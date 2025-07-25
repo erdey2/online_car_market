@@ -1,0 +1,16 @@
+services:
+  docs:
+    image: online_car_market_local_docs
+    container_name: online_car_market_local_docs
+    build:
+      context: .
+      dockerfile: ./compose/local/docs/Dockerfile
+    env_file:
+      - ./.envs/.local/.django
+    volumes:
+      - ./docs:/docs:z
+      - ./config:/app/config:z
+      - ./online_car_market:/app/online_car_market:z
+    ports:
+      - '9000:9000'
+    command: /start-docs
