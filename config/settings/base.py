@@ -84,6 +84,7 @@ THIRD_PARTY_APPS = [
     "allauth.account",
     "allauth.mfa",
     "allauth.socialaccount",
+    'drf_spectacular',
 ]
 
 LOCAL_APPS = [
@@ -296,3 +297,14 @@ SOCIALACCOUNT_FORMS = {"signup": "online_car_market.users.forms.UserSocialSignup
 
 # Your stuff...
 # ------------------------------------------------------------------------------
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # your other DRF settings...
+}
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Online Car Market API',
+    'DESCRIPTION': 'API for car sales, accounting, brokers, and buyers',
+    'VERSION': '1.0.0',
+    # Add more options as needed
+}
+
