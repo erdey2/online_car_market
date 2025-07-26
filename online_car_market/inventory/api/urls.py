@@ -6,5 +6,6 @@ router = DefaultRouter()
 router.register(r'cars', CarViewSet)
 
 urlpatterns = [
-       path('', include(router.urls)),
-   ]
+    path('', include(router.urls)),
+]
+

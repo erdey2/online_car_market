@@ -19,12 +19,12 @@ urlpatterns = [
     # User management
     path("accounts/", include("allauth.urls")),
     # Your stuff: custom urls includes go here
-    path("api/users/", include("users.urls", namespace="users")),
-    path('api/inventory/', include('inventory.urls')),
-    path('api/sales/', include('online_car_market.sales.urls')),
-    path('api/accounting/', include('online_car_market.accounting.urls')),
-    path('api/brokers/', include('online_car_market.brokers.urls')),
-    path('api/buyers/', include('online_car_market.buyers.urls')),
+    path("api/users/", include("online_car_market.users.api.urls")),
+    path('api/inventory/', include("online_car_market.inventory.api.urls")),
+    path('api/sales/', include("online_car_market.sales.api.urls")),
+    path('api/accounting/', include("online_car_market.accounting.api.urls")),
+    path('api/brokers/', include("online_car_market.brokers.api.urls")),
+    path('api/buyers/', include("online_car_market.buyers.api.urls")),
 
     path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

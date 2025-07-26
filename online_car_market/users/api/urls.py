@@ -1,10 +1,11 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import BrokerViewSet  # example view
+from .views import UserViewSet
 
 router = DefaultRouter()
-router.register(r'brokers', BrokerViewSet, basename='broker')
+router.register(r'user-profiles', UserViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
 ]
+

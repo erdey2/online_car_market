@@ -1,15 +1,16 @@
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
-from online_car_market.brokers.models import Broker, BrokerListing
-from online_car_market.brokers.api.serializers import BrokerSerializer, BrokerListingSerializer
-from online_car_market.users.api.views import IsAdmin
+from .models import Expense, FinancialReport
+from .serializers import ExpenseSerializer, FinancialReportSerializer
+from online_car_market.users.api.views import IsAccounting
 
-class BrokerViewSet(ModelViewSet):
-    queryset = Broker.objects.all()
-    serializer_class = BrokerSerializer
-    permission_classes = [IsAuthenticated, IsAdmin]
+class ExpenseViewSet(ModelViewSet):
+    queryset = Expense.objects.all()
+    serializer_class = ExpenseSerializer
+    permission_classes = [IsAuthenticated, IsAccounting]
 
-class BrokerListingViewSet(ModelViewSet):
-    queryset = BrokerListing.objects.all()
-    serializer_class = BrokerListingSerializer
-    permission_classes = [IsAuthenticated, IsAdmin]
+class FinancialReportViewSet(ModelViewSet):
+    queryset = FinancialReport.objects.all()
+    serializer_class = FinancialReportSerializer
+    permission_classes = [IsAuthenticated, IsAccounting]
+
