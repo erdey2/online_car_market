@@ -1,36 +1,67 @@
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.contrib.postgres.fields import ArrayField
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
-class User(AbstractUser):
-    """
-    Default custom user model for online-car-market.
-    If adding fields that need to be filled at user signup,
-    check forms.SignupForm and forms.SocialSignupForms accordingly.
-    """
 
-    # First and last name do not cover name patterns around the globe
-    name = models.CharField(_("Name of User"), blank=True, max_length=255)
-    first_name = None  # type: ignore[assignment]
-    last_name = None  # type: ignore[assignment]
+class UserManager(BaseUserManager):
+    def create_user(self, email, password=None, **extra_fields):
+        if not email:
+            raise ValueError("The Email field must be set")
+        email = self.normalize_email(email)
+        user = self.model(email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
 
-    role = models.CharField(max_length=50, default='Buyer', choices=[
+    def create_superuser(self, email, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+
+        return self.create_user(email, password, **extra_fields)
+
+
+class User(AbstractUser, PermissionsMixin):
+    username = None  # Remove default username field
+    email = models.EmailField(_('Email address'), unique=True)
+
+    first_name = models.CharField(max_length=30, blank=True)
+    last_name = models.CharField(max_length=30, blank=True)
+    date_joined = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
+
+    role = models.CharField(max_length=50, default='buyer', choices=[
         ('super_admin', 'Super Admin'),
         ('admin', 'Admin'),
         ('sales', 'Sales'),
         ('accounting', 'Accounting'),
-        ('buyer', 'Buyer')
+        ('buyer', 'Buyer'),
     ])
+
     description = models.CharField(max_length=100, null=True, blank=True)
     permissions = ArrayField(models.CharField(max_length=100), blank=True, default=list)
+
+    objects = UserManager()
+
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = []
+
+    def __str__(self):
+        return self.email
+
 
 class BuyerProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='buyer_profile')
     address = models.CharField(max_length=100, null=True, blank=True)
     loyalty_created_at = models.DateTimeField(auto_now_add=True)
-    loyalty_score = models.IntegerField()
+    loyalty_score = models.IntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Buyer: {self.user.email}"
+
 
 class BrokerProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='broker_profile')
@@ -38,19 +69,23 @@ class BrokerProfile(models.Model):
     telebirr_account = models.CharField(max_length=100)
     is_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Broker: {self.user.email}"
+
 
 class DealerProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='dealer_profile')
     name = models.CharField(max_length=100)
-    license_number = models.IntegerField()
+    license_number = models.CharField(max_length=50)
     address = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Dealer: {self.user.email}"
 
     def get_absolute_url(self) -> str:
-        """Get URL for user's detail view.
+        return reverse("users:detail", kwargs={"pk": self.pk})
 
-        Returns:
-            str: URL for user detail.
-
-        """
-        return reverse("users:detail", kwargs={"username": self.username})

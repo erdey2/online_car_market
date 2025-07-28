@@ -1,6 +1,6 @@
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
-from .models import Expense, FinancialReport
+from ..models import Expense, FinancialReport
 from .serializers import ExpenseSerializer, FinancialReportSerializer
 from online_car_market.users.api.views import IsAccounting
 
