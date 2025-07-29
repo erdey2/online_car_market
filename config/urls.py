@@ -1,18 +1,19 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include
-from django.urls import path
+from django.urls import path, include, re_path
+from django.views.generic import RedirectView
 from django.views import defaults as default_views
-from django.views.generic import TemplateView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from drf_spectacular.views import (SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView,)
 
 urlpatterns = [
     # Django Admin, use {% url 'admin:index' %}
     path(settings.ADMIN_URL, admin.site.urls),
+
+    path('', RedirectView.as_view(url='/api/docs/', permanent=False)),
     # User management
-    path("accounts/", include("allauth.urls")),
+    path("api/accounts/", include("allauth.urls")),
     # Your stuff: custom urls includes go here
     path("api/users/", include("online_car_market.users.api.urls")),
     path('api/inventory/', include("online_car_market.inventory.api.urls")),

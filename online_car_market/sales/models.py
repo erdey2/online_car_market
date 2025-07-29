@@ -3,7 +3,6 @@ from online_car_market.inventory.models import Car
 from online_car_market.users.models import User
 from online_car_market.brokers.models import Broker
 
-
 class Sale(models.Model):
     car = models.ForeignKey(Car, on_delete=models.CASCADE)
     buyer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='purchases')

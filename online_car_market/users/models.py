@@ -1,15 +1,15 @@
-from django.contrib.auth.models import AbstractUser, BaseUserManager, PermissionsMixin
+from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
+from django.contrib.auth.models import PermissionsMixin
 from django.db import models
 from django.contrib.postgres.fields import ArrayField
-from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-
 
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
             raise ValueError("The Email field must be set")
         email = self.normalize_email(email)
+        extra_fields.setdefault('is_active', True)
         user = self.model(email=email, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
@@ -19,11 +19,14 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
 
+        if not extra_fields.get('is_staff'):
+            raise ValueError('Superuser must have is_staff=True.')
+        if not extra_fields.get('is_superuser'):
+            raise ValueError('Superuser must have is_superuser=True.')
+
         return self.create_user(email, password, **extra_fields)
 
-
-class User(AbstractUser, PermissionsMixin):
-    username = None  # Remove default username field
+class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(_('Email address'), unique=True)
 
     first_name = models.CharField(max_length=30, blank=True)
@@ -46,46 +49,13 @@ class User(AbstractUser, PermissionsMixin):
     objects = UserManager()
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = []
+    REQUIRED_FIELDS = []  # You can add 'first_name', 'last_name' if needed for createsuperuser
 
     def __str__(self):
         return self.email
 
+    def get_full_name(self):
+        return f"{self.first_name} {self.last_name}".strip()
 
-class BuyerProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='buyer_profile')
-    address = models.CharField(max_length=100, null=True, blank=True)
-    loyalty_created_at = models.DateTimeField(auto_now_add=True)
-    loyalty_score = models.IntegerField(default=0)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"Buyer: {self.user.email}"
-
-
-class BrokerProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='broker_profile')
-    national_id = models.CharField(max_length=100)
-    telebirr_account = models.CharField(max_length=100)
-    is_verified = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"Broker: {self.user.email}"
-
-
-class DealerProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='dealer_profile')
-    name = models.CharField(max_length=100)
-    license_number = models.CharField(max_length=50)
-    address = models.CharField(max_length=100)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"Dealer: {self.user.email}"
-
-    def get_absolute_url(self) -> str:
-        return reverse("users:detail", kwargs={"pk": self.pk})
-
+    def get_short_name(self):
+        return self.first_name

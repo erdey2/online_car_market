@@ -1,33 +1,49 @@
 from django.db import models
 from online_car_market.users.models import User
 from online_car_market.inventory.models import Car
+from django.urls import reverse
 
-# Buyer Profile
 class Buyer(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='buyer')
     contact = models.CharField(max_length=100)
+    address = models.CharField(max_length=100, null=True, blank=True)
     loyalty_points = models.IntegerField(default=0)
+    loyalty_created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return self.user.username
+        return f"Buyer: {self.user.email}"
 
-# Rating
+class Dealer(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='dealer_profile')
+    name = models.CharField(max_length=100)
+    license_number = models.CharField(max_length=50)
+    address = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Dealer: {self.user.email}"
+
+    def get_absolute_url(self):
+        return reverse("users:detail", kwargs={"pk": self.pk})
+
 class Rating(models.Model):
     buyer = models.ForeignKey(User, on_delete=models.CASCADE)
     car = models.ForeignKey(Car, on_delete=models.CASCADE)
-    rating = models.IntegerField(choices=[(i, i) for i in range(1, 6)])  # 1-5 stars
+    rating = models.IntegerField()
     comment = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.buyer.username} rated {self.car} ({self.rating})"
+        return f"Rating by {self.buyer.email} for {self.car}"
 
-# Loyalty Program
 class LoyaltyProgram(models.Model):
     buyer = models.ForeignKey(Buyer, on_delete=models.CASCADE)
-    points = models.IntegerField()
-    reward = models.CharField(max_length=100, blank=True)  # e.g., "10% discount"
+    points = models.IntegerField(default=0)
+    reward = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.buyer} - {self.points} points"
+        return f"Loyalty for {self.buyer.user.email}"
+

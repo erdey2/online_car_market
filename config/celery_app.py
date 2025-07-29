@@ -1,5 +1,4 @@
 import os
-
 from celery import Celery
 from celery.signals import setup_logging
 

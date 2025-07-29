@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from ..models import Car
 from .serializers import CarSerializer
 from online_car_market.users.api.views import IsAdmin, IsSales
-
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 class CarViewSet(ModelViewSet):
     queryset = Car.objects.all()
@@ -19,6 +19,18 @@ class CarViewSet(ModelViewSet):
             return [IsAuthenticated(), IsAdmin()]
         return [IsAuthenticated()]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(name='fuel_type', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY,
+                             description='Fuel type of the car'),
+            OpenApiParameter(name='price_min', type=OpenApiTypes.FLOAT, location=OpenApiParameter.QUERY,
+                             description='Minimum price'),
+            OpenApiParameter(name='price_max', type=OpenApiTypes.FLOAT, location=OpenApiParameter.QUERY,
+                             description='Maximum price'),
+        ],
+        description="Filter cars by fuel type and price range.",
+        responses=CarSerializer(many=True)
+    )
     @action(detail=False, methods=['get'])
     def filter(self, request):
       queryset = self.get_queryset()

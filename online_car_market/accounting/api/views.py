@@ -9,6 +9,7 @@ class ExpenseViewSet(ModelViewSet):
     serializer_class = ExpenseSerializer
     permission_classes = [IsAuthenticated, IsAccounting]
 
+
 class FinancialReportViewSet(ModelViewSet):
     queryset = FinancialReport.objects.all()
     serializer_class = FinancialReportSerializer
