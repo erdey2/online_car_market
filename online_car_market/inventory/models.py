@@ -1,6 +1,6 @@
 from django.db import models
-from django.contrib.postgres.fields import ArrayField
-
+from cloudinary.models import CloudinaryField
+from django.contrib import admin
 
 class Car(models.Model):
     make = models.CharField(max_length=100)
@@ -14,9 +14,27 @@ class Car(models.Model):
         ('petrol', 'Petrol'),
         ('diesel', 'Diesel')
     ])
-    images = ArrayField(models.URLField(), blank=True, default=list)  # URLs to Digital Ocean Spaces
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.make} {self.model} ({self.year})"
+
+class CarImage(models.Model):
+    car = models.ForeignKey(Car, on_delete=models.CASCADE, related_name='images')
+    image = CloudinaryField('image')  # stores the Cloudinary image reference
+    is_featured = models.BooleanField(default=False)
+    caption = models.CharField(max_length=255, blank=True, null=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Image for {self.car} (Featured: {self.is_featured})"
+
+    def save(self, *args, **kwargs):
+        if self.is_featured:
+            # Set is_featured=False for all other images of this car
+            CarImage.objects.filter(car=self.car, is_featured=True).exclude(pk=self.pk).update(is_featured=False)
+        super().save(*args, **kwargs)
+
+
+
