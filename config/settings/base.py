@@ -88,14 +88,13 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
+    # custom apps
     "online_car_market.users",
     "online_car_market.inventory",
     "online_car_market.sales",
     "online_car_market.accounting",
     "online_car_market.brokers",
     "online_car_market.buyers",
-
-    # Your stuff: custom apps go here
 ]
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -275,7 +274,7 @@ REDIS_SSL = REDIS_URL.startswith("rediss://")
 # ------------------------------------------------------------------------------
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None  # You have no 'username' field
 ACCOUNT_LOGIN_METHODS = {"email"}         # Set login method
-ACCOUNT_SIGNUP_FIELDS = ["email", "password1", "password2"]
+ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
 ACCOUNT_ALLOW_REGISTRATION = env.bool("DJANGO_ACCOUNT_ALLOW_REGISTRATION", True)
 
 # django-webpack-loader
