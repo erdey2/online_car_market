@@ -2,6 +2,7 @@
 """Base settings to build other settings files upon."""
 from pathlib import Path
 import os
+from datetime import timedelta
 
 import environ
 
@@ -15,6 +16,8 @@ if READ_DOT_ENV_FILE:
     # OS environment variables take precedence over variables from .env
     env.read_env(str(BASE_DIR / ".env")) """
 env.read_env(str(BASE_DIR / ".env"))
+
+SECRET_KEY = env("DJANGO_SECRET_KEY")
 
 # GENERAL
 # ------------------------------------------------------------------------------
@@ -75,16 +78,19 @@ DJANGO_APPS = [
     "django.contrib.admin",
 ]
 THIRD_PARTY_APPS = [
+    "rest_framework",
+    'rest_framework.authtoken',
+    'dj_rest_auth',
+    'rest_framework_simplejwt',
+    'dj_rest_auth.registration',
     "allauth",
     "allauth.account",
     "allauth.mfa",
     "allauth.socialaccount",
-    "rest_framework",
-    'rest_framework.authtoken',
     "drf_spectacular",
     'cloudinary',
     'cloudinary_storage',
-    'dj_rest_auth',
+
 ]
 
 LOCAL_APPS = [
@@ -117,6 +123,9 @@ AUTH_USER_MODEL = "users.User"
 LOGIN_REDIRECT_URL = "users:redirect"
 # https://docs.djangoproject.com/en/dev/ref/settings/#login-url
 LOGIN_URL = "account_login"
+
+ACCOUNT_SIGNUP_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/'
 
 # PASSWORDS
 # ------------------------------------------------------------------------------
@@ -274,8 +283,9 @@ REDIS_SSL = REDIS_URL.startswith("rediss://")
 # ------------------------------------------------------------------------------
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None  # You have no 'username' field
 ACCOUNT_LOGIN_METHODS = {"email"}         # Set login method
-ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
+ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*", "first_name*", "last_name*"]
 ACCOUNT_ALLOW_REGISTRATION = env.bool("DJANGO_ACCOUNT_ALLOW_REGISTRATION", True)
+
 
 # django-webpack-loader
 # ------------------------------------------------------------------------------
@@ -283,9 +293,43 @@ ACCOUNT_ALLOW_REGISTRATION = env.bool("DJANGO_ACCOUNT_ALLOW_REGISTRATION", True)
 # Your stuff...
 # ------------------------------------------------------------------------------
 REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     # your other DRF settings...
 }
+REST_USE_JWT = True
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+}
+
+# dj-rest-auth
+REST_AUTH = {
+    "USE_JWT": True,
+    "TOKEN_MODEL": None,
+    'JWT_AUTH_COOKIE': 'access',
+    'JWT_AUTH_REFRESH_COOKIE': 'refresh',
+    "JWT_AUTH_HTTPONLY": False,
+    'REGISTER_SERIALIZER': 'online_car_market.users.api.serializers.CustomRegisterSerializer',
+}
+
+# Allow unauthenticated access to registration
+REST_AUTH_REGISTER_PERMISSION_CLASSES = [
+    'rest_framework.permissions.AllowAny',
+]
+
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Online Car Market API',
     'DESCRIPTION': 'API for car sales, accounting, brokers, and buyers',
