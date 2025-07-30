@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from ..models import User
+from dj_rest_auth.registration.serializers import RegisterSerializer
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -22,3 +23,18 @@ class UserSerializer(serializers.ModelSerializer):
         if value not in valid_roles:
             raise serializers.ValidationError(f"Invalid role. Must be one of: {valid_roles}")
         return value
+
+
+class CustomRegisterSerializer(RegisterSerializer):
+    first_name = serializers.CharField(required=False)
+    last_name = serializers.CharField(required=False)
+
+    def get_cleaned_data(self):
+        cleaned_data = super().get_cleaned_data()
+        cleaned_data['first_name'] = self.validated_data.get('first_name', '')
+        cleaned_data['last_name'] = self.validated_data.get('last_name', '')
+        return cleaned_data
+
+    def _has_phone_field(self):
+        # Required to avoid AttributeError even if not using phone
+        return False
