@@ -80,9 +80,11 @@ THIRD_PARTY_APPS = [
     "allauth.mfa",
     "allauth.socialaccount",
     "rest_framework",
+    'rest_framework.authtoken',
     "drf_spectacular",
     'cloudinary',
     'cloudinary_storage',
+    'dj_rest_auth',
 ]
 
 LOCAL_APPS = [

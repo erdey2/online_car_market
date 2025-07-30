@@ -1,15 +1,21 @@
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.mixins import ListModelMixin
-from rest_framework.mixins import RetrieveModelMixin
-from rest_framework.mixins import UpdateModelMixin
+from rest_framework.mixins import ListModelMixin, RetrieveModelMixin, UpdateModelMixin
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 from rest_framework.permissions import BasePermission
 from online_car_market.users.models import User
 from .serializers import UserSerializer
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
 
+@extend_schema_view(
+    list=extend_schema(tags=["users"]),
+    retrieve=extend_schema(tags=["users"]),
+    create=extend_schema(tags=["users"]),
+    update=extend_schema(tags=["users"]),
+    destroy=extend_schema(tags=["users"]),
+)
 class UserViewSet(RetrieveModelMixin, ListModelMixin, UpdateModelMixin, GenericViewSet):
     serializer_class = UserSerializer
     queryset = User.objects.all()

@@ -3,7 +3,15 @@ from rest_framework.permissions import IsAuthenticated
 from ..models import Buyer, Rating, LoyaltyProgram
 from .serializers import BuyerSerializer, RatingSerializer, LoyaltyProgramSerializer
 from online_car_market.users.api.views import IsAdmin
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
+@extend_schema_view(
+    list=extend_schema(tags=["buyers"]),
+    retrieve=extend_schema(tags=["buyers"]),
+    create=extend_schema(tags=["buyers"]),
+    update=extend_schema(tags=["buyers"]),
+    destroy=extend_schema(tags=["buyers"]),
+)
 class BuyerViewSet(ModelViewSet):
     queryset = Buyer.objects.all()
     serializer_class = BuyerSerializer
@@ -14,6 +22,13 @@ class BuyerViewSet(ModelViewSet):
             return [IsAuthenticated(), IsAdmin()]
         return [IsAuthenticated()]
 
+@extend_schema_view(
+    list=extend_schema(tags=["buyers"]),
+    retrieve=extend_schema(tags=["buyers"]),
+    create=extend_schema(tags=["buyers"]),
+    update=extend_schema(tags=["buyers"]),
+    destroy=extend_schema(tags=["buyers"]),
+)
 class RatingViewSet(ModelViewSet):
     queryset = Rating.objects.all()
     serializer_class = RatingSerializer
@@ -24,6 +39,13 @@ class RatingViewSet(ModelViewSet):
             return Rating.objects.filter(buyer=self.request.user)
         return Rating.objects.all()
 
+@extend_schema_view(
+    list=extend_schema(tags=["buyers"]),
+    retrieve=extend_schema(tags=["buyers"]),
+    create=extend_schema(tags=["buyers"]),
+    update=extend_schema(tags=["buyers"]),
+    destroy=extend_schema(tags=["buyers"]),
+)
 class LoyaltyProgramViewSet(ModelViewSet):
     queryset = LoyaltyProgram.objects.all()
     serializer_class = LoyaltyProgramSerializer

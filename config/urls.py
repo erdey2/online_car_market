@@ -25,6 +25,9 @@ urlpatterns = [
     path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
+    # advanced auth
+    path('api/auth/', include('dj_rest_auth.urls')),
+
     # Schema in raw OpenAPI format:
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     # Swagger UI:

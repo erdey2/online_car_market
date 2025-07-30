@@ -5,8 +5,16 @@ from rest_framework.response import Response
 from ..models import Car
 from .serializers import CarSerializer
 from online_car_market.users.api.views import IsAdmin, IsSales
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 
+
+@extend_schema_view(
+    list=extend_schema(tags=["inventory"]),
+    retrieve=extend_schema(tags=["inventory"]),
+    create=extend_schema(tags=["inventory"]),
+    update=extend_schema(tags=["inventory"]),
+    destroy=extend_schema(tags=["inventory"]),
+)
 class CarViewSet(ModelViewSet):
     queryset = Car.objects.all()
     serializer_class = CarSerializer
