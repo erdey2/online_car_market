@@ -33,6 +33,7 @@ djangorestframework==3.16.0
 djangorestframework_simplejwt==5.5.1
 drf-spectacular==0.28.0
 fido2==2.0.0
+gunicorn==23.0.0
 idna==3.10
 inflection==0.5.1
 itypes==1.2.0
