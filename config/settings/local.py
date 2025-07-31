@@ -14,7 +14,11 @@ SECRET_KEY = env(
     default="lHWOVArKUo6PzMDmcxWGdbL4NVvNAamwiUnhPrwCTZe46zNSnwpLO0CbzNA6e9Xe",
 )
 # https://docs.djangoproject.com/en/dev/ref/settings/#allowed-hosts
-ALLOWED_HOSTS = ["localhost", "0.0.0.0", "127.0.0.1", 'online-car-market.onrender.com']  # noqa: S104
+ALLOWED_HOSTS = [
+    'online-car-market.onrender.com'
+    'localhost'
+    '127.0.0.1'
+]  # noqa: S104
 
 # CACHES
 # ------------------------------------------------------------------------------
