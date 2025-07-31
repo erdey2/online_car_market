@@ -24,6 +24,7 @@ cryptography==45.0.5
 dj-rest-auth==7.0.1
 Django==5.2.4
 django-allauth==65.10.0
+django-anymail==13.0.1
 django-cloudinary-storage==0.3.0
 django-crispy-forms==2.4
 django-debug-toolbar==5.2.0
