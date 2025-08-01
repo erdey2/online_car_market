@@ -91,7 +91,6 @@ THIRD_PARTY_APPS = [
     "drf_spectacular",
     'cloudinary',
     'cloudinary_storage',
-
 ]
 
 LOCAL_APPS = [
