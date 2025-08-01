@@ -323,6 +323,9 @@ REST_AUTH = {
     'JWT_AUTH_REFRESH_COOKIE': 'refresh',
     "JWT_AUTH_HTTPONLY": False,
     'REGISTER_SERIALIZER': 'online_car_market.users.api.serializers.CustomRegisterSerializer',
+    'SIGNUP_FIELDS': {
+        'username': {'required': False}, 
+    }
 }
 
 # Allow unauthenticated access to registration
