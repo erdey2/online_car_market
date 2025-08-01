@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from online_car_market.users.api.serializers import UserSerializer
 from online_car_market.inventory.api.serializers import CarSerializer
-from online_car_market.buyers.models import Buyer, Rating, LoyaltyProgram
+from online_car_market.buyers.models import Buyer, Rating, LoyaltyProgram, Dealer
 
 
 class BuyerSerializer(serializers.ModelSerializer):
@@ -9,6 +9,12 @@ class BuyerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Buyer
         fields = ['id', 'user', 'contact', 'loyalty_points']
+
+class DealerSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    class Meta:
+        model = Dealer
+        fields = ['name', 'license_number', 'address', 'created_at', 'updated_at']
 
 class RatingSerializer(serializers.ModelSerializer):
     buyer = UserSerializer(read_only=True)
