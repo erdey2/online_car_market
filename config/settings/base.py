@@ -168,9 +168,9 @@ CLOUDINARY_STORAGE = {
     'API_KEY': env('CLOUDINARY_API_KEY'),
     'API_SECRET': env('CLOUDINARY_API_SECRET'),
     'UPLOAD_OPTIONS': {
-        'folder': 'proximity_based_market/ads/',
+        'folder': 'car-images/',
         'resource_type': 'image',
-        'allowed_formats': ['jpg', 'png']
+        'allowed_formats': ['jpg', 'jpeg', 'png']
     }
 }
 
@@ -281,8 +281,8 @@ REDIS_SSL = REDIS_URL.startswith("rediss://")
 
 # django-allauth
 # ------------------------------------------------------------------------------
-ACCOUNT_USER_MODEL_USERNAME_FIELD = None  # You have no 'username' field
-ACCOUNT_LOGIN_METHODS = {"email"}         # Set login method
+ACCOUNT_USER_MODEL_USERNAME_FIELD = None
+ACCOUNT_LOGIN_METHODS = {"email"}
 ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*", "first_name*", "last_name*"]
 ACCOUNT_ALLOW_REGISTRATION = env.bool("DJANGO_ACCOUNT_ALLOW_REGISTRATION", True)
 
@@ -290,7 +290,7 @@ ACCOUNT_ALLOW_REGISTRATION = env.bool("DJANGO_ACCOUNT_ALLOW_REGISTRATION", True)
 # django-webpack-loader
 # ------------------------------------------------------------------------------
 
-# Your stuff...
+# Custom settings...
 # ------------------------------------------------------------------------------
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
