@@ -22,7 +22,6 @@ class BuyerViewSet(ModelViewSet):
             return [IsAuthenticated(), IsAdmin()]
         return [IsAuthenticated()]
 
-
 @extend_schema_view(
     list=extend_schema(tags=["dealer"]),
     retrieve=extend_schema(tags=["dealer"]),
