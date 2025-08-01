@@ -14,7 +14,7 @@ class DealerSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
     class Meta:
         model = Dealer
-        fields = ['name', 'license_number', 'address', 'created_at', 'updated_at']
+        fields = ['name', 'user', 'license_number', 'address', 'created_at', 'updated_at']
 
 class RatingSerializer(serializers.ModelSerializer):
     buyer = UserSerializer(read_only=True)
