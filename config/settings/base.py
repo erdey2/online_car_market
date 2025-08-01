@@ -80,6 +80,7 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS = [
     "rest_framework",
     'rest_framework.authtoken',
+    'allauth.socialaccount.providers.google',
     'dj_rest_auth',
     'rest_framework_simplejwt',
     'dj_rest_auth.registration',
@@ -324,7 +325,7 @@ REST_AUTH = {
     "JWT_AUTH_HTTPONLY": False,
     'REGISTER_SERIALIZER': 'online_car_market.users.api.serializers.CustomRegisterSerializer',
     'SIGNUP_FIELDS': {
-        'username': {'required': False}, 
+        'username': {'required': False},
     }
 }
 
