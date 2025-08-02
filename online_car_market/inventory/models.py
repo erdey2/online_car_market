@@ -14,6 +14,16 @@ class Car(models.Model):
         ('petrol', 'Petrol'),
         ('diesel', 'Diesel')
     ])
+    STATUS_CHOICES = [
+        ('available', 'Available'),
+        ('reserved', 'Reserved'),
+        ('sold', 'Sold'),
+        ('pending_inspection', 'Pending Inspection'),
+        ('under_maintenance', 'Under Maintenance'),
+        ('delivered', 'Delivered'),
+        ('archived', 'Archived'),
+    ]
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='available')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

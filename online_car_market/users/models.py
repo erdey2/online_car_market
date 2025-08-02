@@ -1,7 +1,6 @@
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
-from django.contrib.postgres.fields import ArrayField
 from django.utils.translation import gettext_lazy as _
 
 class UserManager(BaseUserManager):
@@ -28,28 +27,17 @@ class UserManager(BaseUserManager):
 
 class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(_('Email address'), unique=True)
-
-    first_name = models.CharField(max_length=30, blank=True)
-    last_name = models.CharField(max_length=30, blank=True)
+    first_name = models.CharField(max_length=50, blank=True)
+    last_name = models.CharField(max_length=50, blank=True)
+    description = models.TextField(max_length=500, blank=True, null=True)
     date_joined = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
 
-    role = models.CharField(max_length=50, default='buyer', choices=[
-        ('super_admin', 'Super Admin'),
-        ('admin', 'Admin'),
-        ('sales', 'Sales'),
-        ('accounting', 'Accounting'),
-        ('buyer', 'Buyer'),
-    ])
-
-    description = models.CharField(max_length=100, null=True, blank=True)
-    permissions = ArrayField(models.CharField(max_length=100), blank=True, default=list)
-
     objects = UserManager()
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = []  # You can add 'first_name', 'last_name' if needed for createsuperuser
+    REQUIRED_FIELDS = ['first_name', 'last_name']
 
     def __str__(self):
         return self.email
