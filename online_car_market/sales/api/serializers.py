@@ -3,9 +3,8 @@ from rolepermissions.checkers import has_role
 from ..models import Sale, Lead, Car, User
 from online_car_market.buyers.models import Buyer
 from online_car_market.brokers.models import Broker
-from online_car_market.inventory.api.serializers import CarSerializer
-from online_car_market.users.api.serializers import UserSerializer
 import re
+import bleach
 
 class SaleSerializer(serializers.ModelSerializer):
     buyer = serializers.PrimaryKeyRelatedField(queryset=Buyer.objects.all())
@@ -18,10 +17,10 @@ class SaleSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'date']
 
     def validate_price(self, value):
-        """Ensure price is non-negative and reasonable."""
+        """Validate price."""
         if value < 0:
             raise serializers.ValidationError("Price cannot be negative.")
-        if value > 100000000:  # Max 100 million
+        if value > 100000000:
             raise serializers.ValidationError("Price cannot exceed 100,000,000.")
         return value
 
@@ -63,29 +62,36 @@ class LeadSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
     def validate_name(self, value):
-        """Ensure name is valid."""
+        """Sanitize and validate name."""
         if not value:
             raise serializers.ValidationError("Name is required.")
-        if len(value) > 100:
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        if len(cleaned_value) > 100:
             raise serializers.ValidationError("Name cannot exceed 100 characters.")
-        if not re.match(r'^[a-zA-Z\s-]+$', value):
+        if not re.match(r'^[a-zA-Z\s-]+$', cleaned_value):
             raise serializers.ValidationError("Name can only contain letters, spaces, or hyphens.")
-        return value
+        return cleaned_value
 
     def validate_contact(self, value):
-        """Ensure contact is a valid email or Ethiopian phone number."""
+        """Sanitize and validate email or Ethiopian phone number."""
+        if not value:
+            raise serializers.ValidationError("Contact is required.")
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
         email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
         phone_regex = r'^\+251[79]\d{8}$'
-        if not (re.match(email_regex, value) or re.match(phone_regex, value)):
+        if not (re.match(email_regex, cleaned_value) or re.match(phone_regex, cleaned_value)):
             raise serializers.ValidationError("Contact must be a valid email or Ethiopian phone number (e.g., +251912345678).")
-        return value
+        if len(cleaned_value) > 100:
+            raise serializers.ValidationError("Contact cannot exceed 100 characters.")
+        return cleaned_value
 
     def validate_status(self, value):
-        """Ensure status is valid."""
+        """Sanitize and validate status."""
         valid_statuses = ['inquiry', 'negotiation', 'closed']
-        if value not in valid_statuses:
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        if cleaned_value not in valid_statuses:
             raise serializers.ValidationError(f"Status must be one of: {', '.join(valid_statuses)}.")
-        return value
+        return cleaned_value
 
     def validate_assigned_sales(self, value):
         """Ensure assigned_sales has sales role."""

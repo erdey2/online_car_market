@@ -1,71 +1,95 @@
-from rest_framework import serializers
-from rolepermissions.roles import get_user_roles
-from rolepermissions.checkers import has_role
-from ..models import User
-import re
 from dj_rest_auth.registration.serializers import RegisterSerializer
+from rest_framework import serializers
+from rolepermissions.checkers import has_role
+from django.contrib.auth import get_user_model
+import re
 import bleach
 
-class UserSerializer(serializers.ModelSerializer):
-    roles = serializers.SerializerMethodField()
+User = get_user_model()
 
+class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'date_joined', 'is_active', 'roles', 'is_staff', 'description', 'roles']
-        read_only_fields = ['id', 'date_joined', 'is_active', 'is_staff']
-
-    def get_roles(self, obj):
-        """Return list of role names for the user."""
-        return [role.__name__.lower() for role in get_user_roles(obj)]
+        fields = ['id', 'email', 'first_name', 'last_name', 'description', 'is_active', 'is_staff', 'is_superuser', 'date_joined']
+        read_only_fields = ['id', 'date_joined']
 
     def validate_email(self, value):
         """Validate and sanitize email."""
         if not value:
             raise serializers.ValidationError("Email is required.")
-        cleaned_email = bleach.clean(value.strip(), tags=[], strip=True)
-        if not re.match(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$', cleaned_email):
-            raise serializers.ValidationError("Invalid email format.")
-        if User.objects.filter(email=cleaned_email).exclude(pk=self.instance.pk if self.instance else None).exists():
-            raise serializers.ValidationError("Email already exists.")
-        return cleaned_email
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+        if not re.match(email_regex, cleaned_value):
+            raise serializers.ValidationError("Email must be a valid email address.")
+        if len(cleaned_value) > 254:  # EmailField max_length
+            raise serializers.ValidationError("Email cannot exceed 254 characters.")
+        if self.instance is None and User.objects.filter(email=cleaned_value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        if self.instance and self.instance.email != cleaned_value and User.objects.filter(email=cleaned_value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return cleaned_value
 
     def validate_first_name(self, value):
         """Sanitize and validate first name."""
-        if not value:
-            raise serializers.ValidationError("First name is required.")
-        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
-        if len(cleaned_value) > 100:
-            raise serializers.ValidationError("First name cannot exceed 100 characters.")
-        if not re.match(r'^[a-zA-Z\s-]+$', cleaned_value):
-            raise serializers.ValidationError("First name can only contain letters, spaces, or hyphens.")
-        return cleaned_value
+        if value:
+            cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+            if len(cleaned_value) > 50:
+                raise serializers.ValidationError("First name cannot exceed 50 characters.")
+            if not re.match(r'^[a-zA-Z\s-]+$', cleaned_value):
+                raise serializers.ValidationError("First name can only contain letters, spaces, or hyphens.")
+            return cleaned_value
+        return value
 
     def validate_last_name(self, value):
         """Sanitize and validate last name."""
-        if not value:
-            raise serializers.ValidationError("Last name is required.")
-        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
-        if len(cleaned_value) > 100:
-            raise serializers.ValidationError("Last name cannot exceed 100 characters.")
-        if not re.match(r'^[a-zA-Z\s-]+$', cleaned_value):
-            raise serializers.ValidationError("Last name can only contain letters, spaces, or hyphens.")
-        return cleaned_value
+        if value:
+            cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+            if len(cleaned_value) > 50:
+                raise serializers.ValidationError("Last name cannot exceed 50 characters.")
+            if not re.match(r'^[a-zA-Z\s-]+$', cleaned_value):
+                raise serializers.ValidationError("Last name can only contain letters, spaces, or hyphens.")
+            return cleaned_value
+        return value
 
     def validate_description(self, value):
-        """Ensure description does not exceed 500 characters."""
-        if value and len(value) > 500:
-            raise serializers.ValidationError("Description cannot exceed 500 characters.")
+        """Sanitize and validate description."""
+        if value:
+            cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+            if len(cleaned_value) > 500:
+                raise serializers.ValidationError("Description cannot exceed 500 characters.")
+            return cleaned_value
+        return value
+
+    def validate_is_active(self, value):
+        """Restrict is_active changes to super_admin or admin."""
+        user = self.context['request'].user
+        if self.instance and self.instance.is_active != value and not has_role(user, ['super_admin', 'admin']):
+            raise serializers.ValidationError("Only super admins or admins can modify is_active.")
+        return value
+
+    def validate_is_staff(self, value):
+        """Restrict is_staff changes to super_admin or admin."""
+        user = self.context['request'].user
+        if self.instance and self.instance.is_staff != value and not has_role(user, ['super_admin', 'admin']):
+            raise serializers.ValidationError("Only super admins or admins can modify is_staff.")
+        return value
+
+    def validate_is_superuser(self, value):
+        """Restrict is_superuser changes to super_admin."""
+        user = self.context['request'].user
+        if self.instance and self.instance.is_superuser != value and not has_role(user, 'super_admin'):
+            raise serializers.ValidationError("Only super admins can modify is_superuser.")
         return value
 
     def validate(self, data):
-        """Ensure only super_admin or admin can create/update users."""
+        """Ensure only super_admin, admin, or the user can manage profiles."""
         user = self.context['request'].user
         if self.instance is None and not has_role(user, ['super_admin', 'admin']):
-            raise serializers.ValidationError("Only super admins or admins can create users.")
+            raise serializers.ValidationError("Only super admins or admins can create new users.")
         if self.instance and self.instance != user and not has_role(user, ['super_admin', 'admin']):
-            raise serializers.ValidationError(
-                "Only super admins, admins, or the user themselves can update this profile.")
+            raise serializers.ValidationError("Only super admins, admins, or the user can update this profile.")
         return data
+
 
 class CustomRegisterSerializer(RegisterSerializer):
     first_name = serializers.CharField(required=False)

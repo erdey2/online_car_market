@@ -4,11 +4,12 @@ from ..models import Car, CarImage
 from online_car_market.buyers.models import Dealer
 from online_car_market.users.api.serializers import UserSerializer
 import re
+import bleach
 from datetime import datetime
 
 class CarImageSerializer(serializers.ModelSerializer):
     car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all())
-    image = serializers.CharField()  # CloudinaryField treated as CharField for validation
+    image = serializers.CharField()
 
     class Meta:
         model = CarImage
@@ -16,24 +17,26 @@ class CarImageSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'uploaded_at']
 
     def validate_image(self, value):
-        """Ensure image is a valid Cloudinary reference."""
+        """Validate and sanitize Cloudinary image reference."""
         if not value:
             raise serializers.ValidationError("Image is required.")
-        # Basic validation for Cloudinary public_id or URL
-        if not re.match(r'^[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*$', value) and not value.startswith('http'):
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        if not re.match(r'^[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*$', cleaned_value) and not cleaned_value.startswith('http'):
             raise serializers.ValidationError("Invalid Cloudinary image reference or URL.")
-        return value
+        return cleaned_value
 
     def validate_caption(self, value):
-        """Ensure caption is within length."""
-        if value and len(value) > 255:
-            raise serializers.ValidationError("Caption cannot exceed 255 characters.")
+        """Sanitize and validate caption."""
+        if value:
+            cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+            if len(cleaned_value) > 255:
+                raise serializers.ValidationError("Caption cannot exceed 255 characters.")
+            return cleaned_value
         return value
 
     def validate_is_featured(self, value):
         """Ensure only one image per car is featured."""
         if value and self.instance and self.instance.is_featured:
-            # Allow updating existing featured image
             return value
         if value:
             car = self.initial_data.get('car') or (self.instance.car.pk if self.instance else None)
@@ -60,61 +63,65 @@ class CarSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def validate_make(self, value):
-        """Ensure make is valid."""
+        """Sanitize and validate make."""
         if not value:
             raise serializers.ValidationError("Make is required.")
-        if len(value) > 100:
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        if len(cleaned_value) > 100:
             raise serializers.ValidationError("Make cannot exceed 100 characters.")
-        if not re.match(r'^[a-zA-Z0-9\s-]+$', value):
+        if not re.match(r'^[a-zA-Z0-9\s-]+$', cleaned_value):
             raise serializers.ValidationError("Make can only contain letters, numbers, spaces, or hyphens.")
-        return value
+        return cleaned_value
 
     def validate_model(self, value):
-        """Ensure model is valid."""
+        """Sanitize and validate model."""
         if not value:
             raise serializers.ValidationError("Model is required.")
-        if len(value) > 100:
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        if len(cleaned_value) > 100:
             raise serializers.ValidationError("Model cannot exceed 100 characters.")
-        if not re.match(r'^[a-zA-Z0-9\s-]+$', value):
+        if not re.match(r'^[a-zA-Z0-9\s-]+$', cleaned_value):
             raise serializers.ValidationError("Model can only contain letters, numbers, spaces, or hyphens.")
-        return value
+        return cleaned_value
 
     def validate_year(self, value):
-        """Ensure year is valid."""
+        """Validate year."""
         current_year = datetime.now().year
         if not 1900 <= value <= current_year + 1:
             raise serializers.ValidationError(f"Year must be between 1900 and {current_year + 1}.")
         return value
 
     def validate_price(self, value):
-        """Ensure price is non-negative and reasonable."""
+        """Validate price."""
         if value < 0:
             raise serializers.ValidationError("Price cannot be negative.")
-        if value > 100000000:  # Max 100 million
+        if value > 100000000:
             raise serializers.ValidationError("Price cannot exceed 100,000,000.")
         return value
 
     def validate_mileage(self, value):
-        """Ensure mileage is non-negative."""
+        """Validate mileage."""
         if value < 0:
             raise serializers.ValidationError("Mileage cannot be negative.")
-        if value > 1000000:  # Max 1 million km
+        if value > 1000000:
             raise serializers.ValidationError("Mileage cannot exceed 1,000,000 km.")
         return value
 
     def validate_fuel_type(self, value):
-        """Ensure fuel_type is valid."""
+        """Sanitize and validate fuel type."""
         valid_types = ['electric', 'hybrid', 'petrol', 'diesel']
-        if value not in valid_types:
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        if cleaned_value not in valid_types:
             raise serializers.ValidationError(f"Fuel type must be one of: {', '.join(valid_types)}.")
-        return value
+        return cleaned_value
 
     def validate_status(self, value):
-        """Ensure status is valid."""
+        """Sanitize and validate status."""
         valid_statuses = ['available', 'reserved', 'sold', 'pending_inspection', 'under_maintenance', 'delivered', 'archived']
-        if value not in valid_statuses:
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        if cleaned_value not in valid_statuses:
             raise serializers.ValidationError(f"Status must be one of: {', '.join(valid_statuses)}.")
-        return value
+        return cleaned_value
 
     def validate_dealer(self, value):
         """Ensure dealer has dealer role."""

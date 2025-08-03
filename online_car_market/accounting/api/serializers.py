@@ -2,6 +2,7 @@ from rest_framework import serializers
 from rolepermissions.checkers import has_role
 from ..models import Expense, FinancialReport
 import re
+import bleach
 
 class ExpenseSerializer(serializers.ModelSerializer):
     class Meta:
@@ -10,24 +11,28 @@ class ExpenseSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'date']
 
     def validate_type(self, value):
-        """Ensure type is valid."""
+        """Validate and sanitize type."""
         valid_types = ['maintenance', 'marketing', 'operational', 'other']
-        if value not in valid_types:
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        if cleaned_value not in valid_types:
             raise serializers.ValidationError(f"Type must be one of: {', '.join(valid_types)}.")
-        return value
+        return cleaned_value
 
     def validate_amount(self, value):
         """Ensure amount is non-negative and reasonable."""
         if value < 0:
             raise serializers.ValidationError("Amount cannot be negative.")
-        if value > 100000000:  # Max 100 million
+        if value > 100000000:
             raise serializers.ValidationError("Amount cannot exceed 100,000,000.")
         return value
 
     def validate_description(self, value):
-        """Ensure description is within length."""
-        if value and len(value) > 1000:
-            raise serializers.ValidationError("Description cannot exceed 1000 characters.")
+        """Sanitize and validate description."""
+        if value:
+            cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+            if len(cleaned_value) > 1000:
+                raise serializers.ValidationError("Description cannot exceed 1000 characters.")
+            return cleaned_value
         return value
 
     def validate(self, data):
@@ -44,23 +49,33 @@ class FinancialReportSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at']
 
     def validate_type(self, value):
-        """Ensure type is valid."""
+        """Validate and sanitize type."""
         valid_types = ['profit_loss', 'balance_sheet']
-        if value not in valid_types:
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        if cleaned_value not in valid_types:
             raise serializers.ValidationError(f"Type must be one of: {', '.join(valid_types)}.")
-        return value
+        return cleaned_value
 
     def validate_data(self, value):
-        """Ensure data is valid JSON with required keys."""
+        """Validate and sanitize JSON data."""
         if not isinstance(value, dict):
             raise serializers.ValidationError("Data must be a valid JSON object.")
-        required_keys = {'total_revenue', 'total_expenses', 'net_profit'} if value.get('type') == 'profit_loss' else {'assets', 'liabilities', 'equity'}
+        required_keys = {'total_revenue', 'total_expenses', 'net_profit'} if self.initial_data.get('type') == 'profit_loss' else {'assets', 'liabilities', 'equity'}
+        sanitized_data = {}
+        for key in value:
+            if isinstance(value[key], str):
+                sanitized_data[key] = bleach.clean(value[key].strip(), tags=[], strip=True)
+            else:
+                sanitized_data[key] = value[key]
         for key in required_keys:
-            if key not in value:
+            if key not in sanitized_data:
                 raise serializers.ValidationError(f"Data must include '{key}' key.")
-            if not isinstance(value[key], (int, float)) or value[key] < 0:
+            if not isinstance(sanitized_data[key], (int, float)) or sanitized_data[key] < 0:
                 raise serializers.ValidationError(f"'{key}' must be a non-negative number.")
-        return value
+        if sanitized_data.get('total_revenue') and sanitized_data.get('total_expenses') and sanitized_data.get('net_profit'):
+            if sanitized_data['net_profit'] != sanitized_data['total_revenue'] - sanitized_data['total_expenses']:
+                raise serializers.ValidationError("Net profit must equal total revenue minus total expenses for profit_loss reports.")
+        return sanitized_data
 
     def validate(self, data):
         """Ensure only accounting, admins, or super admins can create/update reports."""

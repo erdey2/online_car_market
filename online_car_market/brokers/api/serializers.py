@@ -1,81 +1,106 @@
 from rest_framework import serializers
-from online_car_market.brokers.models import Broker
-from online_car_market.inventory.api.serializers import CarSerializer
-from online_car_market.brokers.models import BrokerListing
 from rolepermissions.checkers import has_role
+from ..models import Broker, BrokerListing
+from online_car_market.users.models import User
+from online_car_market.inventory.models import Car
+from online_car_market.inventory.api.serializers import CarSerializer
 import re
+import bleach
 
 class BrokerSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
 
     class Meta:
         model = Broker
-        fields = ['id', 'name', 'contact', 'commission_rate',
-                  'national_id', 'telebirr_account', 'is_verified',
-                  'created_at', 'updated_at'
-        ]
+        fields = ['id', 'user', 'name', 'contact', 'commission_rate', 'national_id', 'telebirr_account', 'is_verified', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def validate_name(self, value):
-        """Ensure name is valid."""
+        """Sanitize and validate name."""
         if not value:
             raise serializers.ValidationError("Name is required.")
-        if len(value) > 100:
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        if len(cleaned_value) > 100:
             raise serializers.ValidationError("Name cannot exceed 100 characters.")
-        if not re.match(r'^[a-zA-Z0-9\s&-]+$', value):
-            raise serializers.ValidationError("Name can only contain letters, numbers, spaces, ampersands, or hyphens.")
-        return value
+        if not re.match(r'^[a-zA-Z\s&-]+$', cleaned_value):
+            raise serializers.ValidationError("Name can only contain letters, spaces, ampersands, or hyphens.")
+        return cleaned_value
 
     def validate_contact(self, value):
-        """Ensure contact is a valid Ethiopian phone number."""
-        if not re.match(r'^\+251[79]\d{8}$', value):
+        """Validate and sanitize Ethiopian phone number."""
+        if not value:
+            raise serializers.ValidationError("Contact is required.")
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        if not re.match(r'^\+251[79]\d{8}$', cleaned_value):
             raise serializers.ValidationError("Contact must be a valid Ethiopian phone number (e.g., +251912345678).")
-        return value
+        if len(cleaned_value) > 100:
+            raise serializers.ValidationError("Contact cannot exceed 100 characters.")
+        return cleaned_value
 
     def validate_commission_rate(self, value):
-        """Ensure commission_rate is between 0 and 100."""
+        """Validate commission rate is between 0 and 100."""
         if not 0 <= value <= 100:
             raise serializers.ValidationError("Commission rate must be between 0 and 100.")
         return value
 
     def validate_national_id(self, value):
-        """Ensure national_id is unique and follows format (e.g., ET12345678)."""
-        if not re.match(r'^[0-9]{16}$', value):
-            raise serializers.ValidationError("National ID must be a 16 digit number.")
-        if self.instance is None and Broker.objects.filter(national_id=value).exists():
+        """Sanitize and validate national ID (16 digits)."""
+        if not value:
+            raise serializers.ValidationError("National ID is required.")
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        if not re.match(r'^\d{16}$', cleaned_value):
+            raise serializers.ValidationError("National ID must be a 16-digit number.")
+        if len(cleaned_value) > 16:
+            raise serializers.ValidationError("National ID cannot exceed 16 characters.")
+        if self.instance is None and Broker.objects.filter(national_id=cleaned_value).exists():
             raise serializers.ValidationError("A broker with this national ID already exists.")
-        return value
+        if self.instance and self.instance.national_id != cleaned_value and Broker.objects.filter(national_id=cleaned_value).exists():
+            raise serializers.ValidationError("A broker with this national ID already exists.")
+        return cleaned_value
 
     def validate_telebirr_account(self, value):
-        """Ensure telebirr_account is a valid Ethiopian phone number."""
-        if value and not re.match(r'^\+251[79]\d{8}$', value):
-            raise serializers.ValidationError(
-                "Telebirr account must be a valid Ethiopian phone number (e.g., +251912345678).")
+        """Validate and sanitize Ethiopian phone number for Telebirr."""
+        if value:
+            cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+            if not re.match(r'^\+251[79]\d{8}$', cleaned_value):
+                raise serializers.ValidationError("Telebirr account must be a valid Ethiopian phone number (e.g., +251912345678).")
+            if len(cleaned_value) > 100:
+                raise serializers.ValidationError("Telebirr account cannot exceed 100 characters.")
+            return cleaned_value
         return value
 
     def validate_is_verified(self, value):
-        """Ensure only admins can set is_verified."""
+        """Ensure only super_admin or admin can set is_verified."""
         user = self.context['request'].user
         if value and not has_role(user, ['super_admin', 'admin']):
-            raise serializers.ValidationError("Only admins or super admins can verify brokers.")
+            raise serializers.ValidationError("Only super admins or admins can verify brokers.")
+        return value
+
+    def validate_user(self, value):
+        """Ensure user has broker role."""
+        if not has_role(value, 'broker'):
+            raise serializers.ValidationError("The assigned user must have the broker role.")
         return value
 
     def validate(self, data):
-        """Ensure user has broker role."""
+        """Ensure only super_admin, admin, or the broker can manage their profile."""
         user = self.context['request'].user
         if self.instance is None and not has_role(user, ['super_admin', 'admin', 'broker']):
-            raise serializers.ValidationError("Only brokers, admins, or super admins can create broker profiles.")
+            raise serializers.ValidationError("Only super admins, admins, or brokers can create broker profiles.")
         if self.instance and self.instance.user != user and not has_role(user, ['super_admin', 'admin']):
-            raise serializers.ValidationError("Only the profile owner or admins can update this profile.")
+            raise serializers.ValidationError("Only super admins, admins, or the broker can update this profile.")
         return data
 
 class BrokerListingSerializer(serializers.ModelSerializer):
-    broker = BrokerSerializer(read_only=True)
-    car = CarSerializer(read_only=True)
+    broker = serializers.PrimaryKeyRelatedField(queryset=Broker.objects.all())
+    car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all())
+    broker_display = BrokerSerializer(source='broker', read_only=True)
+    car_display = CarSerializer(source='car', read_only=True)
 
     class Meta:
         model = BrokerListing
-        fields = ['id', 'broker', 'car', 'commission', 'created_at']
-        read_only_fields = ['id', 'broker', 'car', 'created_at']
+        fields = ['id', 'broker', 'car', 'broker_display', 'car_display', 'commission', 'created_at']
+        read_only_fields = ['id', 'created_at', 'broker_display', 'car_display']
 
     def validate_commission(self, value):
         """Ensure commission is non-negative and reasonable."""
@@ -85,11 +110,23 @@ class BrokerListingSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Commission cannot exceed 1,000,000.")
         return value
 
+    def validate_car(self, value):
+        """Ensure car is available or reserved."""
+        if value.status not in ['available', 'reserved']:
+            raise serializers.ValidationError("The car must be available or reserved for listing.")
+        return value
+
+    def validate_broker(self, value):
+        """Ensure broker has broker role."""
+        if not has_role(value.user, 'broker'):
+            raise serializers.ValidationError("The assigned broker must have the broker role.")
+        return value
+
     def validate(self, data):
-        """Ensure only brokers or admins can create/update listings."""
+        """Ensure only super_admin, admin, or the broker can manage listings."""
         user = self.context['request'].user
         if self.instance is None and not has_role(user, ['super_admin', 'admin', 'broker']):
-            raise serializers.ValidationError("Only brokers, admins, or super admins can create broker listings.")
+            raise serializers.ValidationError("Only super admins, admins, or brokers can create broker listings.")
         if self.instance and self.instance.broker.user != user and not has_role(user, ['super_admin', 'admin']):
-            raise serializers.ValidationError("Only the listing owner or admins can update this listing.")
+            raise serializers.ValidationError("Only super admins, admins, or the broker can update this listing.")
         return data
