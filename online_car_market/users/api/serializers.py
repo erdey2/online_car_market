@@ -95,12 +95,57 @@ class CustomRegisterSerializer(RegisterSerializer):
     first_name = serializers.CharField(required=False)
     last_name = serializers.CharField(required=False)
 
+    def validate_email(self, value):
+        """Sanitize and validate email."""
+        if not value:
+            raise serializers.ValidationError("Email is required.")
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+        if not re.match(email_regex, cleaned_value):
+            raise serializers.ValidationError("Email must be a valid email address.")
+        if len(cleaned_value) > 254:
+            raise serializers.ValidationError("Email cannot exceed 254 characters.")
+        if User.objects.filter(email=cleaned_value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return cleaned_value
+
+    def validate_first_name(self, value):
+        """Sanitize and validate first name."""
+        if value:
+            cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+            if len(cleaned_value) > 50:
+                raise serializers.ValidationError("First name cannot exceed 50 characters.")
+            if not re.match(r'^[a-zA-Z\s-]+$', cleaned_value):
+                raise serializers.ValidationError("First name can only contain letters, spaces, or hyphens.")
+            return cleaned_value
+        return value
+
+    def validate_last_name(self, value):
+        """Sanitize and validate last name."""
+        if value:
+            cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+            if len(cleaned_value) > 50:
+                raise serializers.ValidationError("Last name cannot exceed 50 characters.")
+            if not re.match(r'^[a-zA-Z\s-]+$', cleaned_value):
+                raise serializers.ValidationError("Last name can only contain letters, spaces, or hyphens.")
+            return cleaned_value
+        return value
+
     def get_cleaned_data(self):
+        """Include sanitized first_name and last_name in cleaned data."""
         cleaned_data = super().get_cleaned_data()
         cleaned_data['first_name'] = self.validated_data.get('first_name', '')
         cleaned_data['last_name'] = self.validated_data.get('last_name', '')
         return cleaned_data
 
     def _has_phone_field(self):
-        # Required to avoid AttributeError even if not using phone
+        """Avoid phone field errors."""
         return False
+
+    def validate(self, data):
+        """Ensure only super_admin, admin, or public registration is allowed."""
+        user = self.context['request'].user
+        # Allow public registration if user is not authenticated
+        if user.is_authenticated and not has_role(user, ['super_admin', 'admin']):
+            raise serializers.ValidationError("Only super admins or admins can create users via this endpoint.")
+        return data
