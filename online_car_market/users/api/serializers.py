@@ -92,6 +92,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class CustomRegisterSerializer(RegisterSerializer):
+    username = None
     first_name = serializers.CharField(required=False)
     last_name = serializers.CharField(required=False)
 
