@@ -47,3 +47,6 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     def get_short_name(self):
         return self.first_name
+
+class Meta:
+        app_label = 'online_car_market.users'
