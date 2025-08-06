@@ -4,9 +4,10 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rolepermissions.permissions import register_object_checker
 from rolepermissions.checkers import has_role
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 from ..models import Car, CarImage
 from .serializers import CarSerializer, CarImageSerializer
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
+
 
 @register_object_checker()
 def has_manage_inventory_permission(permission, user, obj):

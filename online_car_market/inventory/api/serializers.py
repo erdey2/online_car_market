@@ -1,11 +1,11 @@
+from datetime import datetime
 from rest_framework import serializers
 from rolepermissions.checkers import has_role
 from ..models import Car, CarImage
-from online_car_market.buyers.models import Dealer
-from online_car_market.users.api.serializers import UserSerializer
+from online_car_market.dealers.models import Dealer
 import re
 import bleach
-from datetime import datetime
+
 
 class CarImageSerializer(serializers.ModelSerializer):
     car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all())
