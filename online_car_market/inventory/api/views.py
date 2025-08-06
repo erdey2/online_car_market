@@ -2,61 +2,69 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rolepermissions.permissions import register_object_checker
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 from ..models import Car, CarImage
-from .serializers import CarSerializer, CarImageSerializer
-
-
-@register_object_checker()
-def has_manage_inventory_permission(permission, user, obj):
-    return has_role(user, ['super_admin', 'admin', 'dealer'])
+from .serializers import CarSerializer, CarImageSerializer, VerifyCarSerializer
+from online_car_market.users.permissions import SuperAdmin, Admin, Dealer
 
 @extend_schema_view(
-    list=extend_schema(tags=["inventory"]),
-    retrieve=extend_schema(tags=["inventory"]),
-    create=extend_schema(tags=["inventory"]),
-    update=extend_schema(tags=["inventory"]),
-    partial_update=extend_schema(tags=["inventory"]),
-    destroy=extend_schema(tags=["inventory"]),
+    list=extend_schema(tags=["inventory"], description="List all verified cars for non-admins or all cars for admins."),
+    retrieve=extend_schema(tags=["inventory"], description="Retrieve a specific car if verified or user is admin."),
+    create=extend_schema(tags=["inventory"], description="Create a car listing (dealers/admins only)."),
+    update=extend_schema(tags=["inventory"], description="Update a car listing (dealers/admins only)."),
+    partial_update=extend_schema(tags=["inventory"], description="Partially update a car listing (dealers/admins only)."),
+    destroy=extend_schema(tags=["inventory"], description="Delete a car listing (dealers/admins only)."),
 )
 class CarViewSet(ModelViewSet):
-    queryset = Car.objects.all()
     serializer_class = CarSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), has_manage_inventory_permission]
-        return [IsAuthenticated()]
-
     def get_queryset(self):
         user = self.request.user
-        if has_role(user, 'dealer'):
-            return Car.objects.filter(dealer__user=user)
         if has_role(user, ['super_admin', 'admin']):
             return Car.objects.all()
-        return Car.objects.filter(status='available')
+        return Car.objects.filter(verification_status='verified')
 
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [IsAuthenticated, SuperAdmin | Admin | Dealer]
+        return super().get_permissions()
+
+    @action(detail=True, methods=['patch'], serializer_class=VerifyCarSerializer)
     @extend_schema(
+        tags=["inventory"],
+        description="Verify a car listing (admin/super_admin only).",
+        responses=VerifyCarSerializer
+    )
+    def verify(self, request, pk=None):
+        car = self.get_object()
+        serializer = self.get_serializer(car, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    @extend_schema(
+        tags=["inventory"],
         parameters=[
             OpenApiParameter(name='fuel_type', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, description='Fuel type of the car (electric, hybrid, petrol, diesel)'),
             OpenApiParameter(name='price_min', type=OpenApiTypes.FLOAT, location=OpenApiParameter.QUERY, description='Minimum price'),
             OpenApiParameter(name='price_max', type=OpenApiTypes.FLOAT, location=OpenApiParameter.QUERY, description='Maximum price'),
         ],
-        description="Filter cars by fuel type and price range.",
+        description="Filter verified cars by fuel type and price range.",
         responses=CarSerializer(many=True)
     )
-    @action(detail=False, methods=['get'])
     def filter(self, request):
         queryset = self.get_queryset()
         fuel_type = request.query_params.get('fuel_type')
         price_min = request.query_params.get('price_min')
         price_max = request.query_params.get('price_max')
 
-        if fuel_type and fuel_type not in ['electric', 'hybrid', 'petrol', 'diesel']:
-            return Response({"error": "Invalid fuel type. Must be one of: electric, hybrid, petrol, diesel."}, status=400)
+        valid_fuel_types = [choice[0] for choice in Car.FUEL_TYPES]
+        if fuel_type and fuel_type not in valid_fuel_types:
+            return Response({"error": f"Invalid fuel type. Must be one of: {', '.join(valid_fuel_types)}."}, status=400)
+
         if fuel_type:
             queryset = queryset.filter(fuel_type=fuel_type)
 
@@ -80,12 +88,12 @@ class CarViewSet(ModelViewSet):
         return Response(serializer.data)
 
 @extend_schema_view(
-    list=extend_schema(tags=["inventory"]),
-    retrieve=extend_schema(tags=["inventory"]),
-    create=extend_schema(tags=["inventory"]),
-    update=extend_schema(tags=["inventory"]),
-    partial_update=extend_schema(tags=["inventory"]),
-    destroy=extend_schema(tags=["inventory"]),
+    list=extend_schema(tags=["inventory"], description="List all car images."),
+    retrieve=extend_schema(tags=["inventory"], description="Retrieve a specific car image."),
+    create=extend_schema(tags=["inventory"], description="Create a car image (dealers/admins only)."),
+    update=extend_schema(tags=["inventory"], description="Update a car image (dealers/admins only)."),
+    partial_update=extend_schema(tags=["inventory"], description="Partially update a car image (dealers/admins only)."),
+    destroy=extend_schema(tags=["inventory"], description="Delete a car image (dealers/admins only)."),
 )
 class CarImageViewSet(ModelViewSet):
     queryset = CarImage.objects.all()
@@ -94,13 +102,5 @@ class CarImageViewSet(ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), has_manage_inventory_permission]
+            return [IsAuthenticated, SuperAdmin | Admin | Dealer]
         return [IsAuthenticated()]
-
-    def get_queryset(self):
-        user = self.request.user
-        if has_role(user, 'dealer'):
-            return CarImage.objects.filter(car__dealer__user=user)
-        if has_role(user, ['super_admin', 'admin']):
-            return CarImage.objects.all()
-        return CarImage.objects.filter(car__status='available')

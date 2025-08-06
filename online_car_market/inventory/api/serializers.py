@@ -1,11 +1,13 @@
-from datetime import datetime
 from rest_framework import serializers
-from rolepermissions.checkers import has_role
+from rolepermissions.checkers import has_role, has_permission
 from ..models import Car, CarImage
 from online_car_market.dealers.models import Dealer
+from django.contrib.auth import get_user_model
 import re
 import bleach
+from datetime import datetime
 
+User = get_user_model()
 
 class CarImageSerializer(serializers.ModelSerializer):
     car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all())
@@ -49,18 +51,20 @@ class CarImageSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         if self.instance is None and not has_role(user, ['super_admin', 'admin', 'dealer']):
             raise serializers.ValidationError("Only dealers, admins, or super admins can create car images.")
-        if self.instance and data.get('car') and data['car'].dealer and data['car'].dealer.user != user and not has_role(user, ['super_admin', 'admin']):
-            raise serializers.ValidationError("Only the dealer owner or admins can update this car image.")
+        if self.instance and data.get('car') and data['car'].posted_by != user and not has_role(user, ['super_admin', 'admin']):
+            raise serializers.ValidationError("Only the car owner or admins can update this car image.")
         return data
 
 class CarSerializer(serializers.ModelSerializer):
-    dealer = serializers.PrimaryKeyRelatedField(queryset=Dealer.objects.all(), required=False, allow_null=True)
+    dealer = serializers.PrimaryKeyRelatedField(queryset=Dealer.objects.all())
+    posted_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
     images = CarImageSerializer(many=True, read_only=True)
+    verification_status = serializers.ChoiceField(choices=Car.VERIFICATION_STATUSES, read_only=True)
 
     class Meta:
         model = Car
-        fields = ['id', 'make', 'model', 'year', 'price', 'mileage', 'fuel_type', 'status', 'dealer', 'created_at', 'updated_at', 'images']
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        fields = ['id', 'make', 'model', 'year', 'price', 'mileage', 'fuel_type', 'status', 'dealer', 'posted_by', 'verification_status', 'created_at', 'updated_at', 'images']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'verification_status']
 
     def validate_make(self, value):
         """Sanitize and validate make."""
@@ -124,16 +128,40 @@ class CarSerializer(serializers.ModelSerializer):
         return cleaned_value
 
     def validate_dealer(self, value):
-        """Ensure dealer has dealer role."""
-        if value and not has_role(value.user, 'dealer'):
+        """Ensure dealer has dealer role and matches user."""
+        if not has_role(value.user, 'dealer'):
             raise serializers.ValidationError("The assigned user must have the dealer role.")
+        user = self.context['request'].user
+        if value.user != user and not has_role(user, ['super_admin', 'admin']):
+            raise serializers.ValidationError("Only the dealer owner or admins can assign this dealer.")
         return value
 
     def validate(self, data):
-        """Ensure only dealers or admins can create/update cars."""
+        """Ensure only authorized users can create/update cars."""
         user = self.context['request'].user
         if self.instance is None and not has_role(user, ['super_admin', 'admin', 'dealer']):
             raise serializers.ValidationError("Only dealers, admins, or super admins can create cars.")
-        if self.instance and data.get('dealer') and data['dealer'].user != user and not has_role(user, ['super_admin', 'admin']):
-            raise serializers.ValidationError("Only the dealer owner or admins can update this car.")
+        if self.instance and data.get('posted_by') and data['posted_by'] != user and not has_role(user, ['super_admin', 'admin']):
+            raise serializers.ValidationError("Only the car owner or admins can update this car.")
+        return data
+
+class VerifyCarSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Car
+        fields = ['verification_status']
+        read_only_fields = []
+
+    def validate_verification_status(self, value):
+        """Ensure valid verification status."""
+        valid_statuses = ['pending', 'verified', 'rejected']
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        if cleaned_value not in valid_statuses:
+            raise serializers.ValidationError(f"Verification status must be one of: {', '.join(valid_statuses)}.")
+        return cleaned_value
+
+    def validate(self, data):
+        """Ensure only admins or super admins can verify cars."""
+        user = self.context['request'].user
+        if not has_role(user, ['super_admin', 'admin']):
+            raise serializers.ValidationError("Only super admins or admins can verify cars.")
         return data

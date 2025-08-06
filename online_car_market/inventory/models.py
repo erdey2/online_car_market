@@ -1,19 +1,25 @@
 from django.db import models
 from cloudinary.models import CloudinaryField
-from django.contrib import admin
+from django.contrib.auth import get_user_model
+from online_car_market.dealers.models import Dealer
+from django.utils.translation import gettext_lazy as _
+
+User = get_user_model()
 
 class Car(models.Model):
-    make = models.CharField(max_length=100)
-    model = models.CharField(max_length=100)
-    year = models.IntegerField()
-    price = models.DecimalField(max_digits=10, decimal_places=2)
-    mileage = models.IntegerField()
+    VERIFICATION_STATUSES = [
+        ('pending', 'Pending'),
+        ('verified', 'Verified'),
+        ('rejected', 'Rejected'),
+    ]
+
     fuel_type = models.CharField(max_length=50, choices=[
         ('electric', 'Electric'),
         ('hybrid', 'Hybrid'),
         ('petrol', 'Petrol'),
         ('diesel', 'Diesel')
     ])
+
     STATUS_CHOICES = [
         ('available', 'Available'),
         ('reserved', 'Reserved'),
@@ -23,7 +29,16 @@ class Car(models.Model):
         ('delivered', 'Delivered'),
         ('archived', 'Archived'),
     ]
+
+    make = models.CharField(max_length=100)
+    model = models.CharField(max_length=100)
+    year = models.IntegerField()
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    mileage = models.IntegerField()
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='available')
+    dealer = models.ForeignKey(Dealer, on_delete=models.CASCADE)
+    posted_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posted_cars')
+    verification_status = models.CharField(max_length=20, choices=VERIFICATION_STATUSES, default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

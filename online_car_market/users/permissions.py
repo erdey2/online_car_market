@@ -9,6 +9,7 @@ class SuperAdmin(AbstractUserRole):
         'manage_inventory': True,
         'manage_sales': True,
         'manage_accounting': True,
+        'verify_car': True,
     }
 
 class Admin(AbstractUserRole):
@@ -19,6 +20,7 @@ class Admin(AbstractUserRole):
         'manage_inventory': True,
         'manage_sales': True,
         'view_accounting': True,
+        'verify_car': True,
     }
 
 class Sales(AbstractUserRole):
@@ -59,4 +61,5 @@ class Dealer(AbstractUserRole):
         'edit_own_dealer_profile': True,
         'view_cars': True,
         'manage_own_car_listings': True,
+        'post_car': True,
     }
