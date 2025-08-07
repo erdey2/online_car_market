@@ -1,4 +1,10 @@
-import contextlib
+from django.apps import AppConfig
+
+class UsersConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'online_car_market.users'
+
+""" import contextlib
 
 from django.apps import AppConfig
 from django.utils.translation import gettext_lazy as _
@@ -10,4 +16,5 @@ class UsersConfig(AppConfig):
 
     def ready(self):
         with contextlib.suppress(ImportError):
-            import online_car_market.users.signals  # noqa: F401
+            import online_car_market.users.signals  # noqa: F401 """
+

@@ -19,6 +19,7 @@ urlpatterns = [
     path('api/inventory/', include("online_car_market.inventory.api.urls")),
     path('api/sales/', include("online_car_market.sales.api.urls")),
     path('api/accounting/', include("online_car_market.accounting.api.urls")),
+    path('api/dealers/', include("online_car_market.dealers.api.urls")),
     path('api/brokers/', include("online_car_market.brokers.api.urls")),
     path('api/buyers/', include("online_car_market.buyers.api.urls")),
 
