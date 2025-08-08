@@ -1,17 +1,21 @@
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.viewsets import ModelViewSet
-from rest_framework.permissions import IsAuthenticated
-from rolepermissions.permissions import register_object_checker
+from rest_framework.permissions import IsAuthenticated, BasePermission
 from rolepermissions.checkers import has_role
 from ..models import User
 from .serializers import UserSerializer
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework.response import Response
 
-@register_object_checker()
-def has_manage_users_permission(permission, user, obj):
-    return has_role(user, ['super_admin', 'admin'])
+
+# Custom DRF Permission class for managing users
+class CanManageUsers(BasePermission):
+    """
+    Allows access only to users with super_admin or admin role.
+    """
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and has_role(request.user, ['super_admin', 'admin'])
 
 @extend_schema_view(
     list=extend_schema(tags=["users"]),
@@ -25,11 +29,10 @@ class UserViewSet(ModelViewSet):
     serializer_class = UserSerializer
     queryset = User.objects.all()
     lookup_field = "pk"
-    permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), has_manage_users_permission]
+            return [IsAuthenticated(), CanManageUsers()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
@@ -50,3 +53,4 @@ class UserViewSet(ModelViewSet):
             return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
         serializer = UserSerializer(request.user, context={"request": request})
         return Response(status=status.HTTP_200_OK, data=serializer.data)
+
