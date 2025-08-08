@@ -28,8 +28,8 @@ class CarViewSet(ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAuthenticated, SuperAdmin | Admin | Dealer]
-        return super().get_permissions()
+            return [IsAuthenticated(), SuperAdmin(), Admin(), Dealer()]
+        return [IsAuthenticated()]
 
     @action(detail=True, methods=['patch'], serializer_class=VerifyCarSerializer)
     @extend_schema(
@@ -102,5 +102,5 @@ class CarImageViewSet(ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAuthenticated, SuperAdmin | Admin | Dealer]
+            return [IsAuthenticated(), SuperAdmin(), Admin(), Dealer()]
         return [IsAuthenticated()]
