@@ -6,7 +6,7 @@ from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 from ..models import Car, CarImage
 from .serializers import CarSerializer, CarImageSerializer, VerifyCarSerializer
-from ..permissions import IsSuperAdminOrAdminOrDealer, IsSuperAdmin, IsAdmin
+from ..permissions import IsSuperAdminOrAdminOrDealer, IsSuperAdmin, IsAdmin, IsSuperAdminOrAdmin
 
 @extend_schema_view(
     list=extend_schema(tags=["inventory"], description="List all verified cars for non-admins or all cars for admins."),
@@ -30,7 +30,7 @@ class CarViewSet(ModelViewSet):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [IsAuthenticated(), IsSuperAdminOrAdminOrDealer()]
         elif self.action == 'verify':
-            return [IsAuthenticated(), (IsSuperAdmin() or IsAdmin())]
+            return [IsAuthenticated(), IsSuperAdminOrAdmin()]
         return [IsAuthenticated()]
 
     @action(detail=True, methods=['patch'], serializer_class=VerifyCarSerializer)
