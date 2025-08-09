@@ -29,7 +29,7 @@ class Car(models.Model):
         ('delivered', 'Delivered'),
         ('archived', 'Archived'),
     ]
-
+    brand = models.CharField(max_length=255, null=True, blank=True)
     make = models.CharField(max_length=100)
     model = models.CharField(max_length=100)
     year = models.IntegerField()
