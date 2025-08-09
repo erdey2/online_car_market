@@ -35,6 +35,47 @@ class CarViewSet(ModelViewSet):
             return [IsAuthenticated(), IsSuperAdminOrAdmin()]
         return [IsAuthenticated()]
 
+    def create(self, request, *args, **kwargs):
+        uploaded_images = []
+        if hasattr(request, 'data'):
+            # Collect all nested files from form-data
+            for key in request.data.keys():
+                if key.startswith("uploaded_images") and key.endswith(".image"):
+                    # Extract index from uploaded_images[0].image
+                    idx = int(key.split("[")[1].split("]")[0])
+                    while len(uploaded_images) <= idx:
+                        uploaded_images.append({})
+                    uploaded_images[idx]['image'] = request.data.get(key)
+                elif key.startswith("uploaded_images") and key.endswith(".caption"):
+                    idx = int(key.split("[")[1].split("]")[0])
+                    while len(uploaded_images) <= idx:
+                        uploaded_images.append({})
+                    uploaded_images[idx]['caption'] = request.data.get(key)
+                elif key.startswith("uploaded_images") and key.endswith(".is_featured"):
+                    idx = int(key.split("[")[1].split("]")[0])
+                    while len(uploaded_images) <= idx:
+                        uploaded_images.append({})
+                    uploaded_images[idx]['is_featured'] = request.data.get(key)
+
+        # Save car
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        car = serializer.save()
+
+        # Save images
+        for img_data in uploaded_images:
+            if 'image' in img_data:
+                img_serializer = CarImageSerializer(
+                    data={**img_data, 'car': car.pk},
+                    context={'request': request}
+                )
+                img_serializer.is_valid(raise_exception=True)
+                img_serializer.save(car=car)
+
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+
     @action(detail=True, methods=['post'], url_path='upload-images')
     def upload_images(self, request, pk=None):
         """
