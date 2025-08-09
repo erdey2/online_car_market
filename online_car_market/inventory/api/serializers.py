@@ -11,24 +11,24 @@ User = get_user_model()
 
 class CarImageSerializer(serializers.ModelSerializer):
     car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all())
-    image = serializers.CharField()
+    # Accept file uploads; use_url=True makes the field representation return a URL
+    image = serializers.ImageField(required=False, allow_null=True, use_url=True)
+    # Optionally accept existing Cloudinary public_id or full URL
+    image_public_id = serializers.CharField(write_only=True, required=False, allow_blank=False)
 
     class Meta:
         model = CarImage
-        fields = ['id', 'car', 'image', 'is_featured', 'caption', 'uploaded_at']
-        read_only_fields = ['id', 'uploaded_at']
+        fields = ["id", "car", "image", "image_public_id", "is_featured", "caption", "uploaded_at"]
+        read_only_fields = ["id", "uploaded_at"]
 
-    def validate_image(self, value):
-        """Validate and sanitize Cloudinary image reference."""
-        if not value:
-            raise serializers.ValidationError("Image is required.")
-        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
-        if not re.match(r'^[a-zA-Z0-9_-]+(/[a-zA-Z0-9_-]+)*$', cleaned_value) and not cleaned_value.startswith('http'):
-            raise serializers.ValidationError("Invalid Cloudinary image reference or URL.")
-        return cleaned_value
+    def validate_image_public_id(self, value):
+        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+        # allow typical cloudinary public-id style (letters/numbers/_- and slashes) or a full http(s) url
+        if not re.match(r'^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+)*$', cleaned) and not cleaned.startswith(("http://", "https://")):
+            raise serializers.ValidationError("Invalid Cloudinary public ID or URL.")
+        return cleaned
 
     def validate_caption(self, value):
-        """Sanitize and validate caption."""
         if value:
             cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
             if len(cleaned_value) > 255:
@@ -37,23 +37,79 @@ class CarImageSerializer(serializers.ModelSerializer):
         return value
 
     def validate_is_featured(self, value):
-        """Ensure only one image per car is featured."""
-        if value and self.instance and self.instance.is_featured:
+        # If setting featured=true, ensure no other featured image exists for this car (except self on update)
+        if not value:
             return value
-        if value:
-            car = self.initial_data.get('car') or (self.instance.car.pk if self.instance else None)
-            if car and CarImage.objects.filter(car_id=car, is_featured=True).exists():
+
+        # Determine car id
+        car_obj = None
+        if self.instance:
+            car_obj = self.instance.car
+        else:
+            # incoming car is a PK from validated_data (PrimaryKeyRelatedField)
+            car_pk = self.initial_data.get("car")
+            try:
+                car_obj = Car.objects.get(pk=car_pk) if car_pk else None
+            except Car.DoesNotExist:
+                car_obj = None
+
+        if car_obj:
+            qs = CarImage.objects.filter(car=car_obj, is_featured=True)
+            if self.instance:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
                 raise serializers.ValidationError("Another image is already featured for this car.")
         return value
 
     def validate(self, data):
-        """Ensure only dealers or admins can manage images."""
-        user = self.context['request'].user
-        if self.instance is None and not has_role(user, ['super_admin', 'admin', 'dealer']):
-            raise serializers.ValidationError("Only dealers, admins, or super admins can create car images.")
-        if self.instance and data.get('car') and data['car'].posted_by != user and not has_role(user, ['super_admin', 'admin']):
-            raise serializers.ValidationError("Only the car owner or admins can update this car image.")
+        user = self.context["request"].user
+        # create: instance is None
+        if self.instance is None:
+            if not has_role(user, ["super_admin", "admin", "dealer"]):
+                raise serializers.ValidationError("Only dealers, admins, or super admins can create car images.")
+            car = data.get("car")
+            if car and not has_role(user, ["super_admin", "admin"]):
+                # non-admin/ non-super must be owner of the car (posted_by)
+                if not hasattr(car, "posted_by") or car.posted_by != user:
+                    raise serializers.ValidationError("Only the car owner or admins can add images.")
+        else:
+            # update: allow only owner or admin/super_admin
+            car = data.get("car", self.instance.car)
+            if not has_role(user, ["super_admin", "admin"]):
+                if not hasattr(car, "posted_by") or car.posted_by != user:
+                    raise serializers.ValidationError("Only the car owner or admins can update this car image.")
         return data
+
+    def create(self, validated_data):
+        public_id = validated_data.pop("image_public_id", None)
+        image_file = validated_data.pop("image", None)
+        car = validated_data.get("car")
+
+        instance = CarImage.objects.create(car=car, **{k: v for k, v in validated_data.items() if k not in ("image",)})
+        # assign image source: prefer public_id if provided, else uploaded file
+        if public_id:
+            # assign string public id or URL directly to CloudinaryField
+            instance.image = public_id
+        elif image_file:
+            instance.image = image_file
+        instance.save()
+        return instance
+
+    def update(self, instance, validated_data):
+        public_id = validated_data.pop("image_public_id", None)
+        image_file = validated_data.pop("image", None)
+
+        # update regular fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        if public_id:
+            instance.image = public_id
+        elif image_file:
+            instance.image = image_file
+
+        instance.save()
+        return instance
 
 class CarSerializer(serializers.ModelSerializer):
     dealer = serializers.PrimaryKeyRelatedField(queryset=Dealer.objects.all())

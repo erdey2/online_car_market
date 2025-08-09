@@ -2,6 +2,7 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework import status
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 from ..models import Car, CarImage
@@ -27,11 +28,36 @@ class CarViewSet(ModelViewSet):
         return Car.objects.filter(verification_status='verified')
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+        # protect the image upload endpoint as well
+        if self.action in ['create', 'update', 'partial_update', 'destroy', 'upload_images']:
             return [IsAuthenticated(), IsSuperAdminOrAdminOrDealer()]
         elif self.action == 'verify':
             return [IsAuthenticated(), IsSuperAdminOrAdmin()]
         return [IsAuthenticated()]
+
+    @action(detail=True, methods=['post'], url_path='upload-images')
+    def upload_images(self, request, pk=None):
+        """
+        Upload multiple images for a car. Send multipart/form-data with `images` repeated:
+        - images: file1
+        - images: file2
+        """
+        car = self.get_object()
+
+        # files
+        files = request.FILES.getlist('images')
+        if not files:
+            return Response({"detail": "No files provided. Use form field name 'images'."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        created = []
+        for f in files:
+            ser = CarImageSerializer(data={'car': car.pk, 'image': f}, context={'request': request})
+            ser.is_valid(raise_exception=True)
+            ser.save(car=car)
+            created.append(ser.data)
+
+        return Response(created, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['patch'], serializer_class=VerifyCarSerializer)
     @extend_schema(
