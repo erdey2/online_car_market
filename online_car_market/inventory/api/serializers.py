@@ -110,11 +110,11 @@ class UploadedImageSerializer(serializers.Serializer):
             return cleaned_value
         return value
 
-    def validate(self, data):
+    """ def validate(self, data):
         # Require either an uploaded file or a Cloudinary public ID
         if not data.get("image") and not data.get("image_public_id"):
             raise serializers.ValidationError("Either 'image' or 'image_public_id' is required.")
-        return data
+        return data """
 
 # ---------------- Car Serializer ----------------
 class CarSerializer(serializers.ModelSerializer):
