@@ -38,15 +38,15 @@ class CarViewSet(ModelViewSet):
     def create(self, request, *args, **kwargs):
         uploaded_images = []
 
-        # Handle form-data where files are in request.FILES
-        for key in request.FILES.keys():
+        # 1. Extract images
+        for key, file in request.FILES.items():
             if key.startswith("uploaded_images") and key.endswith(".image"):
                 idx = int(key.split("[")[1].split("]")[0])
                 while len(uploaded_images) <= idx:
                     uploaded_images.append({})
-                uploaded_images[idx]['image'] = request.FILES[key]
+                uploaded_images[idx]['image'] = file
 
-        # Handle non-file fields (captions, is_featured)
+        # 2. Extract captions, is_featured, image_public_id
         for key, value in request.data.items():
             if key.startswith("uploaded_images") and not key.endswith(".image"):
                 idx = int(key.split("[")[1].split("]")[0])
@@ -55,16 +55,20 @@ class CarViewSet(ModelViewSet):
                 if key.endswith(".caption"):
                     uploaded_images[idx]['caption'] = value
                 elif key.endswith(".is_featured"):
-                    uploaded_images[idx]['is_featured'] = value.lower() == "true"
+                    uploaded_images[idx]['is_featured'] = str(value).lower() in ["true", "1"]
+                elif key.endswith(".image_public_id"):
+                    uploaded_images[idx]['image_public_id'] = value
 
-        # Save car
-        car_serializer = self.get_serializer(data=request.data)
+        # 3. Save the car (remove uploaded_images from request data)
+        data = request.data.copy()
+        data.pop('uploaded_images', None)
+        car_serializer = self.get_serializer(data=data)
         car_serializer.is_valid(raise_exception=True)
         car = car_serializer.save()
 
-        # Save images
+        # 4. Save images
         for img_data in uploaded_images:
-            if 'image' in img_data:
+            if 'image' in img_data or 'image_public_id' in img_data:
                 img_serializer = CarImageSerializer(
                     data={**img_data, 'car': car.pk},
                     context={'request': request}
