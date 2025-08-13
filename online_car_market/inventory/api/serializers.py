@@ -74,21 +74,22 @@ class CarImageSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         uploaded_images = validated_data.pop('uploaded_images', [])
-        car = Car.objects.create(**validated_data)
 
-        # Create CarImage for each uploaded image entry
+        # Create each CarImage
+        created_images = []
         for img_data in uploaded_images:
-            # Remove 'car' if it exists to avoid multiple values error
-            img_data.pop('car', None)
+            # Remove 'car' if it exists to avoid conflicts
+            car_instance = img_data.pop('car', None) or validated_data.get('car')
 
-            CarImage.objects.create(
-                car=car,
+            image_obj = CarImage.objects.create(
+                car=car_instance,
                 image=img_data.get('image') or img_data.get('image_public_id'),
                 is_featured=img_data.get('is_featured', False),
                 caption=img_data.get('caption', '')
             )
+            created_images.append(image_obj)
 
-        return car
+        return created_images
 
     def update(self, instance, validated_data):
         public_id = validated_data.pop("image_public_id", None)
