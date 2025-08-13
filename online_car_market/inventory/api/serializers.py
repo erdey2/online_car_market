@@ -78,39 +78,6 @@ class CarImageSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError("Only the car owner or admins can update this car image.")
         return data
 
-    def create(self, validated_data):
-        uploaded_images = validated_data.pop('uploaded_images', [])
-        car = Car.objects.create(**validated_data)
-
-        for img_data in uploaded_images:
-            # Handle Cloudinary image upload
-            image_file = img_data.get('image')  # Django file upload
-            public_id = img_data.get('image_public_id')  # pre-uploaded Cloudinary ID
-
-            car_image = CarImage(car=car)
-            if image_file:
-                car_image.image = image_file  # CloudinaryField will upload automatically
-            elif public_id:
-                # Assign existing Cloudinary public ID (as a string)
-                car_image.image = public_id
-            car_image.is_featured = img_data.get('is_featured', False)
-            car_image.caption = img_data.get('caption', '')
-            car_image.save()
-
-        return car
-
-    def update(self, instance, validated_data):
-        public_id = validated_data.pop("image_public_id", None)
-        image_file = validated_data.pop("image", None)
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        if public_id:
-            instance.image = public_id
-        elif image_file:
-            instance.image = image_file
-        instance.save()
-        return instance
-
 class UploadedImageSerializer(serializers.Serializer):
     image = serializers.ImageField(required=False, allow_null=True)
     image_public_id = serializers.CharField(required=False, allow_blank=True)
