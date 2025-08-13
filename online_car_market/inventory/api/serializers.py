@@ -12,18 +12,24 @@ User = get_user_model()
 
 # ---------------- CarImage Serializer ----------------
 class CarImageSerializer(serializers.ModelSerializer):
-    image_url = serializers.SerializerMethodField(read_only=True)  # Always return full URL
-    image_file = serializers.ImageField(write_only=True, required=False)  # For file uploads
-    image_public_id = serializers.CharField(write_only=True, required=False, allow_blank=True)  # For public_id uploads
+    # Always return full URL
+    image_url = serializers.SerializerMethodField(read_only=True)
+
+    # Fields for uploads
+    image_file = serializers.ImageField(write_only=True, required=False)
+    image_public_id = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    # Make car optional for nested uploads
+    car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all(), required=False)
 
     class Meta:
         model = CarImage
-        fields = ["id", "car", "image_url", "image_file", "image_public_id", "is_featured", "caption", "uploaded_at",]
+        fields = ["id", "car", "image_url", "image_file", "image_public_id", "is_featured", "caption", "uploaded_at"]
         read_only_fields = ["id", "uploaded_at"]
 
     def get_image_url(self, obj):
         if obj.image:
-            return obj.image.url  # CloudinaryField returns full URL
+            return obj.image.url
         return None
 
     def validate_image_public_id(self, value):
@@ -37,10 +43,10 @@ class CarImageSerializer(serializers.ModelSerializer):
 
     def validate_caption(self, value):
         if value:
-            cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
-            if len(cleaned_value) > 255:
+            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+            if len(cleaned) > 255:
                 raise serializers.ValidationError("Caption cannot exceed 255 characters.")
-            return cleaned_value
+            return cleaned
         return value
 
     def validate(self, data):
@@ -62,15 +68,17 @@ class CarImageSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
+        # Attach car if passed
+        car = validated_data.pop('car', None)
         image_file = validated_data.pop("image_file", None)
         image_public_id = validated_data.pop("image_public_id", None)
         instance = CarImage(**validated_data)
-
+        if car:
+            instance.car = car
         if image_file:
             instance.image = image_file
         elif image_public_id:
-            instance.image = image_public_id  # Cloudinary will resolve public_id
-
+            instance.image = image_public_id
         instance.save()
         return instance
 
@@ -78,8 +86,13 @@ class CarImageSerializer(serializers.ModelSerializer):
 # ---------------- Car Serializer ----------------
 class CarSerializer(serializers.ModelSerializer):
     dealer = serializers.PrimaryKeyRelatedField(queryset=Dealer.objects.all())
-    posted_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
+    posted_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(),
+                                                   default=serializers.CurrentUserDefault())
+
+    # Read-only nested images
     images = CarImageSerializer(many=True, read_only=True)
+
+    # Write-only nested images for upload
     uploaded_images = CarImageSerializer(many=True, write_only=True, required=False)
 
     verification_status = serializers.ChoiceField(choices=Car.VERIFICATION_STATUSES, read_only=True)
@@ -93,6 +106,7 @@ class CarSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'verification_status']
 
+    # ---------------- Field Validations ----------------
     def validate_make(self, value):
         cleaned = bleach.clean(value.strip(), tags=[], strip=True)
         if not cleaned:
@@ -135,17 +149,17 @@ class CarSerializer(serializers.ModelSerializer):
 
     def validate_fuel_type(self, value):
         valid_types = ['electric', 'hybrid', 'petrol', 'diesel']
-        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
-        if cleaned_value not in valid_types:
+        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+        if cleaned not in valid_types:
             raise serializers.ValidationError(f"Fuel type must be one of: {', '.join(valid_types)}.")
-        return cleaned_value
+        return cleaned
 
     def validate_status(self, value):
         valid_statuses = [c[0] for c in Car.STATUS_CHOICES]
-        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
-        if cleaned_value not in valid_statuses:
+        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+        if cleaned not in valid_statuses:
             raise serializers.ValidationError(f"Status must be one of: {', '.join(valid_statuses)}.")
-        return cleaned_value
+        return cleaned
 
     def validate_dealer(self, value):
         if not has_role(value.user, 'dealer'):
@@ -159,17 +173,18 @@ class CarSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         if self.instance is None and not has_role(user, ['super_admin', 'admin', 'dealer']):
             raise serializers.ValidationError("Only dealers, admins, or super admins can create cars.")
-        if self.instance and data.get('posted_by') and data['posted_by'] != user and not has_role(user, ['super_admin', 'admin']):
+        if self.instance and data.get('posted_by') and data['posted_by'] != user and not has_role(user, ['super_admin',
+                                                                                                         'admin']):
             raise serializers.ValidationError("Only the car owner or admins can update this car.")
         return data
 
+    # ---------------- Create method with uploaded_images ----------------
     def create(self, validated_data):
         uploaded_images = validated_data.pop('uploaded_images', [])
         car = Car.objects.create(**validated_data)
 
         for img_data in uploaded_images:
-            img_data['car'] = car
-            CarImageSerializer(context=self.context).create(img_data)
+            CarImageSerializer(context=self.context).create({**img_data, 'car': car})
 
         return car
 
