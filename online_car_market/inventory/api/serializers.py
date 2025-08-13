@@ -12,20 +12,26 @@ User = get_user_model()
 
 # ---------------- CarImage Serializer ----------------
 class CarImageSerializer(serializers.ModelSerializer):
-    car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all())
-    image = serializers.ImageField(required=False, allow_null=True, use_url=True)
-    image_public_id = serializers.CharField(write_only=True, required=False, allow_blank=False)
+    image = serializers.SerializerMethodField()  # Return URL in GET
+    image_public_id = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model = CarImage
         fields = ["id", "car", "image", "image_public_id", "is_featured", "caption", "uploaded_at"]
         read_only_fields = ["id", "uploaded_at"]
 
+    def get_image(self, obj):
+        if obj.image:
+            return obj.image.url  # CloudinaryField provides URL
+        return None
+
     def validate_image_public_id(self, value):
-        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-        if not re.match(r'^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+)*$', cleaned) and not cleaned.startswith(("http://", "https://")):
-            raise serializers.ValidationError("Invalid Cloudinary public ID or URL.")
-        return cleaned
+        if value:
+            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+            if not re.match(r'^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+)*$', cleaned) and not cleaned.startswith(("http://", "https://")):
+                raise serializers.ValidationError("Invalid Cloudinary public ID or URL.")
+            return cleaned
+        return value
 
     def validate_caption(self, value):
         if value:
@@ -74,22 +80,24 @@ class CarImageSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         uploaded_images = validated_data.pop('uploaded_images', [])
+        car = Car.objects.create(**validated_data)
 
-        # Create each CarImage
-        created_images = []
         for img_data in uploaded_images:
-            # Remove 'car' if it exists to avoid conflicts
-            car_instance = img_data.pop('car', None) or validated_data.get('car')
+            # Handle Cloudinary image upload
+            image_file = img_data.get('image')  # Django file upload
+            public_id = img_data.get('image_public_id')  # pre-uploaded Cloudinary ID
 
-            image_obj = CarImage.objects.create(
-                car=car_instance,
-                image=img_data.get('image') or img_data.get('image_public_id'),
-                is_featured=img_data.get('is_featured', False),
-                caption=img_data.get('caption', '')
-            )
-            created_images.append(image_obj)
+            car_image = CarImage(car=car)
+            if image_file:
+                car_image.image = image_file  # CloudinaryField will upload automatically
+            elif public_id:
+                # Assign existing Cloudinary public ID (as a string)
+                car_image.image = public_id
+            car_image.is_featured = img_data.get('is_featured', False)
+            car_image.caption = img_data.get('caption', '')
+            car_image.save()
 
-        return created_images
+        return car
 
     def update(self, instance, validated_data):
         public_id = validated_data.pop("image_public_id", None)
@@ -221,14 +229,18 @@ class CarSerializer(serializers.ModelSerializer):
         uploaded_images = validated_data.pop('uploaded_images', [])
         car = Car.objects.create(**validated_data)
 
-        # Create CarImage for each uploaded image entry
         for img_data in uploaded_images:
-            CarImage.objects.create(
-                car=car,
-                image=img_data.get('image') or img_data.get('image_public_id'),
-                is_featured=img_data.get('is_featured', False),
-                caption=img_data.get('caption', '')
-            )
+            image_file = img_data.get('image')
+            public_id = img_data.get('image_public_id')
+
+            car_image = CarImage(car=car)
+            if image_file:
+                car_image.image = image_file
+            elif public_id:
+                car_image.image = public_id
+            car_image.is_featured = img_data.get('is_featured', False)
+            car_image.caption = img_data.get('caption', '')
+            car_image.save()
 
         return car
 
