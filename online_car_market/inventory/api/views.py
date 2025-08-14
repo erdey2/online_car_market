@@ -10,12 +10,12 @@ from .serializers import CarSerializer, CarImageSerializer, VerifyCarSerializer
 from ..permissions import IsSuperAdminOrAdminOrDealer, IsSuperAdmin, IsAdmin, IsSuperAdminOrAdmin
 
 @extend_schema_view(
-    list=extend_schema(tags=["inventory"], description="List all verified cars for non-admins or all cars for admins."),
-    retrieve=extend_schema(tags=["inventory"], description="Retrieve a specific car if verified or user is admin."),
-    create=extend_schema(tags=["inventory"], description="Create a car listing (dealers/admins only)."),
-    update=extend_schema(tags=["inventory"], description="Update a car listing (dealers/admins only)."),
-    partial_update=extend_schema(tags=["inventory"], description="Partially update a car listing (dealers/admins only)."),
-    destroy=extend_schema(tags=["inventory"], description="Delete a car listing (dealers/admins only)."),
+    list=extend_schema(tags=["inventory"]),
+    retrieve=extend_schema(tags=["inventory"]),
+    create=extend_schema(tags=["inventory"]),
+    update=extend_schema(tags=["inventory"]),
+    partial_update=extend_schema(tags=["inventory"]),
+    destroy=extend_schema(tags=["inventory"]),
 )
 class CarViewSet(ModelViewSet):
     serializer_class = CarSerializer
@@ -28,27 +28,23 @@ class CarViewSet(ModelViewSet):
         return Car.objects.filter(verification_status='verified')
 
     def get_permissions(self):
-        # protect the image upload endpoint as well
-        if self.action in ['create', 'update', 'partial_update', 'destroy', 'upload_images']:
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [IsAuthenticated(), IsSuperAdminOrAdminOrDealer()]
-        elif self.action == 'verify':
-            return [IsAuthenticated(), IsSuperAdminOrAdmin()]
         return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):
         uploaded_images = []
 
-        # 1. Extract images
+        # Extract images and metadata from form-data
         for key, file in request.FILES.items():
-            if key.startswith("uploaded_images") and key.endswith(".image"):
+            if key.startswith("uploaded_images") and key.endswith(".image_file"):
                 idx = int(key.split("[")[1].split("]")[0])
                 while len(uploaded_images) <= idx:
                     uploaded_images.append({})
-                uploaded_images[idx]['image'] = file
+                uploaded_images[idx]['image_file'] = file
 
-        # 2. Extract captions, is_featured, image_public_id
         for key, value in request.data.items():
-            if key.startswith("uploaded_images") and not key.endswith(".image"):
+            if key.startswith("uploaded_images") and not key.endswith(".image_file"):
                 idx = int(key.split("[")[1].split("]")[0])
                 while len(uploaded_images) <= idx:
                     uploaded_images.append({})
@@ -59,25 +55,19 @@ class CarViewSet(ModelViewSet):
                 elif key.endswith(".image_public_id"):
                     uploaded_images[idx]['image_public_id'] = value
 
-        # 3. Save the car (remove uploaded_images from request data)
+        # Remove uploaded_images from main data
         data = request.data.copy()
         data.pop('uploaded_images', None)
-        car_serializer = self.get_serializer(data=data)
-        car_serializer.is_valid(raise_exception=True)
-        car = car_serializer.save()
 
-        # 4. Save images
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        car = serializer.save()
+
+        # Save uploaded images
         for img_data in uploaded_images:
-            if 'image' in img_data or 'image_public_id' in img_data:
-                img_serializer = CarImageSerializer(
-                    data={**img_data, 'car': car.pk},
-                    context={'request': request}
-                )
-                img_serializer.is_valid(raise_exception=True)
-                img_serializer.save(car=car)
+            CarImageSerializer(context={'request': request}).create({**img_data, 'car': car})
 
-        headers = self.get_success_headers(car_serializer.data)
-        return Response(car_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'], url_path='upload-images')
     def upload_images(self, request, pk=None):
