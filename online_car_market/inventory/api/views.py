@@ -3,6 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 from ..models import Car, CarImage
@@ -20,6 +21,7 @@ from ..permissions import IsSuperAdminOrAdminOrDealer, IsSuperAdmin, IsAdmin, Is
 class CarViewSet(ModelViewSet):
     serializer_class = CarSerializer
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
         user = self.request.user
@@ -34,65 +36,40 @@ class CarViewSet(ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         """
-        Create car with multiple image uploads in a single request.
-        Accepts multipart/form-data:
-        - uploaded_images[0].image_file
-        - uploaded_images[0].caption (optional)
-        - uploaded_images[0].is_featured (optional)
+        Create a Car with optional uploaded images.
+        Use multipart/form-data for uploaded_images as nested objects:
+          uploaded_images[0].image_file
+          uploaded_images[0].caption
+          uploaded_images[0].is_featured
         """
-        uploaded_images = []
-
-        # Extract files & metadata
-        for key, file in request.FILES.items():
-            if key.startswith("uploaded_images") and key.endswith(".image_file"):
-                idx = int(key.split("[")[1].split("]")[0])
-                while len(uploaded_images) <= idx:
-                    uploaded_images.append({})
-                uploaded_images[idx]['image_file'] = file
-
-        for key, value in request.data.items():
-            if key.startswith("uploaded_images") and not key.endswith(".image_file"):
-                idx = int(key.split("[")[1].split("]")[0])
-                while len(uploaded_images) <= idx:
-                    uploaded_images.append({})
-                if key.endswith(".caption"):
-                    uploaded_images[idx]['caption'] = value
-                elif key.endswith(".is_featured"):
-                    uploaded_images[idx]['is_featured'] = str(value).lower() in ["true", "1"]
-
-        # Prepare main car data
-        data = request.data.copy()
-        data.pop('uploaded_images', None)
-
-        serializer = self.get_serializer(data=data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         car = serializer.save()
-
-        # Save uploaded images to Cloudinary
-        for img_data in uploaded_images:
-            CarImageSerializer(context={'request': request}).create({**img_data, 'car': car})
-
-        return Response(CarSerializer(car, context={'request': request}).data,
-                        status=status.HTTP_201_CREATED)
+        return Response(self.get_serializer(car).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'], url_path='upload-images')
     def upload_images(self, request, pk=None):
         """
         Upload additional images to an existing car.
-        Accepts multipart/form-data with repeated field name `images`.
+        Accept multipart/form-data with repeated field name `images`.
         """
         car = self.get_object()
         files = request.FILES.getlist('images')
         if not files:
-            return Response({"detail": "No files provided. Use form field name 'images'."},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "No files provided. Use form field name 'images'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         created = []
         for f in files:
-            ser = CarImageSerializer(data={'car': car.pk, 'image_file': f}, context={'request': request})
-            ser.is_valid(raise_exception=True)
-            ser.save()
-            created.append(ser.data)
+            serializer = CarImageSerializer(
+                data={'car': car.pk, 'image_file': f},
+                context={'request': request}
+            )
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            created.append(serializer.data)
 
         return Response(created, status=status.HTTP_201_CREATED)
 
@@ -113,9 +90,19 @@ class CarViewSet(ModelViewSet):
     @extend_schema(
         tags=["inventory"],
         parameters=[
-            OpenApiParameter(name='fuel_type', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY, description='Fuel type of the car (electric, hybrid, petrol, diesel)'),
-            OpenApiParameter(name='price_min', type=OpenApiTypes.FLOAT, location=OpenApiParameter.QUERY, description='Minimum price'),
-            OpenApiParameter(name='price_max', type=OpenApiTypes.FLOAT, location=OpenApiParameter.QUERY, description='Maximum price'),
+            OpenApiParameter(
+                name='fuel_type', type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                description='Fuel type of the car (electric, hybrid, petrol, diesel)'
+            ),
+            OpenApiParameter(
+                name='price_min', type=OpenApiTypes.FLOAT,
+                location=OpenApiParameter.QUERY, description='Minimum price'
+            ),
+            OpenApiParameter(
+                name='price_max', type=OpenApiTypes.FLOAT,
+                location=OpenApiParameter.QUERY, description='Maximum price'
+            ),
         ],
         description="Filter verified cars by fuel type and price range.",
         responses=CarSerializer(many=True)
@@ -131,11 +118,9 @@ class CarViewSet(ModelViewSet):
 
         try:
             if price_min:
-                price_min = float(price_min)
-                queryset = queryset.filter(price__gte=price_min)
+                queryset = queryset.filter(price__gte=float(price_min))
             if price_max:
-                price_max = float(price_max)
-                queryset = queryset.filter(price__lte=price_max)
+                queryset = queryset.filter(price__lte=float(price_max))
         except ValueError:
             return Response({"error": "Price parameters must be valid numbers."}, status=400)
 
@@ -159,4 +144,5 @@ class CarImageViewSet(ModelViewSet):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [IsAuthenticated(), IsSuperAdminOrAdminOrDealer()]
         return [IsAuthenticated()]
+
 
