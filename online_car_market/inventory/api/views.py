@@ -28,14 +28,21 @@ class CarViewSet(ModelViewSet):
         return Car.objects.filter(verification_status='verified')
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), IsSuperAdminOrAdminOrDealer()]
-        return [IsAuthenticated()]
+        if self.action in ["create", "update", "partial_update", "destroy"]:
+            return [IsSuperAdminOrAdminOrDealer()]
+        return super().get_permissions()
 
     def create(self, request, *args, **kwargs):
+        """
+        Create car with multiple image uploads in a single request.
+        Accepts multipart/form-data:
+        - uploaded_images[0].image_file
+        - uploaded_images[0].caption (optional)
+        - uploaded_images[0].is_featured (optional)
+        """
         uploaded_images = []
 
-        # Extract images and metadata from form-data
+        # Extract files & metadata
         for key, file in request.FILES.items():
             if key.startswith("uploaded_images") and key.endswith(".image_file"):
                 idx = int(key.split("[")[1].split("]")[0])
@@ -52,10 +59,8 @@ class CarViewSet(ModelViewSet):
                     uploaded_images[idx]['caption'] = value
                 elif key.endswith(".is_featured"):
                     uploaded_images[idx]['is_featured'] = str(value).lower() in ["true", "1"]
-                elif key.endswith(".image_public_id"):
-                    uploaded_images[idx]['image_public_id'] = value
 
-        # Remove uploaded_images from main data
+        # Prepare main car data
         data = request.data.copy()
         data.pop('uploaded_images', None)
 
@@ -63,22 +68,20 @@ class CarViewSet(ModelViewSet):
         serializer.is_valid(raise_exception=True)
         car = serializer.save()
 
-        # Save uploaded images
+        # Save uploaded images to Cloudinary
         for img_data in uploaded_images:
             CarImageSerializer(context={'request': request}).create({**img_data, 'car': car})
 
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(CarSerializer(car, context={'request': request}).data,
+                        status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'], url_path='upload-images')
     def upload_images(self, request, pk=None):
         """
-        Upload multiple images for a car. Send multipart/form-data with `images` repeated:
-        - images: file1
-        - images: file2
+        Upload additional images to an existing car.
+        Accepts multipart/form-data with repeated field name `images`.
         """
         car = self.get_object()
-
-        # files
         files = request.FILES.getlist('images')
         if not files:
             return Response({"detail": "No files provided. Use form field name 'images'."},
@@ -86,9 +89,9 @@ class CarViewSet(ModelViewSet):
 
         created = []
         for f in files:
-            ser = CarImageSerializer(data={'car': car.pk, 'image': f}, context={'request': request})
+            ser = CarImageSerializer(data={'car': car.pk, 'image_file': f}, context={'request': request})
             ser.is_valid(raise_exception=True)
-            ser.save(car=car)
+            ser.save()
             created.append(ser.data)
 
         return Response(created, status=status.HTTP_201_CREATED)
@@ -123,25 +126,15 @@ class CarViewSet(ModelViewSet):
         price_min = request.query_params.get('price_min')
         price_max = request.query_params.get('price_max')
 
-        valid_fuel_types = [choice[0] for choice in Car.FUEL_TYPES]
-        if fuel_type and fuel_type not in valid_fuel_types:
-            return Response({"error": f"Invalid fuel type. Must be one of: {', '.join(valid_fuel_types)}."}, status=400)
-
         if fuel_type:
             queryset = queryset.filter(fuel_type=fuel_type)
 
         try:
             if price_min:
                 price_min = float(price_min)
-                if price_min < 0:
-                    return Response({"error": "Minimum price cannot be negative."}, status=400)
                 queryset = queryset.filter(price__gte=price_min)
             if price_max:
                 price_max = float(price_max)
-                if price_max < 0:
-                    return Response({"error": "Maximum price cannot be negative."}, status=400)
-                if price_min and price_max < price_min:
-                    return Response({"error": "Maximum price cannot be less than minimum price."}, status=400)
                 queryset = queryset.filter(price__lte=price_max)
         except ValueError:
             return Response({"error": "Price parameters must be valid numbers."}, status=400)
