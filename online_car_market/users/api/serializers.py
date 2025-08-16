@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from dj_rest_auth.registration.serializers import RegisterSerializer
 from rolepermissions.checkers import has_role
+from rolepermissions.roles import get_user_roles
 from django.contrib.auth import get_user_model
 import re
 import bleach
@@ -8,10 +9,17 @@ import bleach
 User = get_user_model()
 
 class UserSerializer(serializers.ModelSerializer):
+    role = serializers.SerializerMethodField()
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'description', 'is_active', 'is_staff', 'is_superuser', 'date_joined']
+        fields = ['id', 'email', 'first_name', 'last_name', 'role', 'description', 'is_active', 'is_staff', 'is_superuser', 'date_joined']
         read_only_fields = ['id', 'date_joined']
+
+    def get_role(self, obj):
+        roles = get_user_roles(obj)
+        if roles:
+            return roles[0].get_name()  # return only the first role
+        return None
 
     def validate_email(self, value):
         """Validate and sanitize email."""
