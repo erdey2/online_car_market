@@ -6,17 +6,23 @@ from ..models import Expense, FinancialReport
 from .serializers import ExpenseSerializer, FinancialReportSerializer
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
+# -----------------------
+# Object-level permission
+# -----------------------
 @register_object_checker()
 def has_manage_accounting_permission(permission, user, obj):
-    return has_role(user, ['super_admin', 'admin', 'accounting'])
+    return has_role(user, ['super_admin', 'admin', 'accounting', 'dealer'])
 
+# -----------------------
+# Expense ViewSet
+# -----------------------
 @extend_schema_view(
-    list=extend_schema(tags=["accounting"]),
-    retrieve=extend_schema(tags=["accounting"]),
-    create=extend_schema(tags=["accounting"]),
-    update=extend_schema(tags=["accounting"]),
-    partial_update=extend_schema(tags=["accounting"]),
-    destroy=extend_schema(tags=["accounting"]),
+    list=extend_schema(tags=["Dealers - Accounting"]),
+    retrieve=extend_schema(tags=["Dealers - Accounting"]),
+    create=extend_schema(tags=["Dealers - Accounting"]),
+    update=extend_schema(tags=["Dealers - Accounting"]),
+    partial_update=extend_schema(tags=["Dealers - Accounting"]),
+    destroy=extend_schema(tags=["Dealers - Accounting"]),
 )
 class ExpenseViewSet(ModelViewSet):
     queryset = Expense.objects.all()
@@ -30,17 +36,22 @@ class ExpenseViewSet(ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        if has_role(user, 'dealer'):
+            return Expense.objects.filter(dealer=user)
         if has_role(user, ['super_admin', 'admin', 'accounting']):
             return Expense.objects.all()
         return Expense.objects.none()
 
+# -----------------------
+# FinancialReport ViewSet
+# -----------------------
 @extend_schema_view(
-    list=extend_schema(tags=["accounting"]),
-    retrieve=extend_schema(tags=["accounting"]),
-    create=extend_schema(tags=["accounting"]),
-    update=extend_schema(tags=["accounting"]),
-    partial_update=extend_schema(tags=["accounting"]),
-    destroy=extend_schema(tags=["accounting"]),
+    list=extend_schema(tags=["Dealers - Accounting"]),
+    retrieve=extend_schema(tags=["Dealers - Accounting"]),
+    create=extend_schema(tags=["Dealers - Accounting"]),
+    update=extend_schema(tags=["Dealers - Accounting"]),
+    partial_update=extend_schema(tags=["Dealers - Accounting"]),
+    destroy=extend_schema(tags=["Dealers - Accounting"]),
 )
 class FinancialReportViewSet(ModelViewSet):
     queryset = FinancialReport.objects.all()
@@ -54,6 +65,8 @@ class FinancialReportViewSet(ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        if has_role(user, 'dealer'):
+            return FinancialReport.objects.filter(dealer=user)
         if has_role(user, ['super_admin', 'admin', 'accounting']):
             return FinancialReport.objects.all()
         return FinancialReport.objects.none()
