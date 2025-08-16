@@ -6,6 +6,44 @@ from django.views.generic import RedirectView
 from django.views import defaults as default_views
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from drf_spectacular.views import (SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView,)
+from drf_spectacular.utils import extend_schema
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView
+from dj_rest_auth.registration.views import RegisterView, ResendEmailVerificationView, VerifyEmailView
+from dj_rest_auth.views import LoginView, LogoutView, PasswordChangeView, PasswordResetView, PasswordResetConfirmView, UserDetailsView
+from rest_framework.authtoken.views import ObtainAuthToken
+
+# JWT auth views
+TokenObtainPairView = extend_schema(
+    tags=["Authentication & Users"],
+    summary="Obtain JWT token pair",
+    description="Returns an access and refresh token for valid user credentials."
+)(TokenObtainPairView)
+
+TokenRefreshView = extend_schema(
+    tags=["Authentication & Users"],
+    summary="Refresh JWT access token",
+    description="Use a refresh token to obtain a new access token."
+)(TokenRefreshView)
+
+TokenVerifyView = extend_schema(
+    tags=["Authentication & Users"],
+    summary="Verify JWT token",
+    description="Check if a token is valid and not expired."
+)(TokenVerifyView)
+
+# Authentication & Users group
+RegisterView = extend_schema(tags=["Authentication & Users"])(RegisterView)
+ResendEmailVerificationView = extend_schema(tags=["Authentication & Users"])(ResendEmailVerificationView)
+VerifyEmailView = extend_schema(tags=["Authentication & Users"])(VerifyEmailView)
+LoginView = extend_schema(tags=["Authentication & Users"])(LoginView)
+LogoutView = extend_schema(tags=["Authentication & Users"])(LogoutView)
+PasswordChangeView = extend_schema(tags=["Authentication & Users"])(PasswordChangeView)
+PasswordResetView = extend_schema(tags=["Authentication & Users"])(PasswordResetView)
+PasswordResetConfirmView = extend_schema(tags=["Authentication & Users"])(PasswordResetConfirmView)
+
+# Explicit token and user views
+TokenView = extend_schema(tags=["Authentication & Users"])(ObtainAuthToken)
+UserDetailsView = extend_schema(tags=["Authentication & Users"])(UserDetailsView)
 
 urlpatterns = [
     # Django Admin, use {% url 'admin:index' %}
