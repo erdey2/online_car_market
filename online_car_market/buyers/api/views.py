@@ -7,10 +7,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import serializers
 
 
-# -----------------------
 # PERMISSION CLASSES
-# -----------------------
-
 class CanManageBuyers(BasePermission):
     def has_object_permission(self, request, view, obj):
         return has_role(request.user, ['super_admin', 'admin']) or obj.user == request.user
@@ -23,17 +20,14 @@ class CanManageLoyalty(BasePermission):
     def has_permission(self, request, view):
         return has_role(request.user, ['super_admin', 'admin'])
 
-# -----------------------
 # VIEWSETS
-# -----------------------
-
 @extend_schema_view(
-    list=extend_schema(tags=["buyers"]),
-    retrieve=extend_schema(tags=["buyers"]),
-    create=extend_schema(tags=["buyers"]),
-    update=extend_schema(tags=["buyers"]),
-    partial_update=extend_schema(tags=["buyers"]),
-    destroy=extend_schema(tags=["buyers"]),
+    list=extend_schema(tags=["Buyers - Profiles"]),
+    retrieve=extend_schema(tags=["Buyers - Profiles"]),
+    create=extend_schema(tags=["Buyers - Profiles"]),
+    update=extend_schema(tags=["Buyers - Profiles"]),
+    partial_update=extend_schema(tags=["Buyers - Profiles"]),
+    destroy=extend_schema(tags=["Buyers - Profiles"]),
 )
 class BuyerViewSet(ModelViewSet):
     queryset = Buyer.objects.all()
@@ -70,12 +64,12 @@ class BuyerViewSet(ModelViewSet):
         serializer.save(user=user)
 
 @extend_schema_view(
-    list=extend_schema(tags=["ratings"]),
-    retrieve=extend_schema(tags=["ratings"]),
-    create=extend_schema(tags=["ratings"]),
-    update=extend_schema(tags=["ratings"]),
-    partial_update=extend_schema(tags=["ratings"]),
-    destroy=extend_schema(tags=["ratings"]),
+    list=extend_schema(tags=["Buyers - Rating"]),
+    retrieve=extend_schema(tags=["Buyers - Rating"]),
+    create=extend_schema(tags=["Buyers - Rating"]),
+    update=extend_schema(tags=["Buyers - Rating"]),
+    partial_update=extend_schema(tags=["Buyers - Rating"]),
+    destroy=extend_schema(tags=["Buyers - Rating"]),
 )
 class RatingViewSet(ModelViewSet):
     queryset = Rating.objects.all()
@@ -95,12 +89,12 @@ class RatingViewSet(ModelViewSet):
         return self.queryset.none()
 
 @extend_schema_view(
-    list=extend_schema(tags=["loyalty"]),
-    retrieve=extend_schema(tags=["loyalty"]),
-    create=extend_schema(tags=["loyalty"]),
-    update=extend_schema(tags=["loyalty"]),
-    partial_update=extend_schema(tags=["loyalty"]),
-    destroy=extend_schema(tags=["loyalty"]),
+    list=extend_schema(tags=["Buyers - Loyalty"]),
+    retrieve=extend_schema(tags=["Buyers - Loyalty"]),
+    create=extend_schema(tags=["Buyers - Loyalty"]),
+    update=extend_schema(tags=["Buyers - Loyalty"]),
+    partial_update=extend_schema(tags=["Buyers - Loyalty"]),
+    destroy=extend_schema(tags=["Buyers - Loyalty"]),
 )
 class LoyaltyProgramViewSet(ModelViewSet):
     queryset = LoyaltyProgram.objects.all()

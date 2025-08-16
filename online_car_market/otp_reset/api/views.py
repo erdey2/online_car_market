@@ -37,7 +37,7 @@ class RequestPasswordResetOTP(APIView):
                 status_codes=["404"]
             ),
         ],
-        tags=["auth"],
+        tags=["Authentication & Users"],
         summary="Request Password Reset OTP",
         description="Send a one-time password (OTP) to the user's email for password reset."
     )
@@ -91,7 +91,7 @@ class ConfirmPasswordResetOTP(APIView):
                 status_codes=["400"]
             ),
         ],
-        tags=["auth"],
+        tags=["Authentication & Users"],
         summary="Confirm Password Reset with OTP",
         description="Verify the OTP sent to user's email and allow password reset if valid."
 

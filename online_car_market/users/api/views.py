@@ -6,6 +6,7 @@ from rolepermissions.checkers import has_role
 from ..models import User
 from .serializers import UserSerializer
 from drf_spectacular.utils import extend_schema, extend_schema_view
+
 from rest_framework.response import Response
 
 
@@ -18,12 +19,12 @@ class CanManageUsers(BasePermission):
         return request.user.is_authenticated and has_role(request.user, ['super_admin', 'admin'])
 
 @extend_schema_view(
-    list=extend_schema(tags=["users"]),
-    retrieve=extend_schema(tags=["users"]),
-    create=extend_schema(tags=["users"]),
-    update=extend_schema(tags=["users"]),
-    partial_update=extend_schema(tags=["users"]),
-    destroy=extend_schema(tags=["users"]),
+    list=extend_schema(tags=["Authentication & Users"]),
+    retrieve=extend_schema(tags=["Authentication & Users"]),
+    create=extend_schema(tags=["Authentication & Users"]),
+    update=extend_schema(tags=["Authentication & Users"]),
+    partial_update=extend_schema(tags=["Authentication & Users"]),
+    destroy=extend_schema(tags=["Authentication & Users"]),
 )
 class UserViewSet(ModelViewSet):
     serializer_class = UserSerializer
@@ -44,6 +45,7 @@ class UserViewSet(ModelViewSet):
         return self.queryset.none()
 
     @extend_schema(
+        tags=["Authentication & Users"],
         description="Retrieve the authenticated user's profile.",
         responses=UserSerializer
     )
