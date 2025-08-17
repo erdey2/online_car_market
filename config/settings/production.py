@@ -123,11 +123,13 @@ sentry_sdk.init(
 
 # Your stuff...
 # ------------------------------------------------------------------------------
+CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
 CORS_ALLOWED_ORIGINS = [
+
     # "http://localhost:5175",
-    "https://autodealer-two.vercel.app/",
+    # "https://autodealer-two.vercel.app/",
 ]
 
 
