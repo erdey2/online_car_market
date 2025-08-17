@@ -64,12 +64,12 @@ class BuyerViewSet(ModelViewSet):
         serializer.save(user=user)
 
 @extend_schema_view(
-    list=extend_schema(tags=["Buyers - Rating"]),
-    retrieve=extend_schema(tags=["Buyers - Rating"]),
-    create=extend_schema(tags=["Buyers - Rating"]),
-    update=extend_schema(tags=["Buyers - Rating"]),
-    partial_update=extend_schema(tags=["Buyers - Rating"]),
-    destroy=extend_schema(tags=["Buyers - Rating"]),
+    list=extend_schema(tags=["Buyers - Ratings"]),
+    retrieve=extend_schema(tags=["Buyers - Ratings"]),
+    create=extend_schema(tags=["Buyers - Ratings"]),
+    update=extend_schema(tags=["Buyers - Ratings"]),
+    partial_update=extend_schema(tags=["Buyers - Ratings"]),
+    destroy=extend_schema(tags=["Buyers - Ratings"]),
 )
 class RatingViewSet(ModelViewSet):
     queryset = Rating.objects.all()

@@ -42,25 +42,60 @@ class CarViewSet(ModelViewSet):
         car = serializer.save()
         return Response(self.get_serializer(car).data, status=status.HTTP_201_CREATED)
 
-    @action(detail=True, methods=['post'], url_path='upload-images')
-    @extend_schema(tags=["Dealers - Inventory"], description="Upload additional images to an existing car.")
+    # upload-images
+    @extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Upload additional images to an existing car. Use form field `images`.",
+        request={
+            "multipart/form-data": {
+                "type": "object",
+                "properties": {
+                    "images": {
+                        "type": "array",
+                        "items": {"type": "string", "format": "binary"}
+                    }
+                },
+                "required": ["images"]
+            }
+        },
+        responses=CarImageSerializer(many=True),
+    )
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='upload-images',
+        serializer_class=CarImageSerializer,
+        parser_classes=[MultiPartParser]
+    )
     def upload_images(self, request, pk=None):
         car = self.get_object()
         files = request.FILES.getlist('images')
         if not files:
-            return Response({"detail": "No files provided. Use form field name 'images'."},
-                            status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "No files provided. Use form field name 'images'."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         created = []
         for f in files:
-            serializer = CarImageSerializer(data={'car': car.pk, 'image_file': f}, context={'request': request})
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-            created.append(serializer.data)
+            ser = CarImageSerializer(data={'car': car.pk, 'image_file': f}, context={'request': request})
+            ser.is_valid(raise_exception=True)
+            ser.save()
+            created.append(ser.data)
         return Response(created, status=status.HTTP_201_CREATED)
 
-    @action(detail=True, methods=['patch'], serializer_class=VerifyCarSerializer)
-    @extend_schema(tags=["Dealers - Inventory"], description="Verify a car listing (admin/super_admin only).",
-                   responses=VerifyCarSerializer)
+
+    # verify
+    @extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Verify a car listing (admin/super_admin only).",
+        responses=VerifyCarSerializer,
+    )
+    @action(
+        detail=True,
+        methods=['patch'],
+        serializer_class=VerifyCarSerializer,
+        permission_classes=[IsSuperAdminOrAdminOrDealer]
+    )
     def verify(self, request, pk=None):
         car = self.get_object()
         serializer = self.get_serializer(car, data=request.data, partial=True)
@@ -68,18 +103,19 @@ class CarViewSet(ModelViewSet):
         serializer.save()
         return Response(serializer.data)
 
-    @action(detail=False, methods=['get'])
+    # filter
     @extend_schema(
         tags=["Dealers - Inventory"],
+        description="Filter verified cars by fuel type and price range.",
         parameters=[
             OpenApiParameter("fuel_type", OpenApiTypes.STR, OpenApiParameter.QUERY,
-                             description="Fuel type of the car (electric, hybrid, petrol, diesel)"),
+                             description="Fuel type (electric, hybrid, petrol, diesel)"),
             OpenApiParameter("price_min", OpenApiTypes.FLOAT, OpenApiParameter.QUERY, description="Minimum price"),
             OpenApiParameter("price_max", OpenApiTypes.FLOAT, OpenApiParameter.QUERY, description="Maximum price"),
         ],
-        description="Filter verified cars by fuel type and price range.",
-        responses=CarSerializer(many=True)
+        responses=CarSerializer(many=True),
     )
+    @action(detail=False, methods=['get'], serializer_class=CarSerializer)
     def filter(self, request):
         queryset = self.get_queryset()
         fuel_type = request.query_params.get('fuel_type')
@@ -94,10 +130,11 @@ class CarViewSet(ModelViewSet):
             if price_max:
                 queryset = queryset.filter(price__lte=float(price_max))
         except ValueError:
-            return Response({"error": "Price parameters must be valid numbers."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Price parameters must be valid numbers."}, status=400)
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+
 
 # CarImage ViewSet
 @extend_schema_view(

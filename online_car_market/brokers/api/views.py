@@ -23,12 +23,12 @@ class CanManageBrokerListings(BasePermission):
 
 # Broker ViewSet
 @extend_schema_view(
-    list=extend_schema(tags=["Brokers - Profiles & Listings"]),
-    retrieve=extend_schema(tags=["Brokers - Profiles & Listings"]),
-    create=extend_schema(tags=["Brokers - Profiles & Listings"]),
-    update=extend_schema(tags=["Brokers - Profiles & Listings"]),
-    partial_update=extend_schema(tags=["Brokers - Profiles & Listings"]),
-    destroy=extend_schema(tags=["Brokers - Profiles & Listings"]),
+    list=extend_schema(tags=["Brokers - Profiles"]),
+    retrieve=extend_schema(tags=["Brokers - Profiles"]),
+    create=extend_schema(tags=["Brokers - Profiles"]),
+    update=extend_schema(tags=["Brokers - Profiles"]),
+    partial_update=extend_schema(tags=["Brokers - Profiles"]),
+    destroy=extend_schema(tags=["Brokers - Profiles"]),
 )
 class BrokerViewSet(ModelViewSet):
     queryset = Broker.objects.all()
@@ -50,12 +50,12 @@ class BrokerViewSet(ModelViewSet):
 
 # BrokerListing ViewSet
 @extend_schema_view(
-    list=extend_schema(tags=["Brokers - Profiles & Listings"]),
-    retrieve=extend_schema(tags=["Brokers - Profiles & Listings"]),
-    create=extend_schema(tags=["Brokers - Profiles & Listings"]),
-    update=extend_schema(tags=["Brokers - Profiles & Listings"]),
-    partial_update=extend_schema(tags=["Brokers - Profiles & Listings"]),
-    destroy=extend_schema(tags=["Brokers - Profiles & Listings"]),
+    list=extend_schema(tags=["Brokers - Listings"]),
+    retrieve=extend_schema(tags=["Brokers - Listings"]),
+    create=extend_schema(tags=["Brokers - Listings"]),
+    update=extend_schema(tags=["Brokers - Listings"]),
+    partial_update=extend_schema(tags=["Brokers - Listings"]),
+    destroy=extend_schema(tags=["Brokers - Listings"]),
 )
 class BrokerListingViewSet(ModelViewSet):
     queryset = BrokerListing.objects.all()
