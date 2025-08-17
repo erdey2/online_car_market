@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from dj_rest_auth.registration.serializers import RegisterSerializer
+from dj_rest_auth.serializers import LoginSerializer
 from rolepermissions.checkers import has_role
 from rolepermissions.roles import get_user_roles
 from django.contrib.auth import get_user_model
@@ -98,6 +99,13 @@ class UserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Only super admins, admins, or the user can update this profile.")
         return data
 
+class CustomLoginSerializer(LoginSerializer):
+    username = None  # remove username completely
+    email = serializers.EmailField(required=True)
+
+    def validate(self, attrs):
+        # Let dj-rest-auth handle the authentication with email + password
+        return super().validate(attrs)
 
 class CustomRegisterSerializer(RegisterSerializer):
     username = None
