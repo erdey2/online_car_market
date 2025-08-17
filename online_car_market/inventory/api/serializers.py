@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
 from ..models import Car, CarImage
 from online_car_market.dealers.models import Dealer
@@ -20,6 +21,7 @@ class CarImageSerializer(serializers.ModelSerializer):
         fields = ["id", "car", "image_file", "image_url", "is_featured", "caption", "uploaded_at"]
         read_only_fields = ["id", "uploaded_at", "image_url"]
 
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_image_url(self, obj):
         return obj.image.url if obj.image else None
 

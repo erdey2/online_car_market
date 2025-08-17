@@ -3,6 +3,7 @@ from dj_rest_auth.registration.serializers import RegisterSerializer
 from dj_rest_auth.serializers import LoginSerializer
 from rolepermissions.checkers import has_role
 from rolepermissions.roles import get_user_roles
+from drf_spectacular.utils import extend_schema_field
 from django.contrib.auth import get_user_model
 import re
 import bleach
@@ -16,6 +17,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id', 'email', 'first_name', 'last_name', 'role', 'description', 'is_active', 'is_staff', 'is_superuser', 'date_joined']
         read_only_fields = ['id', 'date_joined']
 
+    @extend_schema_field(serializers.CharField(allow_null=True))
     def get_role(self, obj):
         roles = get_user_roles(obj)
         if roles:
