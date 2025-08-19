@@ -1,5 +1,13 @@
 from rest_framework import serializers
 from rolepermissions.checkers import has_role
+from rolepermissions.roles import assign_role
+
+from online_car_market.dealers.api.serializers import DealerSerializer
+from online_car_market.dealers.models import Dealer
+
+from online_car_market.brokers.api.serializers import BrokerSerializer
+from online_car_market.brokers.models import Broker
+
 from online_car_market.users.api.serializers import UserSerializer
 from online_car_market.inventory.api.serializers import CarSerializer
 from online_car_market.buyers.models import Buyer, Rating, LoyaltyProgram
@@ -133,3 +141,36 @@ class LoyaltyProgramSerializer(serializers.ModelSerializer):
         if not has_role(user, ['super_admin', 'admin']):
             raise serializers.ValidationError("Only admins or super admins can manage loyalty programs.")
         return data
+
+class UpgradeToDealerSerializer(DealerSerializer):
+    class Meta(DealerSerializer.Meta):
+        fields = ['name', 'license_number', 'address', 'telebirr_account']
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        dealer = Dealer.objects.create(user=user, **validated_data)
+        assign_role(user, 'dealer')
+        return dealer
+
+class UpgradeToBrokerSerializer(BrokerSerializer):
+    class Meta(BrokerSerializer.Meta):
+        fields = ['name', 'contact', 'commission_rate', 'national_id', 'telebirr_account']
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        broker = Broker.objects.create(user=user, **validated_data)
+        assign_role(user, 'broker')
+        return broker
+
+class VerifyDealerSerializer(serializers.ModelSerializer):
+    is_verified = serializers.BooleanField()
+
+    class Meta:
+        model = Dealer
+        fields = ['is_verified']
+
+    def validate_is_verified(self, value):
+        user = self.context['request'].user
+        if not has_role(user, ['super_admin', 'admin']):
+            raise serializers.ValidationError("Only super admins or admins can verify dealers.")
+        return value

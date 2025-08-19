@@ -24,3 +24,6 @@ class BrokerListing(models.Model):
 
     def __str__(self):
         return f"{self.broker.name} - {self.car}"
+
+    class Meta:
+        unique_together = ('broker', 'car')

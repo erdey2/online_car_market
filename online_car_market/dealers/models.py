@@ -9,6 +9,7 @@ class Dealer(models.Model):
     license_number = models.CharField(max_length=50)
     address = models.CharField(max_length=100)
     telebirr_account = models.CharField(max_length=100, null=True)
+    is_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

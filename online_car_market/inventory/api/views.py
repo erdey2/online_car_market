@@ -1,3 +1,5 @@
+from django.db.models import Count, Avg
+from django.db import models
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
@@ -6,19 +8,19 @@ from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
-from ..models import Car, CarImage
-from .serializers import CarSerializer, CarImageSerializer, VerifyCarSerializer
-from ..permissions import IsSuperAdminOrAdminOrDealer
-
+from ..models import Car, CarImage, Bid, Payment
+from .serializers import CarSerializer, CarImageSerializer, VerifyCarSerializer, BidSerializer, PaymentSerializer
+from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealer
+from online_car_market.dealers.models import Dealer
 
 # Car ViewSet
 @extend_schema_view(
-    list=extend_schema(tags=["Dealers - Inventory"]),
-    retrieve=extend_schema(tags=["Dealers - Inventory"]),
-    create=extend_schema(tags=["Dealers - Inventory"]),
-    update=extend_schema(tags=["Dealers - Inventory"]),
-    partial_update=extend_schema(tags=["Dealers - Inventory"]),
-    destroy=extend_schema(tags=["Dealers - Inventory"]),
+    list=extend_schema(tags=["Dealers - Inventory"], description="List all verified cars for non-admins or all cars for admins."),
+    retrieve=extend_schema(tags=["Dealers - Inventory"], description="Retrieve a specific car if verified or user is admin."),
+    create=extend_schema(tags=["Dealers - Inventory"], description="Create a car listing (dealers/brokers/admins only)."),
+    update=extend_schema(tags=["Dealers - Inventory"], description="Update a car listing (dealers/brokers/admins only)."),
+    partial_update=extend_schema(tags=["Dealers - Inventory"], description="Partially update a car listing."),
+    destroy=extend_schema(tags=["Dealers - Inventory"], description="Delete a car listing (dealers/brokers/admins only)."),
 )
 class CarViewSet(ModelViewSet):
     serializer_class = CarSerializer
@@ -32,7 +34,7 @@ class CarViewSet(ModelViewSet):
         return Car.objects.filter(verification_status='verified')
 
     def get_permissions(self):
-        if self.action in ["create", "update", "partial_update", "destroy"]:
+        if self.action in ["create", "update", "partial_update", "destroy",  "bid", "pay"]:
             return [IsSuperAdminOrAdminOrDealer()]
         return super().get_permissions()
 
@@ -83,7 +85,6 @@ class CarViewSet(ModelViewSet):
             created.append(ser.data)
         return Response(created, status=status.HTTP_201_CREATED)
 
-
     # verify
     @extend_schema(
         tags=["Dealers - Inventory"],
@@ -121,20 +122,106 @@ class CarViewSet(ModelViewSet):
         fuel_type = request.query_params.get('fuel_type')
         price_min = request.query_params.get('price_min')
         price_max = request.query_params.get('price_max')
+        sale_type = request.query_params.get('sale_type')
+
+        valid_fuel_types = [choice[0] for choice in Car.FUEL_TYPES]
+        if fuel_type and fuel_type not in valid_fuel_types:
+            return Response({"error": f"Invalid fuel type. Must be one of: {', '.join(valid_fuel_types)}."}, status=400)
+
+        valid_sale_types = [choice[0] for choice in Car.SALE_TYPES]
+        if sale_type and sale_type not in valid_sale_types:
+            return Response({"error": f"Invalid sale type. Must be one of: {', '.join(valid_sale_types)}."}, status=400)
 
         if fuel_type:
             queryset = queryset.filter(fuel_type=fuel_type)
+
         try:
             if price_min:
-                queryset = queryset.filter(price__gte=float(price_min))
+                price_min = float(price_min)
+                if price_min < 0:
+                    return Response({"error": "Minimum price cannot be negative."}, status=400)
+                queryset = queryset.filter(price__gte=price_min)
             if price_max:
-                queryset = queryset.filter(price__lte=float(price_max))
+                price_max = float(price_max)
+                if price_max < 0:
+                    return Response({"error": "Maximum price cannot be negative."}, status=400)
+                if price_min and price_max < price_min:
+                    return Response({"error": "Maximum price cannot be less than minimum price."}, status=400)
+                queryset = queryset.filter(price__lte=price_max)
         except ValueError:
             return Response({"error": "Price parameters must be valid numbers."}, status=400)
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
+    @extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Place a bid on an auction car.",
+        responses=BidSerializer
+    )
+    @action(detail=True, methods=['post'], serializer_class=BidSerializer)
+    def bid(self, request, pk=None):
+        car = self.get_object()
+        serializer = self.get_serializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        bid = serializer.save(car=car)
+        return Response(BidSerializer(bid).data)
+
+    @extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Record a payment (listing fee, commission, or purchase).",
+        responses=PaymentSerializer
+    )
+    @action(detail=True, methods=['post'], serializer_class=PaymentSerializer)
+    def pay(self, request, pk=None):
+        car = self.get_object() if pk else None
+        serializer = self.get_serializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        payment = serializer.save(user=request.user, car=car)
+        return Response(PaymentSerializer(payment).data)
+
+    @extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Get market analytics (super admin only).",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "total_cars": {"type": "integer"},
+                    "average_price": {"type": "number"},
+                    "dealer_stats": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "dealer_id": {"type": "integer"},
+                                "dealer_name": {"type": "string"},
+                                "total_cars": {"type": "integer"},
+                                "sold_cars": {"type": "integer"},
+                                "average_price": {"type": "number"}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'])
+    def analytics(self, request):
+        if not has_role(request.user, ['super_admin']):
+            return Response({"error": "Only super admins can access analytics."}, status=403)
+        total_cars = Car.objects.count()
+        average_price = Car.objects.filter(price__isnull=False).aggregate(Avg('price'))['price__avg'] or 0
+        dealer_stats = Dealer.objects.annotate(
+            total_cars=Count('cars'),
+            sold_cars=Count('cars', filter=models.Q(cars__status='sold')),
+            avg_price=Avg('cars__price')
+        ).values('id', 'name', 'total_cars', 'sold_cars', 'avg_price')
+        return Response({
+            "total_cars": total_cars,
+            "average_price": round(average_price, 2),
+            "dealer_stats": list(dealer_stats)
+        })
 
 # CarImage ViewSet
 @extend_schema_view(

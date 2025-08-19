@@ -1,60 +1,53 @@
-from rest_framework import serializers, status
 from rest_framework.viewsets import ModelViewSet
-from rest_framework.permissions import IsAuthenticated, BasePermission
-from rolepermissions.checkers import has_role
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import action
 from rest_framework.response import Response
+from rolepermissions.checkers import has_role
+from rolepermissions.roles import assign_role
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from ..models import Dealer
-from .serializers import DealerSerializer
-from django.contrib.auth import get_user_model
+from .serializers import DealerSerializer, UpgradeToDealerSerializer, VerifyDealerSerializer
+from online_car_market.users.permissions import IsSuperAdmin, IsAdmin, IsDealer
 
-# PERMISSION CLASSES
-class CanManageDealers(BasePermission):
-    """
-    Allows access only to super_admin, admin, or the dealer themselves.
-    """
-    def has_object_permission(self, request, view, obj):
-        return has_role(request.user, ['super_admin', 'admin']) or obj.user == request.user
-
-# VIEWSET
 @extend_schema_view(
-    list=extend_schema(tags=["Dealers - Profiles"]),
-    retrieve=extend_schema(tags=["Dealers - Profiles"]),
-    create=extend_schema(tags=["Dealers - Profiles"]),
-    update=extend_schema(tags=["Dealers - Profiles"]),
-    partial_update=extend_schema(tags=["Dealers - Profiles"]),
-    destroy=extend_schema(tags=["Dealers - Profiles"]),
+    list=extend_schema(tags=["Dealers - Profiles"], description="List all dealers (admin only)."),
+    retrieve=extend_schema(tags=["Dealers - Profiles"], description="Retrieve a dealer profile."),
+    create=extend_schema(tags=["Dealers - Profiles"], description="Create a dealer profile (admin only)."),
+    update=extend_schema(tags=["Dealers - Profiles"], description="Update a dealer profile (admin or owner)."),
+    partial_update=extend_schema(tags=["Dealers - Profiles"], description="Partially update a dealer profile."),
+    destroy=extend_schema(tags=["Dealers - Profiles"], description="Delete a dealer profile (admin only)."),
 )
 class DealerProfileViewSet(ModelViewSet):
-    queryset = Dealer.objects.all()
     serializer_class = DealerSerializer
+    permission_classes = [IsAuthenticated]
 
-    # Permissions
-    def get_permissions(self):
-        if self.action in ['update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), CanManageDealers()]
-        return [IsAuthenticated()]
-
-    # Queryset filtering
     def get_queryset(self):
         user = self.request.user
         if has_role(user, ['super_admin', 'admin']):
-            return self.queryset.all()
-        if has_role(user, 'dealer'):
-            return self.queryset.filter(user=user)
-        return self.queryset.none()
+            return Dealer.objects.all()
+        return Dealer.objects.filter(user=user)
 
-    # Create a dealer profile
-    def perform_create(self, serializer):
-        # Expecting 'user' to be passed as an ID in the request
-        user_id = self.request.data.get("user", {}).get("id") or self.request.data.get("user")
-        if not user_id:
-            raise serializers.ValidationError({"user": "User ID is required."})
+    @extend_schema(
+        tags=["Dealers - Profiles"],
+        description="Verify a dealer profile (admin/super_admin only).",
+        responses=VerifyDealerSerializer
+    )
+    @action(detail=True, methods=['patch'], serializer_class=VerifyDealerSerializer)
+    def verify(self, request, pk=None):
+        dealer = self.get_object()
+        serializer = self.get_serializer(dealer, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
-        User = get_user_model()
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            raise serializers.ValidationError({"user": "User not found."})
-
-        serializer.save(user=user)
+    @extend_schema(
+        tags=["Dealers - Profiles"],
+        description="Request to upgrade to dealer role.",
+        responses=DealerSerializer
+    )
+    @action(detail=False, methods=['post'], serializer_class=UpgradeToDealerSerializer)
+    def upgrade(self, request):
+        serializer = self.get_serializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        dealer = serializer.save()
+        return Response(DealerSerializer(dealer).data)

@@ -1,12 +1,13 @@
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
-from ..models import Car, CarImage
+from ..models import Car, CarImage, Bid, Payment
 from online_car_market.dealers.models import Dealer
 from django.contrib.auth import get_user_model
 import re
 import bleach
 from datetime import datetime
+from django.utils import timezone
 
 User = get_user_model()
 
@@ -33,6 +34,14 @@ class CarImageSerializer(serializers.ModelSerializer):
             return cleaned
         return value
 
+    def validate_image_file(self, value):
+        if value:
+            max_size = 5 * 1024 * 1024  # 5MB
+            if value.size > max_size:
+                raise serializers.ValidationError("Image file size cannot exceed 5MB.")
+            return value
+        return value
+
     def validate(self, data):
         car = data.get("car") or getattr(self.instance, "car", None)
         user = self.context["request"].user
@@ -53,13 +62,73 @@ class CarImageSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+class BidSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
 
-# ---------------- Car Serializer ----------------
+    class Meta:
+        model = Bid
+        fields = ['id', 'car', 'user', 'amount', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Bid amount must be positive.")
+        return value
+
+    def validate_car(self, value):
+        if value.sale_type != 'auction':
+            raise serializers.ValidationError("Bids can only be placed on auction cars.")
+        if value.auction_end and value.auction_end < timezone.now():
+            raise serializers.ValidationError("Auction has ended.")
+        return value
+
+    def validate(self, data):
+        user = self.context['request'].user
+        car = data.get('car')
+        if car.posted_by == user:
+            raise serializers.ValidationError("You cannot bid on your own car.")
+        return data
+
+class PaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
+        fields = ['id', 'user', 'car', 'amount', 'payment_type', 'is_confirmed', 'transaction_id', 'created_at']
+        read_only_fields = ['id', 'user', 'is_confirmed', 'created_at']
+
+    def validate_amount(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Payment amount must be positive.")
+        return value
+
+    def validate_payment_type(self, value):
+        valid_types = [choice[0] for choice in Payment.PAYMENT_TYPES]
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        if cleaned_value not in valid_types:
+            raise serializers.ValidationError(f"Payment type must be one of: {', '.join(valid_types)}.")
+        return cleaned_value
+
+    def validate_transaction_id(self, value):
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        if not re.match(r'^[a-zA-Z0-9-]+$', cleaned_value):
+            raise serializers.ValidationError("Transaction ID can only contain letters, numbers, or hyphens.")
+        return cleaned_value
+
+    def validate(self, data):
+        user = self.context['request'].user
+        payment_type = data.get('payment_type')
+        car = data.get('car')
+        if payment_type == 'listing_fee' and not has_role(user, 'broker'):
+            raise serializers.ValidationError("Only brokers can pay listing fees.")
+        if payment_type in ['commission', 'purchase'] and not car:
+            raise serializers.ValidationError("Car is required for commission or purchase payments.")
+        return data
+
 class CarSerializer(serializers.ModelSerializer):
     dealer = serializers.PrimaryKeyRelatedField(queryset=Dealer.objects.all())
     posted_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
     images = CarImageSerializer(many=True, read_only=True)
     uploaded_images = CarImageSerializer(many=True, write_only=True, required=False)
+    bids = BidSerializer(many=True, read_only=True)
     verification_status = serializers.ChoiceField(choices=Car.VERIFICATION_STATUSES, read_only=True)
 
     class Meta:
@@ -122,6 +191,18 @@ class CarSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(f"Status must be one of: {', '.join(valid_statuses)}.")
         return cleaned
 
+    def validate_sale_type(self, value):
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        valid_types = [choice[0] for choice in Car.SALE_TYPES]
+        if cleaned_value not in valid_types:
+            raise serializers.ValidationError(f"Sale type must be one of: {', '.join(valid_types)}.")
+        return cleaned_value
+
+    def validate_auction_end(self, value):
+        if value and value < timezone.now():
+            raise serializers.ValidationError("Auction end time must be in the future.")
+        return value
+
     def validate_dealer(self, value):
         if not has_role(value.user, 'dealer'):
             raise serializers.ValidationError("Dealer user must have dealer role.")
@@ -132,6 +213,14 @@ class CarSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         user = self.context['request'].user
+        sale_type = data.get('sale_type')
+        price = data.get('price')
+        auction_end = data.get('auction_end')
+
+        if sale_type == 'auction' and price is not None:
+            raise serializers.ValidationError("Auction cars cannot have a fixed price.")
+        if sale_type == 'auction' and not auction_end:
+            raise serializers.ValidationError("Auction end time is required for auction cars.")
         if self.instance is None and not has_role(user, ['super_admin', 'admin', 'dealer']):
             raise serializers.ValidationError("Only dealers, admins, or super admins can create cars.")
         if self.instance and data.get('posted_by') and data['posted_by'] != user and not has_role(user, ['super_admin', 'admin']):

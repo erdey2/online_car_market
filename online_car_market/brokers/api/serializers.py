@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from rolepermissions.checkers import has_role
+from rolepermissions.roles import assign_role
+
 from ..models import Broker, BrokerListing
 from online_car_market.users.models import User
 from online_car_market.inventory.models import Car
@@ -130,3 +132,26 @@ class BrokerListingSerializer(serializers.ModelSerializer):
         if self.instance and self.instance.broker.user != user and not has_role(user, ['super_admin', 'admin']):
             raise serializers.ValidationError("Only super admins, admins, or the broker can update this listing.")
         return data
+
+class UpgradeToBrokerSerializer(BrokerSerializer):
+    class Meta(BrokerSerializer.Meta):
+        fields = ['name', 'contact', 'commission_rate', 'national_id', 'telebirr_account']
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        broker = Broker.objects.create(user=user, **validated_data)
+        assign_role(user, 'broker')
+        return broker
+
+class VerifyBrokerSerializer(serializers.ModelSerializer):
+    is_verified = serializers.BooleanField()
+
+    class Meta:
+        model = Broker
+        fields = ['is_verified']
+
+    def validate_is_verified(self, value):
+        user = self.context['request'].user
+        if not has_role(user, ['super_admin', 'admin']):
+            raise serializers.ValidationError("Only super admins or admins can verify brokers.")
+        return value

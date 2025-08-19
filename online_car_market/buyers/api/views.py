@@ -6,7 +6,6 @@ from .serializers import BuyerSerializer, RatingSerializer, LoyaltyProgramSerial
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import serializers
 
-
 # PERMISSION CLASSES
 class CanManageBuyers(BasePermission):
     def has_object_permission(self, request, view, obj):
@@ -20,14 +19,13 @@ class CanManageLoyalty(BasePermission):
     def has_permission(self, request, view):
         return has_role(request.user, ['super_admin', 'admin'])
 
-# VIEWSETS
 @extend_schema_view(
-    list=extend_schema(tags=["Buyers - Profiles"]),
-    retrieve=extend_schema(tags=["Buyers - Profiles"]),
-    create=extend_schema(tags=["Buyers - Profiles"]),
-    update=extend_schema(tags=["Buyers - Profiles"]),
-    partial_update=extend_schema(tags=["Buyers - Profiles"]),
-    destroy=extend_schema(tags=["Buyers - Profiles"]),
+    list=extend_schema(tags=["Buyers - Profiles"], description="List all buyers (admin only)."),
+    retrieve=extend_schema(tags=["Buyers - Profiles"], description="Retrieve a buyer profile."),
+    create=extend_schema(tags=["Buyers - Profiles"], description="Create a buyer profile (admin only)."),
+    update=extend_schema(tags=["Buyers - Profiles"], description="Update a buyer profile (admin or owner)."),
+    partial_update=extend_schema(tags=["Buyers - Profiles"], description="Partially update a buyer profile."),
+    destroy=extend_schema(tags=["Buyers - Profiles"], description="Delete a buyer profile (admin only)."),
 )
 class BuyerViewSet(ModelViewSet):
     queryset = Buyer.objects.all()

@@ -1,10 +1,11 @@
 from rest_framework import serializers
 from rolepermissions.checkers import has_role
+from rolepermissions.roles import assign_role
+
 from online_car_market.users.api.serializers import UserSerializer
 from ..models import Dealer
 import bleach
 import re
-
 
 class DealerSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
@@ -72,3 +73,26 @@ class DealerSerializer(serializers.ModelSerializer):
         if self.instance and self.instance.user != user and not has_role(user, ['super_admin', 'admin']):
             raise serializers.ValidationError("Only super admins, admins, or the dealer can update this profile.")
         return data
+
+class UpgradeToDealerSerializer(DealerSerializer):
+    class Meta(DealerSerializer.Meta):
+        fields = ['name', 'license_number', 'address', 'telebirr_account']
+
+    def create(self, validated_data):
+        user = self.context['request'].user
+        dealer = Dealer.objects.create(user=user, **validated_data)
+        assign_role(user, 'dealer')
+        return dealer
+
+class VerifyDealerSerializer(serializers.ModelSerializer):
+    is_verified = serializers.BooleanField()
+
+    class Meta:
+        model = Dealer
+        fields = ['is_verified']
+
+    def validate_is_verified(self, value):
+        user = self.context['request'].user
+        if not has_role(user, ['super_admin', 'admin']):
+            raise serializers.ValidationError("Only super admins or admins can verify dealers.")
+        return value
