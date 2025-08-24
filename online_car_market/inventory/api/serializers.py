@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
-from ..models import Car, CarImage, Bid, Payment
+from ..models import Car, CarImage, Bid, Payment, CarMake, CarModel
 from online_car_market.dealers.models import Dealer
 from django.contrib.auth import get_user_model
 import re
@@ -130,6 +130,8 @@ class CarSerializer(serializers.ModelSerializer):
     uploaded_images = CarImageSerializer(many=True, write_only=True, required=False)
     bids = BidSerializer(many=True, read_only=True)
     verification_status = serializers.ChoiceField(choices=Car.VERIFICATION_STATUSES, read_only=True)
+    make_ref = serializers.PrimaryKeyRelatedField(queryset=CarMake.objects.all(), required=False, allow_null=True)
+    model_ref = serializers.PrimaryKeyRelatedField(queryset=CarModel.objects.all(), required=False, allow_null=True)
 
     class Meta:
         model = Car
@@ -211,11 +213,18 @@ class CarSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Only dealer owner or admins can assign this dealer.")
         return value
 
+    def validate_model_ref(self, value):
+        if value and value.make != self.initial_data.get('make_ref'):
+            raise serializers.ValidationError("Selected model must belong to the selected make.")
+        return value
+
     def validate(self, data):
         user = self.context['request'].user
         sale_type = data.get('sale_type')
         price = data.get('price')
         auction_end = data.get('auction_end')
+        make_ref = data.get('make_ref')
+        model_ref = data.get('model_ref')
 
         if sale_type == 'auction' and price is not None:
             raise serializers.ValidationError("Auction cars cannot have a fixed price.")
@@ -225,6 +234,11 @@ class CarSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Only dealers, admins, or super admins can create cars.")
         if self.instance and data.get('posted_by') and data['posted_by'] != user and not has_role(user, ['super_admin', 'admin']):
             raise serializers.ValidationError("Only the car owner or admins can update this car.")
+
+        if make_ref and not CarMake.objects.filter(id=make_ref.id).exists():
+            raise serializers.ValidationError("Selected make does not exist.")
+        if model_ref and not CarModel.objects.filter(id=model_ref.id, make=make_ref).exists():
+            raise serializers.ValidationError("Selected model does not match the selected make.")
         return data
 
     # ---------------- Create method ----------------

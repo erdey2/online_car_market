@@ -5,6 +5,29 @@ from online_car_market.dealers.models import Dealer
 
 User = get_user_model()
 
+class CarMake(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ['name']
+
+
+class CarModel(models.Model):
+    make = models.ForeignKey(CarMake, on_delete=models.CASCADE, related_name='models')
+    name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.make.name} {self.name}"
+
+    class Meta:
+        unique_together = ('make', 'name')
+        ordering = ['make__name', 'name']
+
 class Car(models.Model):
     VERIFICATION_STATUSES = [
         ('pending', 'Pending'),
@@ -36,6 +59,8 @@ class Car(models.Model):
     # brand = models.CharField(max_length=255, null=True, blank=True)
     make = models.CharField(max_length=100)
     model = models.CharField(max_length=100)
+    make_ref = models.ForeignKey(CarMake, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars')
+    model_ref = models.ForeignKey(CarModel, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars')
     year = models.IntegerField()
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     mileage = models.IntegerField()

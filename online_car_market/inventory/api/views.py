@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
-from ..models import Car, CarImage, Bid, Payment
+from ..models import Car, CarImage, Bid, Payment, CarMake, CarModel
 from .serializers import CarSerializer, CarImageSerializer, VerifyCarSerializer, BidSerializer, PaymentSerializer
 from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealer
 from online_car_market.dealers.models import Dealer
@@ -107,13 +107,19 @@ class CarViewSet(ModelViewSet):
     # filter
     @extend_schema(
         tags=["Dealers - Inventory"],
-        description="Filter verified cars by fuel type and price range.",
         parameters=[
             OpenApiParameter("fuel_type", OpenApiTypes.STR, OpenApiParameter.QUERY,
                              description="Fuel type (electric, hybrid, petrol, diesel)"),
             OpenApiParameter("price_min", OpenApiTypes.FLOAT, OpenApiParameter.QUERY, description="Minimum price"),
             OpenApiParameter("price_max", OpenApiTypes.FLOAT, OpenApiParameter.QUERY, description="Maximum price"),
+            OpenApiParameter(name='sale_type', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY,
+                             description='Sale type (fixed_price, auction)'),
+            OpenApiParameter(name='make_ref', type=OpenApiTypes.INT, location=OpenApiParameter.QUERY,
+                             description='Car make ID'),
+            OpenApiParameter(name='model_ref', type=OpenApiTypes.INT, location=OpenApiParameter.QUERY,
+                             description='Car model ID'),
         ],
+        description="Filter verified cars by fuel type, price range, sale type, make, or model.",
         responses=CarSerializer(many=True),
     )
     @action(detail=False, methods=['get'], serializer_class=CarSerializer)
@@ -123,6 +129,8 @@ class CarViewSet(ModelViewSet):
         price_min = request.query_params.get('price_min')
         price_max = request.query_params.get('price_max')
         sale_type = request.query_params.get('sale_type')
+        make_ref = request.query_params.get('make_ref')
+        model_ref = request.query_params.get('model_ref')
 
         valid_fuel_types = [choice[0] for choice in Car.FUEL_TYPES]
         if fuel_type and fuel_type not in valid_fuel_types:
@@ -134,6 +142,22 @@ class CarViewSet(ModelViewSet):
 
         if fuel_type:
             queryset = queryset.filter(fuel_type=fuel_type)
+        if make_ref:
+            try:
+                make_ref = int(make_ref)
+                if not CarMake.objects.filter(id=make_ref).exists():
+                    return Response({"error": "Invalid make ID."}, status=400)
+                queryset = queryset.filter(make_ref=make_ref)
+            except ValueError:
+                return Response({"error": "Make ID must be a valid integer."}, status=400)
+        if model_ref:
+            try:
+                model_ref = int(model_ref)
+                if not CarModel.objects.filter(id=model_ref).exists():
+                    return Response({"error": "Invalid model ID."}, status=400)
+                queryset = queryset.filter(model_ref=model_ref)
+            except ValueError:
+                return Response({"error": "Model ID must be a valid integer."}, status=400)
 
         try:
             if price_min:

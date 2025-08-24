@@ -1,0 +1,30 @@
+digraph Three_Party_Sales {
+	rankdir=LR size=10
+	B1 [label="Broker Sign-up & Verification"]
+	B2 [label="Pre-Payment to ERP"]
+	B3 [label="Car Reserved & Listed"]
+	B4 [label="Marketing & Lead Handling"]
+	B5 [label="Customer Buys via Broker"]
+	B6 [label="Commission Settlement"]
+	D1 [label="Dealer Adds Cars to Inventory"]
+	D2 [label="Car Reserved for Broker (after payment)"]
+	D3 [label="Prepares Car for Delivery"]
+	E1 [label="ERP Verifies Broker"]
+	E2 [label="ERP Records Payment & Locks Car"]
+	E3 [label="ERP Generates Sales Order & Splits Commission"]
+	E4 [label="ERP Releases Payment to Dealer & Broker"]
+	C1 [label="Customer Buys Car"]
+	B1 -> E1
+	B2 -> E2
+	B3 -> B4
+	B4 -> C1
+	C1 -> B5
+	B5 -> E3
+	E4 -> B6
+	D1 -> D2
+	D2 -> D3
+	D3 -> E3
+	E1 -> B2
+	E2 -> D2
+	E3 -> E4
+}
