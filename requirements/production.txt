@@ -38,6 +38,7 @@ djangorestframework==3.16.0
 djangorestframework_simplejwt==5.5.1
 drf-spectacular==0.28.0
 fido2==2.0.0
+graphviz==0.21
 gunicorn==23.0.0
 idna==3.10
 inflection==0.5.1
@@ -77,3 +78,4 @@ urllib3==2.5.0
 vine==5.1.0
 wcwidth==0.2.13
 webencodings==0.5.1
+whitenoise==6.9.0

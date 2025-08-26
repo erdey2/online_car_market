@@ -131,5 +131,3 @@ CORS_ALLOWED_ORIGINS = [
     # "http://localhost:5175",
     # "https://autodealer-two.vercel.app/",
 ]
-
-
