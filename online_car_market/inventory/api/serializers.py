@@ -141,8 +141,8 @@ class CarSerializer(serializers.ModelSerializer):
     # ---------------- Field Validations ----------------
     def validate_make(self, value):
         cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-        if not cleaned:
-            raise serializers.ValidationError("Make is required.")
+        ''' if not cleaned:
+            raise serializers.ValidationError("Make is required.") '''
         if len(cleaned) > 100:
             raise serializers.ValidationError("Make cannot exceed 100 characters.")
         if not re.match(r'^[a-zA-Z0-9\s-]+$', cleaned):
@@ -151,8 +151,8 @@ class CarSerializer(serializers.ModelSerializer):
 
     def validate_model(self, value):
         cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-        if not cleaned:
-            raise serializers.ValidationError("Model is required.")
+        ''' if not cleaned:
+            raise serializers.ValidationError("Model is required.") '''
         if len(cleaned) > 100:
             raise serializers.ValidationError("Model cannot exceed 100 characters.")
         if not re.match(r'^[a-zA-Z0-9\s-]+$', cleaned):
@@ -223,8 +223,21 @@ class CarSerializer(serializers.ModelSerializer):
         sale_type = data.get('sale_type')
         price = data.get('price')
         auction_end = data.get('auction_end')
+        make = data.get('make')
+        model = data.get('model')
         make_ref = data.get('make_ref')
         model_ref = data.get('model_ref')
+
+        # Ensure at least one pair is provided
+        if not (make and model) and not (make_ref and model_ref):
+            raise serializers.ValidationError(
+                "Either 'make' and 'model' or 'make_ref' and 'model_ref' must be provided.")
+
+        # Auto-populate make and model from references if provided
+        if make_ref:
+            data['make'] = make_ref.name
+        if model_ref:
+            data['model'] = model_ref.name
 
         if sale_type == 'auction' and price is not None:
             raise serializers.ValidationError("Auction cars cannot have a fixed price.")

@@ -131,6 +131,8 @@ class CarViewSet(ModelViewSet):
         sale_type = request.query_params.get('sale_type')
         make_ref = request.query_params.get('make_ref')
         model_ref = request.query_params.get('model_ref')
+        make = request.query_params.get('make')
+        model = request.query_params.get('model')
 
         valid_fuel_types = [choice[0] for choice in Car.FUEL_TYPES]
         if fuel_type and fuel_type not in valid_fuel_types:
@@ -158,6 +160,11 @@ class CarViewSet(ModelViewSet):
                 queryset = queryset.filter(model_ref=model_ref)
             except ValueError:
                 return Response({"error": "Model ID must be a valid integer."}, status=400)
+
+        if make:
+            queryset = queryset.filter(Q(make=make) | Q(make_ref__name=make))
+        if model:
+            queryset = queryset.filter(Q(model=model) | Q(model_ref__name=model))
 
         try:
             if price_min:
