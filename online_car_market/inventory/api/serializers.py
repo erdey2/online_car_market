@@ -304,30 +304,43 @@ class CarSerializer(serializers.ModelSerializer):
         return car '''
 
     def create(self, validated_data):
-        make_ref = validated_data.get('make_ref')
-        model_ref = validated_data.get('model_ref')
+        request = self.context['request']
 
-        # Auto-populate make/model from refs
-        if make_ref:
-            validated_data['make'] = make_ref.name
-        if model_ref:
-            validated_data['model'] = model_ref.name
+        # Extract uploaded_images from form-data
+        uploaded_images_data = []
+        for key, value in request.data.items():
+            match = re.match(r'uploaded_images\[(\d+)\]\.(\w+)', key)
+            if match:
+                index, field = int(match.group(1)), match.group(2)
+                while len(uploaded_images_data) <= index:
+                    uploaded_images_data.append({})
+                uploaded_images_data[index][field] = value
 
-        # Extract nested uploaded_images (if provided in JSON body)
-        uploaded_images_data = validated_data.pop('uploaded_images', [])
+        # Remove uploaded_images before Car creation
+        validated_data.pop('uploaded_images', None)
+
+        # --- Resolve make/model from refs if empty ---
+        make_ref = validated_data.get("make_ref")
+        model_ref = validated_data.get("model_ref")
+
+        if not validated_data.get("make") and make_ref:
+            validated_data["make"] = make_ref.name if hasattr(make_ref, "name") else str(make_ref)
+
+        if not validated_data.get("model") and model_ref:
+            validated_data["model"] = model_ref.name if hasattr(model_ref, "name") else str(model_ref)
 
         # Create Car instance
         car = Car.objects.create(**validated_data)
 
-        # Save images passed in JSON (nested serializer case)
-        for img_data in uploaded_images_data:
-            CarImage.objects.create(car=car, **img_data)
+        # Handle CarImage instances
+        for index, img_data in enumerate(uploaded_images_data):
+            img_data['car'] = car
+            if 'image_file' in img_data and isinstance(img_data['image_file'], str):
+                file_key = f"uploaded_images[{index}].image_file"
+                if file_key in request.FILES:
+                    img_data['image_file'] = request.FILES[file_key]
 
-        # Save images uploaded as files (multipart/form-data case)
-        request = self.context['request']
-        for key, file in request.FILES.items():
-            if key.startswith("uploaded_images"):
-                CarImage.objects.create(car=car, image_file=file)
+            CarImageSerializer(context=self.context).create(img_data)
 
         return car
 
