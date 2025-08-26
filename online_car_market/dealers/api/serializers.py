@@ -13,7 +13,7 @@ class DealerSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Dealer
-        fields = ['id', 'user', 'name', 'license_number', 'address', 'telebirr_account', 'created_at', 'updated_at']
+        fields = ['id', 'user', 'company_name', 'license_number', 'address', 'telebirr_account', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def validate_name(self, value):
@@ -76,7 +76,7 @@ class DealerSerializer(serializers.ModelSerializer):
 
 class UpgradeToDealerSerializer(DealerSerializer):
     class Meta(DealerSerializer.Meta):
-        fields = ['name', 'license_number', 'address', 'telebirr_account']
+        fields = ['company_name', 'phone', 'address', 'license_number', 'tax_id', 'telebirr_account', 'is_verified']
 
     def create(self, validated_data):
         user = self.context['request'].user

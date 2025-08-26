@@ -80,7 +80,7 @@ class Broker(AbstractUserRole):
         'view_own_broker_profile': True,
         'edit_own_broker_profile': True,
         'view_cars': True,
-        'manage_own_listings': True,
+        'post_car': True,
     }
 
 class Buyer(AbstractUserRole):

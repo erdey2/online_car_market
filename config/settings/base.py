@@ -347,7 +347,6 @@ SPECTACULAR_SETTINGS = {
         {"name": "Dealers - Sales", "description": "Orders, invoices, and sales management"},
         {"name": "Dealers - Accounting", "description": "Payments, transactions, and dealer reports"},
         {"name": "Brokers - Profiles", "description": "Broker accounts and profile management"},
-        {"name": "Brokers - Listings", "description": "Broker car listings and commissions"},
         {"name": "Buyers - Profiles", "description": "Buyer accounts and profile management"},
         {"name": "Buyers - Loyalty", "description": "Loyalty points and rewards for buyers"},
         {"name": "Buyers - Ratings", "description": "Ratings and reviews of cars and dealers"},
