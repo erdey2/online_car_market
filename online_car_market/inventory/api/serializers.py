@@ -256,6 +256,15 @@ class CarSerializer(serializers.ModelSerializer):
 
     # ---------------- Create method ----------------
     def create(self, validated_data):
+        make_ref = validated_data.get('make_ref')
+        model_ref = validated_data.get('model_ref')
+
+        # Auto-populate make/model from refs
+        if make_ref:
+            validated_data['make'] = make_ref.name
+        if model_ref:
+            validated_data['model'] = model_ref.name
+            
         request = self.context['request']
         # print("Request data:", dict(request.data))
 
