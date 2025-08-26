@@ -74,6 +74,14 @@ class Car(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def save(self, *args, **kwargs):
+        # Auto-fill from refs if not provided
+        if self.make_ref and not self.make:
+            self.make = self.make_ref.name
+        if self.model_ref and not self.model:
+            self.model = self.model_ref.name
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.make} {self.model} ({self.year})"
 

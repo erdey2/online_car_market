@@ -323,16 +323,19 @@ class CarSerializer(serializers.ModelSerializer):
         make_ref = validated_data.get("make_ref")
         model_ref = validated_data.get("model_ref")
 
-        if not validated_data.get("make") and make_ref:
-            validated_data["make"] = make_ref.name if hasattr(make_ref, "name") else str(make_ref)
+        if make_ref and not validated_data.get("make"):
+            validated_data["make"] = make_ref.name
 
-        if not validated_data.get("model") and model_ref:
-            validated_data["model"] = model_ref.name if hasattr(model_ref, "name") else str(model_ref)
+        if model_ref and not validated_data.get("model"):
+            validated_data["model"] = model_ref.name
 
-        # Create Car instance
+        # ✅ Create Car instance with resolved make/model
         car = Car.objects.create(**validated_data)
 
-        # Handle CarImage instances
+        # Debug print (safe)
+        print(f"Created car: {car.make} {car.model} ({car.year})")
+
+        # --- Handle CarImage instances ---
         for index, img_data in enumerate(uploaded_images_data):
             img_data['car'] = car
             if 'image_file' in img_data and isinstance(img_data['image_file'], str):
@@ -343,6 +346,7 @@ class CarSerializer(serializers.ModelSerializer):
             CarImageSerializer(context=self.context).create(img_data)
 
         return car
+
 
 # ---------------- Verify Car Serializer ----------------
 class VerifyCarSerializer(serializers.ModelSerializer):
