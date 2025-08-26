@@ -255,7 +255,7 @@ class CarSerializer(serializers.ModelSerializer):
         return data
 
     # ---------------- Create method ----------------
-    def create(self, validated_data):
+    ''' def create(self, validated_data):
         make_ref = validated_data.get('make_ref')
         model_ref = validated_data.get('model_ref')
 
@@ -264,7 +264,7 @@ class CarSerializer(serializers.ModelSerializer):
             validated_data['make'] = make_ref.name
         if model_ref:
             validated_data['model'] = model_ref.name
-            
+
         request = self.context['request']
         # print("Request data:", dict(request.data))
 
@@ -300,6 +300,34 @@ class CarSerializer(serializers.ModelSerializer):
                     if file_key:
                         img_data['image_file'] = request.FILES[file_key]
             CarImageSerializer(context=self.context).create(img_data)
+
+        return car '''
+
+    def create(self, validated_data):
+        make_ref = validated_data.get('make_ref')
+        model_ref = validated_data.get('model_ref')
+
+        # Auto-populate make/model from refs
+        if make_ref:
+            validated_data['make'] = make_ref.name
+        if model_ref:
+            validated_data['model'] = model_ref.name
+
+        # Extract nested uploaded_images (if provided in JSON body)
+        uploaded_images_data = validated_data.pop('uploaded_images', [])
+
+        # Create Car instance
+        car = Car.objects.create(**validated_data)
+
+        # Save images passed in JSON (nested serializer case)
+        for img_data in uploaded_images_data:
+            CarImage.objects.create(car=car, **img_data)
+
+        # Save images uploaded as files (multipart/form-data case)
+        request = self.context['request']
+        for key, file in request.FILES.items():
+            if key.startswith("uploaded_images"):
+                CarImage.objects.create(car=car, image_file=file)
 
         return car
 
