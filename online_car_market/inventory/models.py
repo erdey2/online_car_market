@@ -62,7 +62,7 @@ class Car(models.Model):
     make_ref = models.ForeignKey(CarMake, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars')
     model_ref = models.ForeignKey(CarModel, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars')
     year = models.IntegerField()
-    price = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
     mileage = models.IntegerField()
     fuel_type = models.CharField(max_length=20, choices=FUEL_TYPES)
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='available')
