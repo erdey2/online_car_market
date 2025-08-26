@@ -347,6 +347,17 @@ class CarSerializer(serializers.ModelSerializer):
 
         return car
 
+    def update(self, instance, validated_data):
+        make_ref = validated_data.get("make_ref", instance.make_ref)
+        model_ref = validated_data.get("model_ref", instance.model_ref)
+
+        if make_ref:
+            validated_data["make"] = make_ref.name
+        if model_ref:
+            validated_data["model"] = model_ref.name
+
+        return super().update(instance, validated_data)
+
 
 # ---------------- Verify Car Serializer ----------------
 class VerifyCarSerializer(serializers.ModelSerializer):
