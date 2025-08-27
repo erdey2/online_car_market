@@ -14,3 +14,6 @@ class Broker(models.Model):
 
     def __str__(self):
         return f"Broker: {self.name} ({self.user.email})"
+
+    class Meta:
+        ordering = ['name']

@@ -2,6 +2,7 @@ from django.db import models
 from cloudinary.models import CloudinaryField
 from django.contrib.auth import get_user_model
 from online_car_market.dealers.models import Dealer
+from online_car_market.brokers.models import Broker
 
 User = get_user_model()
 
@@ -56,7 +57,7 @@ class Car(models.Model):
         ('fixed_price', 'Fixed Price'),
         ('auction', 'Auction'),
     )
-    # brand = models.CharField(max_length=255, null=True, blank=True)
+
     make = models.CharField(max_length=100, null=True, blank=True)
     model = models.CharField(max_length=100, null=True, blank=True)
     make_ref = models.ForeignKey(CarMake, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars')
@@ -68,9 +69,11 @@ class Car(models.Model):
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='available')
     sale_type = models.CharField(max_length=20, choices=SALE_TYPES, default='fixed_price')
     auction_end = models.DateTimeField(null=True, blank=True)  # For auction cars
-    dealer = models.ForeignKey(Dealer, on_delete=models.CASCADE)
+    dealer = models.ForeignKey(Dealer, on_delete=models.CASCADE, null=True, blank=True, related_name='cars')
+    broker = models.ForeignKey(Broker, on_delete=models.CASCADE, null=True, blank=True, related_name='cars')
     posted_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posted_cars')
     verification_status = models.CharField(max_length=20, choices=VERIFICATION_STATUSES, default='pending')
+    priority = models.BooleanField(default=False)  # For prioritizing verified cars
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -84,6 +87,14 @@ class Car(models.Model):
 
     def __str__(self):
         return f"{self.make} {self.model} ({self.year})"
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(dealer__isnull=False) | models.Q(broker__isnull=False),
+                name='dealer_or_broker_required'
+            )
+        ]
 
 class CarImage(models.Model):
     car = models.ForeignKey(Car, on_delete=models.CASCADE, related_name='images')
@@ -112,9 +123,9 @@ class Bid(models.Model):
 
 class Payment(models.Model):
     PAYMENT_TYPES = (
-        ('listing_fee', 'Listing Fee'),
         ('commission', 'Commission'),
         ('purchase', 'Purchase'),
+        ('verification_fee', 'Verification Fee'),  # For brokers only
     )
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
     car = models.ForeignKey(Car, on_delete=models.CASCADE, null=True, blank=True)

@@ -1,4 +1,3 @@
-from django.db.models import Count, Avg
 from django.db import models
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
@@ -8,19 +7,21 @@ from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
+from django.db.models import Count, Avg, Q
 from ..models import Car, CarImage, Bid, Payment, CarMake, CarModel
 from .serializers import CarSerializer, CarImageSerializer, VerifyCarSerializer, BidSerializer, PaymentSerializer
-from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealer
+from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealer, IsSuperAdminOrAdminOrDealerOrBroker
 from online_car_market.dealers.models import Dealer
+from online_car_market.brokers.models import Broker
 
 # Car ViewSet
 @extend_schema_view(
-    list=extend_schema(tags=["Dealers - Inventory"], description="List all verified cars for non-admins or all cars for admins."),
+    list=extend_schema(tags=["Dealers - Inventory"], description="List all verified cars for non-admins or all cars for admins, with verified cars prioritized."),
     retrieve=extend_schema(tags=["Dealers - Inventory"], description="Retrieve a specific car if verified or user is admin."),
     create=extend_schema(tags=["Dealers - Inventory"], description="Create a car listing (dealers/brokers/admins only)."),
     update=extend_schema(tags=["Dealers - Inventory"], description="Update a car listing (dealers/brokers/admins only)."),
-    partial_update=extend_schema(tags=["Dealers - Inventory"], description="Partially update a car listing."),
-    destroy=extend_schema(tags=["Dealers - Inventory"], description="Delete a car listing (dealers/brokers/admins only)."),
+    partial_update=extend_schema(tags=["inventory"], description="Partially update a car listing."),
+    destroy=extend_schema(tags=["inventory"], description="Delete a car listing (dealers/brokers/admins only)."),
 )
 class CarViewSet(ModelViewSet):
     serializer_class = CarSerializer
@@ -30,12 +31,18 @@ class CarViewSet(ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if has_role(user, ['super_admin', 'admin']):
-            return Car.objects.all()
-        return Car.objects.filter(verification_status='verified')
+            return Car.objects.all().order_by('-priority', '-created_at')
+        if has_role(user, 'dealer'):
+            return Car.objects.filter(Q(dealer__user=user) | Q(verification_status='verified')).order_by('-priority',
+                                                                                                         '-created_at')
+        if has_role(user, 'broker'):
+            return Car.objects.filter(Q(broker__user=user) | Q(verification_status='verified')).order_by('-priority',
+                                                                                                         '-created_at')
+        return Car.objects.filter(verification_status='verified').order_by('-priority', '-created_at')
 
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy",  "bid", "pay"]:
-            return [IsSuperAdminOrAdminOrDealer()]
+            return [IsSuperAdminOrAdminOrDealerOrBroker]
         return super().get_permissions()
 
     def create(self, request, *args, **kwargs):
@@ -88,20 +95,24 @@ class CarViewSet(ModelViewSet):
     # verify
     @extend_schema(
         tags=["Dealers - Inventory"],
-        description="Verify a car listing (admin/super_admin only).",
+        description="Verify a car listing and set priority (admin/super_admin only).",
         responses=VerifyCarSerializer,
     )
     @action(
         detail=True,
         methods=['patch'],
         serializer_class=VerifyCarSerializer,
-        permission_classes=[IsSuperAdminOrAdminOrDealer]
     )
     def verify(self, request, pk=None):
         car = self.get_object()
         serializer = self.get_serializer(car, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        car.verification_status = serializer.validated_data['verification_status']
+        if car.verification_status == 'verified':
+            car.priority = True
+        else:
+            car.priority = False
+        car.save()
         return Response(serializer.data)
 
     # filter
@@ -119,7 +130,7 @@ class CarViewSet(ModelViewSet):
             OpenApiParameter(name='model_ref', type=OpenApiTypes.INT, location=OpenApiParameter.QUERY,
                              description='Car model ID'),
         ],
-        description="Filter verified cars by fuel type, price range, sale type, make, or model.",
+        description="Filter verified cars by fuel type, price range, sale type, make, or model, with verified cars prioritized.",
         responses=CarSerializer(many=True),
     )
     @action(detail=False, methods=['get'], serializer_class=CarSerializer)
@@ -200,7 +211,7 @@ class CarViewSet(ModelViewSet):
 
     @extend_schema(
         tags=["Dealers - Inventory"],
-        description="Record a payment (listing fee, commission, or purchase).",
+        description="Record a payment (commission, purchase, or verification fee for brokers).",
         responses=PaymentSerializer
     )
     @action(detail=True, methods=['post'], serializer_class=PaymentSerializer)
@@ -209,6 +220,12 @@ class CarViewSet(ModelViewSet):
         serializer = self.get_serializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         payment = serializer.save(user=request.user, car=car)
+        if payment.payment_type == 'verification_fee' and payment.is_confirmed and has_role(request.user, 'broker'):
+            broker = Broker.objects.get(user=request.user)
+            broker.is_verified = True
+            broker.save()
+            Car.objects.filter(broker=broker, verification_status='pending').update(verification_status='verified',
+                                                                                    priority=True)
         return Response(PaymentSerializer(payment).data)
 
     @extend_schema(
@@ -232,6 +249,30 @@ class CarViewSet(ModelViewSet):
                                 "average_price": {"type": "number"}
                             }
                         }
+                    },
+                    "broker_stats": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "broker_id": {"type": "integer"},
+                                "broker_name": {"type": "string"},
+                                "total_cars": {"type": "integer"},
+                                "sold_cars": {"type": "integer"},
+                                "average_price": {"type": "number"}
+                            }
+                        }
+                    },
+                    "make_stats": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "make_name": {"type": "string"},
+                                "total_cars": {"type": "integer"},
+                                "average_price": {"type": "number"}
+                            }
+                        }
                     }
                 }
             }
@@ -245,13 +286,24 @@ class CarViewSet(ModelViewSet):
         average_price = Car.objects.filter(price__isnull=False).aggregate(Avg('price'))['price__avg'] or 0
         dealer_stats = Dealer.objects.annotate(
             total_cars=Count('cars'),
-            sold_cars=Count('cars', filter=models.Q(cars__status='sold')),
+            sold_cars=Count('cars', filter=Q(cars__status='sold')),
             avg_price=Avg('cars__price')
         ).values('id', 'name', 'total_cars', 'sold_cars', 'avg_price')
+        broker_stats = Broker.objects.annotate(
+            total_cars=Count('cars'),
+            sold_cars=Count('cars', filter=Q(cars__status='sold')),
+            avg_price=Avg('cars__price')
+        ).values('id', 'name', 'total_cars', 'sold_cars', 'avg_price')
+        make_stats = CarMake.objects.annotate(
+            total_cars=Count('cars'),
+            avg_price=Avg('cars__price')
+        ).values('name', 'total_cars', 'avg_price')
         return Response({
             "total_cars": total_cars,
             "average_price": round(average_price, 2),
-            "dealer_stats": list(dealer_stats)
+            "dealer_stats": list(dealer_stats),
+            "broker_stats": list(broker_stats),
+            "make_stats": list(make_stats)
         })
 
 # CarImage ViewSet

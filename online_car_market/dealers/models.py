@@ -10,7 +10,7 @@ class Dealer(models.Model):
     license_number = models.CharField(max_length=50)
     tax_id = models.CharField(max_length=100, null=True, blank=True)
     telebirr_account = models.CharField(max_length=100, null=True)
-    is_verified = models.BooleanField(default=True)
+    is_verified = models.BooleanField(default=True) # Dealers are verified by default
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

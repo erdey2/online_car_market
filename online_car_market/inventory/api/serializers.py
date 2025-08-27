@@ -3,6 +3,7 @@ from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
 from ..models import Car, CarImage, Bid, Payment, CarMake, CarModel
 from online_car_market.dealers.models import Dealer
+from online_car_market.brokers.models import Broker
 from django.contrib.auth import get_user_model
 import re
 import bleach
@@ -117,14 +118,15 @@ class PaymentSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         payment_type = data.get('payment_type')
         car = data.get('car')
-        if payment_type == 'listing_fee' and not has_role(user, 'broker'):
-            raise serializers.ValidationError("Only brokers can pay listing fees.")
+        if payment_type == 'verification_fee' and not has_role(user, 'broker'):
+            raise serializers.ValidationError("Only brokers can pay verification fees.")
         if payment_type in ['commission', 'purchase'] and not car:
             raise serializers.ValidationError("Car is required for commission or purchase payments.")
         return data
 
 class CarSerializer(serializers.ModelSerializer):
-    dealer = serializers.PrimaryKeyRelatedField(queryset=Dealer.objects.all())
+    dealer = serializers.PrimaryKeyRelatedField(queryset=Dealer.objects.all(), required=False, allow_null=True)
+    broker = serializers.PrimaryKeyRelatedField(queryset=Broker.objects.all(), required=False, allow_null=True)
     posted_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
     images = CarImageSerializer(many=True, read_only=True)
     uploaded_images = CarImageSerializer(many=True, write_only=True, required=False)
@@ -136,7 +138,7 @@ class CarSerializer(serializers.ModelSerializer):
     class Meta:
         model = Car
         fields = '__all__'
-        read_only_fields = ['id', 'created_at', 'updated_at', 'verification_status']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'verification_status', 'priority']
 
     # ---------------- Field Validations ----------------
     def validate_make(self, value):
@@ -213,6 +215,12 @@ class CarSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Only dealer owner or admins can assign this dealer.")
         return value
 
+    def validate_broker(self, value):
+        if value:
+            if not has_role(value.user, 'broker'):
+                raise serializers.ValidationError("Broker user must have broker role.")
+        return value
+
     def validate_model_ref(self, value):
         if value and value.make != self.initial_data.get('make_ref'):
             raise serializers.ValidationError("Selected model must belong to the selected make.")
@@ -227,6 +235,8 @@ class CarSerializer(serializers.ModelSerializer):
         model = data.get('model')
         make_ref = data.get('make_ref')
         model_ref = data.get('model_ref')
+        dealer = data.get('dealer')
+        broker = data.get('broker')
 
         # Ensure at least one pair is provided
         if not (make and model) and not (make_ref and model_ref):
@@ -238,6 +248,25 @@ class CarSerializer(serializers.ModelSerializer):
             data['make'] = make_ref.name
         if model_ref:
             data['model'] = model_ref.name
+
+        # Ensure exactly one of dealer or broker is provided
+        if (dealer and broker) or (not dealer and not broker):
+            raise serializers.ValidationError("Exactly one of 'dealer' or 'broker' must be provided.")
+
+        # Role-based validation
+        if dealer and not has_role(user, ['super_admin', 'admin', 'dealer']):
+            raise serializers.ValidationError("Only dealers, admins, or super admins can assign a dealer.")
+        if broker and not has_role(user, ['super_admin', 'admin', 'broker']):
+            raise serializers.ValidationError("Only brokers, admins, or super admins can assign a broker.")
+        if dealer and dealer.user != user and not has_role(user, ['super_admin', 'admin']):
+            raise serializers.ValidationError("Only the dealer owner or admins can assign this dealer.")
+        if broker and broker.user != user and not has_role(user, ['super_admin', 'admin']):
+            raise serializers.ValidationError("Only the broker owner or admins can assign this broker.")
+
+        # Auto-verify dealer cars if dealer is verified
+        if dealer and dealer.is_verified:
+            data['verification_status'] = 'verified'
+            data['priority'] = True
 
         if sale_type == 'auction' and price is not None:
             raise serializers.ValidationError("Auction cars cannot have a fixed price.")
@@ -255,54 +284,6 @@ class CarSerializer(serializers.ModelSerializer):
         return data
 
     # ---------------- Create method ----------------
-    ''' def create(self, validated_data):
-        make_ref = validated_data.get('make_ref')
-        model_ref = validated_data.get('model_ref')
-
-        # Auto-populate make/model from refs
-        if make_ref:
-            validated_data['make'] = make_ref.name
-        if model_ref:
-            validated_data['model'] = model_ref.name
-
-        request = self.context['request']
-        # print("Request data:", dict(request.data))
-
-        # Extract uploaded_images from form-data
-        uploaded_images_data = []
-        for key, value in request.data.items():
-            match = re.match(r'uploaded_images\[(\d+)\]\.(\w+)', key)
-            if match:
-                index, field = int(match.group(1)), match.group(2)
-                while len(uploaded_images_data) <= index:
-                    uploaded_images_data.append({})
-                uploaded_images_data[index][field] = value
-
-        # Remove uploaded_images fields from validated_data before creating Car
-        # (Django model does not have these fields)
-        validated_data.pop('uploaded_images', None)
-
-        # Create Car instance
-        car = Car.objects.create(**validated_data)
-
-        # Create CarImage instances
-        for img_data in uploaded_images_data:
-            img_data['car'] = car
-            # For uploaded files, use request.FILES
-            if 'image_file' in img_data:
-                if isinstance(img_data['image_file'], str):
-                    # replace the string from request.data with actual UploadedFile
-                    file_key = None
-                    for k, v in request.FILES.items():
-                        if k.startswith(f"uploaded_images[{uploaded_images_data.index(img_data)}].image_file"):
-                            file_key = k
-                            break
-                    if file_key:
-                        img_data['image_file'] = request.FILES[file_key]
-            CarImageSerializer(context=self.context).create(img_data)
-
-        return car '''
-
     def create(self, validated_data):
         request = self.context['request']
 
@@ -329,11 +310,11 @@ class CarSerializer(serializers.ModelSerializer):
         if model_ref and not validated_data.get("model"):
             validated_data["model"] = model_ref.name
 
-        # ✅ Create Car instance with resolved make/model
+        # Create Car instance with resolved make/model
         car = Car.objects.create(**validated_data)
 
         # Debug print (safe)
-        print(f"Created car: {car.make} {car.model} ({car.year})")
+        # print(f"Created car: {car.make} {car.model} ({car.year})")
 
         # --- Handle CarImage instances ---
         for index, img_data in enumerate(uploaded_images_data):
@@ -366,7 +347,7 @@ class VerifyCarSerializer(serializers.ModelSerializer):
         fields = ['verification_status']
 
     def validate_verification_status(self, value):
-        valid_statuses = ['pending', 'verified', 'rejected']
+        valid_statuses = [choice[0] for choice in Car.VERIFICATION_STATUSES]
         cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
         if cleaned_value not in valid_statuses:
             raise serializers.ValidationError(f"Verification status must be one of: {', '.join(valid_statuses)}.")
