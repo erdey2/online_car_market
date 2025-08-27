@@ -4,10 +4,10 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rolepermissions.checkers import has_role
 from rolepermissions.roles import assign_role
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 from ..models import Dealer
 from .serializers import DealerSerializer, UpgradeToDealerSerializer, VerifyDealerSerializer
-from online_car_market.users.permissions import IsSuperAdmin, IsAdmin, IsDealer
+
 
 @extend_schema_view(
     list=extend_schema(tags=["Dealers - Profiles"], description="List all dealers (admin only)."),
@@ -17,6 +17,7 @@ from online_car_market.users.permissions import IsSuperAdmin, IsAdmin, IsDealer
     partial_update=extend_schema(tags=["Dealers - Profiles"], description="Partially update a dealer profile."),
     destroy=extend_schema(tags=["Dealers - Profiles"], description="Delete a dealer profile (admin only)."),
 )
+@extend_schema(parameters=[OpenApiParameter(name="id", type=OpenApiTypes.INT, location="path", description="Dealer ID")])
 class DealerProfileViewSet(ModelViewSet):
     serializer_class = DealerSerializer
     permission_classes = [IsAuthenticated]

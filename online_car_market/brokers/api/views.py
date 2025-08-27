@@ -3,10 +3,10 @@ from rest_framework.permissions import IsAuthenticated, BasePermission
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rolepermissions.checkers import has_role
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 from ..models import Broker
 from .serializers import BrokerSerializer, UpgradeToBrokerSerializer, VerifyBrokerSerializer
-from online_car_market.users.permissions import IsSuperAdmin, IsAdmin, IsBroker
+
 
 class CanManageBrokerListings(BasePermission):
     def has_permission(self, request, view):
@@ -21,6 +21,8 @@ class CanManageBrokerListings(BasePermission):
     partial_update=extend_schema(tags=["Brokers - Profiles"], description="Partially update a broker profile."),
     destroy=extend_schema(tags=["Brokers - Profiles"], description="Delete a broker profile (admin only)."),
 )
+
+@extend_schema(parameters=[OpenApiParameter(name="id", type=OpenApiTypes.INT, location="path", description="Broker ID")])
 class BrokerViewSet(ModelViewSet):
     serializer_class = BrokerSerializer
     permission_classes = [IsAuthenticated]

@@ -3,9 +3,9 @@ from online_car_market.users.models import User
 from django.urls import reverse
 
 class Dealer(models.Model):
-    company_name = models.CharField(max_length=100)
+    company_name = models.CharField(max_length=100, db_index=True)
     phone = models.CharField(max_length=100, null=True, blank=True)
-    address = models.CharField(max_length=100)
+    address = models.CharField(max_length=100, db_index=True)
 
     license_number = models.CharField(max_length=50)
     tax_id = models.CharField(max_length=100, null=True, blank=True)

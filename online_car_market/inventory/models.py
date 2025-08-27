@@ -58,20 +58,20 @@ class Car(models.Model):
         ('auction', 'Auction'),
     )
 
-    make = models.CharField(max_length=100, null=True, blank=True)
-    model = models.CharField(max_length=100, null=True, blank=True)
-    make_ref = models.ForeignKey(CarMake, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars')
-    model_ref = models.ForeignKey(CarModel, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars')
+    make = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    model = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    make_ref = models.ForeignKey(CarMake, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars', db_index=True)
+    model_ref = models.ForeignKey(CarModel, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars', db_index=True)
     year = models.IntegerField()
-    price = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0.0, db_index=True)
     mileage = models.IntegerField()
-    fuel_type = models.CharField(max_length=20, choices=FUEL_TYPES)
+    fuel_type = models.CharField(max_length=20, choices=FUEL_TYPES, db_index=True)
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='available')
     sale_type = models.CharField(max_length=20, choices=SALE_TYPES, default='fixed_price')
     auction_end = models.DateTimeField(null=True, blank=True)  # For auction cars
     dealer = models.ForeignKey(Dealer, on_delete=models.CASCADE, null=True, blank=True, related_name='cars')
     broker = models.ForeignKey(Broker, on_delete=models.CASCADE, null=True, blank=True, related_name='cars')
-    posted_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posted_cars')
+    posted_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posted_cars', db_index=True)
     verification_status = models.CharField(max_length=20, choices=VERIFICATION_STATUSES, default='pending')
     priority = models.BooleanField(default=False)  # For prioritizing verified cars
     created_at = models.DateTimeField(auto_now_add=True)
