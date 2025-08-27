@@ -20,7 +20,7 @@ from online_car_market.brokers.models import Broker
     retrieve=extend_schema(tags=["Dealers - Inventory"], description="Retrieve a specific car if verified or user is admin."),
     create=extend_schema(tags=["Dealers - Inventory"], description="Create a car listing (dealers/brokers/admins only)."),
     update=extend_schema(tags=["Dealers - Inventory"], description="Update a car listing (dealers/brokers/admins only)."),
-    partial_update=extend_schema(tags=["Dealers - inventory"], description="Partially update a car listing."),
+    partial_update=extend_schema(tags=["Dealers - Inventory"], description="Partially update a car listing."),
     destroy=extend_schema(tags=["Dealers - Inventory"], description="Delete a car listing (dealers/brokers/admins only)."),
 )
 class CarViewSet(ModelViewSet):
