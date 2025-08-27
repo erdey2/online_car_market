@@ -255,6 +255,7 @@ class CarViewSet(ModelViewSet):
         })
 
 # CarImage ViewSet
+'''
 @extend_schema_view(
     list=extend_schema(tags=["Dealers - Inventory"], description="List all car images."),
     retrieve=extend_schema(tags=["Dealers - Inventory"], description="Retrieve a specific car image."),
@@ -271,4 +272,4 @@ class CarImageViewSet(ModelViewSet):
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [IsSuperAdminOrAdminOrDealer()]
-        return super().get_permissions()
+        return super().get_permissions() '''
