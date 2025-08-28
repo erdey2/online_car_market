@@ -16,7 +16,7 @@ class BrokerRatingSerializer(serializers.ModelSerializer):
     class Meta:
         model = BrokerRating
         fields = ['id', 'broker', 'user', 'rating', 'comment', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'user', 'broker', 'created_at', 'updated_at']
 
     def validate_rating(self, value):
         if not 1 <= value <= 5:
@@ -33,11 +33,18 @@ class BrokerRatingSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         user = self.context['request'].user
-        broker = data.get('broker')
+        broker_id = self.context['view'].kwargs.get('broker_pk')
+        broker = Broker.objects.filter(pk=broker_id).first()
+
+        if not broker:
+            raise serializers.ValidationError({"broker": "Broker does not exist."})
+
         if has_role(user, 'broker') and broker.user == user:
             raise serializers.ValidationError("You cannot rate your own broker profile.")
+
         if BrokerRating.objects.filter(broker=broker, user=user).exists():
-            raise serializers.ValidationError("You have already rated this broker.")
+            raise serializers.ValidationError("You have already rated this dealer.")
+
         return data
 
 class BrokerSerializer(serializers.ModelSerializer):

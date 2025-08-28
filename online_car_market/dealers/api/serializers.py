@@ -9,12 +9,15 @@ import bleach
 import re
 
 class DealerRatingSerializer(serializers.ModelSerializer):
-    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
+    user = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        default=serializers.CurrentUserDefault()
+    )
 
     class Meta:
         model = DealerRating
         fields = ['id', 'dealer', 'user', 'rating', 'comment', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'dealer', 'user', 'created_at', 'updated_at']
 
     def validate_rating(self, value):
         if not 1 <= value <= 5:
@@ -31,12 +34,20 @@ class DealerRatingSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         user = self.context['request'].user
-        dealer = data.get('dealer')
+        dealer_id = self.context['view'].kwargs.get('dealer_pk')  # ✅ from URL
+        dealer = Dealer.objects.filter(pk=dealer_id).first()
+
+        if not dealer:
+            raise serializers.ValidationError({"dealer": "Dealer does not exist."})
+
         if has_role(user, 'dealer') and dealer.user == user:
             raise serializers.ValidationError("You cannot rate your own dealer profile.")
+
         if DealerRating.objects.filter(dealer=dealer, user=user).exists():
             raise serializers.ValidationError("You have already rated this dealer.")
+
         return data
+
 
 class DealerSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)

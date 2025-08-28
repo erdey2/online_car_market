@@ -85,6 +85,6 @@ class BrokerRatingViewSet(ModelViewSet):
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
-        broker_id = self.kwargs.get('broker_id')
-        broker = Broker.objects.get(id=broker_id)
+        broker_id = self.kwargs.get('broker_pk')
+        broker = Broker.objects.get(pk=broker_id)
         serializer.save(broker=broker, user=self.request.user)

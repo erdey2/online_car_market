@@ -80,6 +80,6 @@ class DealerRatingViewSet(ModelViewSet):
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
-        dealer_id = self.kwargs.get('dealer_id')
-        dealer = Dealer.objects.get(id=dealer_id)
+        dealer_id = self.kwargs.get('dealer_pk')
+        dealer = Dealer.objects.get(pk=dealer_id)
         serializer.save(dealer=dealer, user=self.request.user)
