@@ -25,7 +25,7 @@ from online_car_market.brokers.models import Broker
 )
 class CarViewSet(ModelViewSet):
     serializer_class = CarSerializer
-    permission_classes = [IsAuthenticated()]
+    permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):

@@ -59,12 +59,12 @@ class BrokerViewSet(ModelViewSet):
         return Response(BrokerSerializer(broker).data)
 
 @extend_schema_view(
-    list=extend_schema(tags=["brokers"], description="List all ratings for a broker."),
-    retrieve=extend_schema(tags=["brokers"], description="Retrieve a specific broker rating."),
-    create=extend_schema(tags=["brokers"], description="Create a broker rating (authenticated users only)."),
-    update=extend_schema(tags=["brokers"], description="Update a broker rating (rating owner or admin only)."),
-    partial_update=extend_schema(tags=["brokers"], description="Partially update a broker rating."),
-    destroy=extend_schema(tags=["brokers"], description="Delete a broker rating (rating owner or admin only)."),
+    list=extend_schema(tags=["Brokers - Ratings"], description="List all ratings for a broker."),
+    retrieve=extend_schema(tags=["Brokers - Ratings"], description="Retrieve a specific broker rating."),
+    create=extend_schema(tags=["Brokers - Ratings"], description="Create a broker rating (authenticated users only)."),
+    update=extend_schema(tags=["Brokers - Ratings"], description="Update a broker rating (rating owner or admin only)."),
+    partial_update=extend_schema(tags=["Brokers - Ratings"], description="Partially update a broker rating."),
+    destroy=extend_schema(tags=["Brokers - Ratings"], description="Delete a broker rating (rating owner or admin only)."),
 )
 class BrokerRatingViewSet(ModelViewSet):
     serializer_class = BrokerRatingSerializer

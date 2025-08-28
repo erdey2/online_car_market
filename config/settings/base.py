@@ -342,15 +342,21 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'API for car sales, accounting, brokers, and buyers',
     "TAGS": [
         {"name": "Authentication & Users", "description": "Login, registration, user profiles, roles"},
+
         {"name": "Dealers - Profiles", "description": "Dealer accounts and profile management"},
         {"name": "Dealers - Inventory", "description": "Manage dealer car inventory"},
         {"name": "Dealers - Sales", "description": "Orders, invoices, and sales management"},
         {"name": "Dealers - Accounting", "description": "Payments, transactions, and dealer reports"},
+        {"name": "Dealers - Ratings", "description": "Manage Dealers ratings"},
+
         {"name": "Brokers - Profiles", "description": "Broker accounts and profile management"},
+        {"name": "Brokers - Ratings", "description": "Manage Brokers ratings"},
+        {"name": "Brokers - Orders", "description": "Broker' orders and order details"},
+
         {"name": "Buyers - Profiles", "description": "Buyer accounts and profile management"},
         {"name": "Buyers - Loyalty", "description": "Loyalty points and rewards for buyers"},
-        {"name": "Buyers - Ratings", "description": "Ratings and reviews of cars and dealers"},
-        {"name": "Brokers - Orders", "description": "Broker' orders and order details"},
+
+        {"name": "Analytics", "description": "Brokers and Dealers Statics"},
         # {"name": "Common", "description": "Notifications, logs, system settings, and shared utilities"},
     ],
     'VERSION': '1.0.0',

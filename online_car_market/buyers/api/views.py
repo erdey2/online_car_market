@@ -1,8 +1,8 @@
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated, BasePermission
 from rolepermissions.checkers import has_role
-from ..models import Buyer, Rating, LoyaltyProgram
-from .serializers import BuyerSerializer, RatingSerializer, LoyaltyProgramSerializer
+from ..models import Buyer, LoyaltyProgram
+from .serializers import BuyerSerializer, LoyaltyProgramSerializer
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import serializers
 
@@ -60,31 +60,6 @@ class BuyerViewSet(ModelViewSet):
             raise serializers.ValidationError({"user": "User not found."})
 
         serializer.save(user=user)
-
-@extend_schema_view(
-    list=extend_schema(tags=["Buyers - Ratings"]),
-    retrieve=extend_schema(tags=["Buyers - Ratings"]),
-    create=extend_schema(tags=["Buyers - Ratings"]),
-    update=extend_schema(tags=["Buyers - Ratings"]),
-    partial_update=extend_schema(tags=["Buyers - Ratings"]),
-    destroy=extend_schema(tags=["Buyers - Ratings"]),
-)
-class RatingViewSet(ModelViewSet):
-    queryset = Rating.objects.all()
-    serializer_class = RatingSerializer
-
-    def get_permissions(self):
-        if self.action in ['update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), CanManageRatings()]
-        return [IsAuthenticated()]
-
-    def get_queryset(self):
-        user = self.request.user
-        if has_role(user, ['super_admin', 'admin']):
-            return self.queryset.all()
-        if has_role(user, 'buyer'):
-            return self.queryset.filter(buyer=user)
-        return self.queryset.none()
 
 @extend_schema_view(
     list=extend_schema(tags=["Buyers - Loyalty"]),

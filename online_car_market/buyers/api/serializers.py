@@ -10,7 +10,7 @@ from online_car_market.brokers.models import Broker
 
 from online_car_market.users.api.serializers import UserSerializer
 from online_car_market.inventory.api.serializers import CarSerializer
-from online_car_market.buyers.models import Buyer, Rating, LoyaltyProgram
+from online_car_market.buyers.models import Buyer, LoyaltyProgram
 import re, bleach
 
 
@@ -66,47 +66,6 @@ class BuyerSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Only super admins, admins, or buyers can create buyer profiles.")
         if self.instance and self.instance.user != user and not has_role(user, ['super_admin', 'admin']):
             raise serializers.ValidationError("Only super admins, admins, or the buyer can update this profile.")
-        return data
-
-class RatingSerializer(serializers.ModelSerializer):
-    buyer = UserSerializer(read_only=True)
-    car = CarSerializer(read_only=True)
-    # buyer = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
-    # car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all())
-
-    class Meta:
-        model = Rating
-        fields = ['id', 'buyer', 'car', 'rating', 'comment', 'created_at']
-        read_only_fields = ['id', 'buyer', 'created_at']
-
-    def validate_rating(self, value):
-        """Ensure rating is between 1 and 5."""
-        if not 1 <= value <= 5:
-            raise serializers.ValidationError("Rating must be between 1 and 5.")
-        return value
-
-    def validate_comment(self, value):
-        """Sanitize and validate comment."""
-        if value:
-            cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
-            if len(cleaned_value) > 1000:
-                raise serializers.ValidationError("Comment cannot exceed 1000 characters.")
-            return cleaned_value
-        return value
-
-    def validate_buyer(self, value):
-        """Ensure buyer has buyer role."""
-        if not has_role(value, 'buyer'):
-            raise serializers.ValidationError("The assigned user must have the buyer role.")
-        return value
-
-    def validate(self, data):
-        """Ensure only super_admin, admin, or the buyer can manage their ratings."""
-        user = self.context['request'].user
-        if self.instance is None and not has_role(user, ['super_admin', 'admin', 'buyer']):
-            raise serializers.ValidationError("Only super admins, admins, or buyers can create ratings.")
-        if self.instance and self.instance.buyer != user and not has_role(user, ['super_admin', 'admin']):
-            raise serializers.ValidationError("Only super admins, admins, or the buyer can update this rating.")
         return data
 
 class LoyaltyProgramSerializer(serializers.ModelSerializer):
