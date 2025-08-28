@@ -1,21 +1,57 @@
 from rest_framework import serializers
 from rolepermissions.checkers import has_role
 from rolepermissions.roles import assign_role
-
-from ..models import Broker
+from django.db.models import Avg
+from ..models import Broker, BrokerRating
 from online_car_market.users.models import User
 from online_car_market.inventory.models import Car
 from online_car_market.inventory.api.serializers import CarSerializer
 import re
 import bleach
 
+
+class BrokerRatingSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
+
+    class Meta:
+        model = BrokerRating
+        fields = ['id', 'broker', 'user', 'rating', 'comment', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+
+    def validate_rating(self, value):
+        if not 1 <= value <= 5:
+            raise serializers.ValidationError("Rating must be between 1 and 5.")
+        return value
+
+    def validate_comment(self, value):
+        if value:
+            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+            if len(cleaned) > 500:
+                raise serializers.ValidationError("Comment cannot exceed 500 characters.")
+            return cleaned
+        return value
+
+    def validate(self, data):
+        user = self.context['request'].user
+        broker = data.get('broker')
+        if has_role(user, 'broker') and broker.user == user:
+            raise serializers.ValidationError("You cannot rate your own broker profile.")
+        if BrokerRating.objects.filter(broker=broker, user=user).exists():
+            raise serializers.ValidationError("You have already rated this broker.")
+        return data
+
 class BrokerSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+    average_rating = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Broker
-        fields = ['id', 'user', 'name', 'contact', 'national_id', 'telebirr_account', 'is_verified', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        fields = ['id', 'user', 'name', 'contact', 'national_id', 'telebirr_account', 'is_verified', 'created_at', 'updated_at', 'average_rating']
+        read_only_fields = ['id', 'user', 'is_verified', 'created_at', 'updated_at', 'average_rating']
+
+    def get_average_rating(self, obj):
+        avg_rating = obj.ratings.aggregate(Avg('rating'))['rating__avg']
+        return round(avg_rating, 1) if avg_rating else None
 
     def validate_name(self, value):
         """Sanitize and validate name."""

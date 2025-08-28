@@ -33,6 +33,15 @@ class IsSuperAdminOrAdminOrDealer(BasePermission):
              has_role(request.user, 'dealer'))
         )
 
+class IsSuperAdminOrAdminOrBuyer(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated and
+            (has_role(request.user, 'super_admin') or
+             has_role(request.user, 'admin') or
+             has_role(request.user, 'buyer'))
+        )
+
 class IsSuperAdminOrAdmin(BasePermission):
     def has_permission(self, request, view):
         return (

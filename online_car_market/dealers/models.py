@@ -21,3 +21,25 @@ class Dealer(models.Model):
 
     def get_absolute_url(self):
         return reverse("users:detail", kwargs={"pk": self.pk})
+
+class DealerRating(models.Model):
+    dealer = models.ForeignKey(Dealer, on_delete=models.CASCADE, related_name='ratings')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='dealer_ratings')
+    rating = models.PositiveIntegerField()  # 1-5 scale
+    comment = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.rating}/5 for {self.dealer.name} by {self.user.email}"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['dealer'], name='idx_dealerrating_dealer'),
+            models.Index(fields=['user'], name='idx_dealerrating_user'),
+            models.Index(fields=['dealer', 'user'], name='idx_dealerrating_dealer_user'),
+        ]
+        constraints = [
+            models.UniqueConstraint(fields=['dealer', 'user'], name='unique_dealer_user_rating'),
+            models.CheckConstraint(check=models.Q(rating__gte=1, rating__lte=5), name='dealerrating_valid_range'),
+        ]

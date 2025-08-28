@@ -1,3 +1,5 @@
+from django.utils import timezone
+from django.db.models import Avg
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
@@ -8,7 +10,7 @@ from django.contrib.auth import get_user_model
 import re
 import bleach
 from datetime import datetime
-from django.utils import timezone
+
 
 User = get_user_model()
 
@@ -134,11 +136,25 @@ class CarSerializer(serializers.ModelSerializer):
     verification_status = serializers.ChoiceField(choices=Car.VERIFICATION_STATUSES, read_only=True)
     make_ref = serializers.PrimaryKeyRelatedField(queryset=CarMake.objects.all(), required=False, allow_null=True)
     model_ref = serializers.PrimaryKeyRelatedField(queryset=CarModel.objects.all(), required=False, allow_null=True)
+    dealer_average_rating = serializers.SerializerMethodField(read_only=True)
+    broker_average_rating = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Car
         fields = '__all__'
-        read_only_fields = ['id', 'created_at', 'updated_at', 'verification_status', 'priority']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'verification_status', 'priority', 'dealer_average_rating', 'broker_average_rating']
+
+    def get_dealer_average_rating(self, obj):
+        if obj.dealer:
+            avg_rating = obj.dealer.ratings.aggregate(Avg('rating'))['rating__avg']
+            return round(avg_rating, 1) if avg_rating else None
+        return None
+
+    def get_broker_average_rating(self, obj):
+        if obj.broker:
+            avg_rating = obj.broker.ratings.aggregate(Avg('rating'))['rating__avg']
+            return round(avg_rating, 1) if avg_rating else None
+        return None
 
     # ---------------- Field Validations ----------------
     def validate_make(self, value):

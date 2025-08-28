@@ -10,7 +10,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiPara
 from django.db.models import Count, Avg, Q
 from ..models import Car, CarImage, Bid, Payment, CarMake, CarModel
 from .serializers import CarSerializer, CarImageSerializer, VerifyCarSerializer, BidSerializer, PaymentSerializer
-from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealer, IsSuperAdminOrAdminOrDealerOrBroker
+from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealerOrBroker
 from online_car_market.dealers.models import Dealer
 from online_car_market.brokers.models import Broker
 
@@ -25,7 +25,7 @@ from online_car_market.brokers.models import Broker
 )
 class CarViewSet(ModelViewSet):
     serializer_class = CarSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated()]
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
@@ -42,7 +42,7 @@ class CarViewSet(ModelViewSet):
 
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy",  "bid", "pay"]:
-            return [IsSuperAdminOrAdminOrDealerOrBroker]
+            return [IsSuperAdminOrAdminOrDealerOrBroker()]
         return super().get_permissions()
 
     def create(self, request, *args, **kwargs):
@@ -229,7 +229,7 @@ class CarViewSet(ModelViewSet):
         return Response(PaymentSerializer(payment).data)
 
     @extend_schema(
-        tags=["Dealers - Inventory"],
+        tags=["Analytics"],
         description="Get market analytics (super admin only).",
         responses={
             200: {
