@@ -59,7 +59,7 @@ class DealerSerializer(serializers.ModelSerializer):
         fields = ['id', 'user', 'company_name', 'license_number', 'address', 'telebirr_account', 'is_verified', 'created_at', 'updated_at', 'average_rating']
         read_only_fields = ['id', 'user', 'is_verified', 'created_at', 'updated_at', 'average_rating']
 
-    def get_average_rating(self, obj):
+    def get_average_rating(self, obj) -> float:
         avg_rating = obj.ratings.aggregate(Avg('rating'))['rating__avg']
         return round(avg_rating, 1) if avg_rating else None
 

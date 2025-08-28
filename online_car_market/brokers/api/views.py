@@ -66,6 +66,12 @@ class BrokerViewSet(ModelViewSet):
     partial_update=extend_schema(tags=["Brokers - Ratings"], description="Partially update a broker rating."),
     destroy=extend_schema(tags=["Brokers - Ratings"], description="Delete a broker rating (rating owner or admin only)."),
 )
+@extend_schema(
+    parameters=[
+        OpenApiParameter(name="broker_pk", type=OpenApiTypes.INT, location="path", description="Parent Broker ID"),
+        OpenApiParameter(name="id", type=OpenApiTypes.INT, location="path", description="Rating ID"),
+    ]
+)
 class BrokerRatingViewSet(ModelViewSet):
     serializer_class = BrokerRatingSerializer
     permission_classes = [IsAuthenticated]

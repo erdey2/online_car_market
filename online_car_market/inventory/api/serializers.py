@@ -144,13 +144,13 @@ class CarSerializer(serializers.ModelSerializer):
         fields = '__all__'
         read_only_fields = ['id', 'created_at', 'updated_at', 'verification_status', 'priority', 'dealer_average_rating', 'broker_average_rating']
 
-    def get_dealer_average_rating(self, obj):
+    def get_dealer_average_rating(self, obj) -> float | None:
         if obj.dealer:
             avg_rating = obj.dealer.ratings.aggregate(Avg('rating'))['rating__avg']
             return round(avg_rating, 1) if avg_rating else None
         return None
 
-    def get_broker_average_rating(self, obj):
+    def get_broker_average_rating(self, obj) -> float | None:
         if obj.broker:
             avg_rating = obj.broker.ratings.aggregate(Avg('rating'))['rating__avg']
             return round(avg_rating, 1) if avg_rating else None

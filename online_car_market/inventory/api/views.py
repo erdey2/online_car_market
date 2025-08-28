@@ -52,6 +52,7 @@ class CarViewSet(ModelViewSet):
         return Response(self.get_serializer(car).data, status=status.HTTP_201_CREATED)
 
     # upload-images
+    '''
     @extend_schema(
         tags=["Dealers - Inventory"],
         description="Upload additional images to an existing car. Use form field `images`.",
@@ -90,7 +91,7 @@ class CarViewSet(ModelViewSet):
             ser.is_valid(raise_exception=True)
             ser.save()
             created.append(ser.data)
-        return Response(created, status=status.HTTP_201_CREATED)
+        return Response(created, status=status.HTTP_201_CREATED) '''
 
     # verify
     @extend_schema(

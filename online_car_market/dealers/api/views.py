@@ -61,6 +61,12 @@ class DealerProfileViewSet(ModelViewSet):
     partial_update=extend_schema(tags=["Dealers - Ratings"], description="Partially update a dealer rating."),
     destroy=extend_schema(tags=["Dealers - Ratings"], description="Delete a dealer rating (rating owner or admin only)."),
 )
+@extend_schema(
+    parameters=[
+        OpenApiParameter(name="dealer_pk", type=OpenApiTypes.INT, location="path", description="Parent Dealer ID"),
+        OpenApiParameter(name="id", type=OpenApiTypes.INT, location="path", description="Rating ID"),
+    ]
+)
 class DealerRatingViewSet(ModelViewSet):
     serializer_class = DealerRatingSerializer
     permission_classes = [IsAuthenticated]
