@@ -1,4 +1,3 @@
-from django.db import models
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
@@ -8,8 +7,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 from django.db.models import Count, Avg, Q
-from ..models import Car, CarImage, Bid, Payment, CarMake, CarModel
-from .serializers import CarSerializer, CarImageSerializer, VerifyCarSerializer, BidSerializer, PaymentSerializer
+from ..models import Car, CarMake, CarModel
+from .serializers import CarSerializer, VerifyCarSerializer, BidSerializer, PaymentSerializer
 from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealerOrBroker
 from online_car_market.dealers.models import Dealer
 from online_car_market.brokers.models import Broker
@@ -120,16 +119,18 @@ class CarViewSet(ModelViewSet):
     @extend_schema(
         tags=["Dealers - Inventory"],
         parameters=[
-            OpenApiParameter("fuel_type", OpenApiTypes.STR, OpenApiParameter.QUERY,
+            OpenApiParameter(name="fuel_type", type=OpenApiTypes.STR, location="query",
                              description="Fuel type (electric, hybrid, petrol, diesel)"),
-            OpenApiParameter("price_min", OpenApiTypes.FLOAT, OpenApiParameter.QUERY, description="Minimum price"),
-            OpenApiParameter("price_max", OpenApiTypes.FLOAT, OpenApiParameter.QUERY, description="Maximum price"),
-            OpenApiParameter(name='sale_type', type=OpenApiTypes.STR, location=OpenApiParameter.QUERY,
-                             description='Sale type (fixed_price, auction)'),
-            OpenApiParameter(name='make_ref', type=OpenApiTypes.INT, location=OpenApiParameter.QUERY,
-                             description='Car make ID'),
-            OpenApiParameter(name='model_ref', type=OpenApiTypes.INT, location=OpenApiParameter.QUERY,
-                             description='Car model ID'),
+            OpenApiParameter(name="price_min", type=OpenApiTypes.FLOAT, location="query",
+                             description="Minimum price"),
+            OpenApiParameter(name="price_max", type=OpenApiTypes.FLOAT, location="query",
+                             description="Maximum price"),
+            OpenApiParameter(name="sale_type", type=OpenApiTypes.STR, location="query",
+                             description="Sale type (fixed_price, auction)"),
+            OpenApiParameter(name="make_ref", type=OpenApiTypes.INT, location="query",
+                             description="Car make ID"),
+            OpenApiParameter(name="model_ref", type=OpenApiTypes.INT, location="query",
+                             description="Car model ID"),
         ],
         description="Filter verified cars by fuel type, price range, sale type, make, or model, with verified cars prioritized.",
         responses=CarSerializer(many=True),

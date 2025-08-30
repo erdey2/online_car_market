@@ -2,19 +2,16 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated, BasePermission
+from rest_framework.response import Response
 from rolepermissions.checkers import has_role
 from ..models import User
 from .serializers import UserSerializer
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
-from rest_framework.response import Response
-
 
 # Custom DRF Permission class for managing users
 class CanManageUsers(BasePermission):
-    """
-    Allows access only to users with super_admin or admin role.
-    """
+    """ Allows access only to users with super_admin or admin role. """
     def has_permission(self, request, view):
         return request.user.is_authenticated and has_role(request.user, ['super_admin', 'admin'])
 
