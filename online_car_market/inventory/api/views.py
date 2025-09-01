@@ -12,7 +12,7 @@ from .serializers import CarSerializer, VerifyCarSerializer, BidSerializer, Paym
 from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealerOrBroker
 from online_car_market.dealers.models import Dealer
 from online_car_market.brokers.models import Broker
-
+from online_car_market.buyers.models import Buyer
 # Car ViewSet
 @extend_schema_view(
     list=extend_schema(tags=["Dealers - Inventory"], description="List all verified cars for non-admins or all cars for admins, with verified cars prioritized."),
@@ -29,18 +29,26 @@ class CarViewSet(ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+
         if has_role(user, ['super_admin', 'admin']):
             return Car.objects.all().order_by('-priority', '-created_at')
-        if has_role(user, 'dealer'):
-            return Car.objects.filter(Q(dealer__user=user) | Q(verification_status='verified')).order_by('-priority',
-                                                                                                         '-created_at')
-        if has_role(user, 'broker'):
-            return Car.objects.filter(Q(broker__user=user) | Q(verification_status='verified')).order_by('-priority',
-                                                                                                         '-created_at')
-        if has_role(user, 'buyers'):
-            return Car.objects.filter(Q(buyer__user=user) | Q(verification_status='verified')).order_by('-priority',
-                                                                                                         '-created_at')
 
+        if has_role(user, 'dealer'):
+            return Car.objects.filter(
+                Q(dealer__user=user) | Q(verification_status='verified')
+            ).order_by('-priority', '-created_at')
+
+        if has_role(user, 'broker'):
+            return Car.objects.filter(
+                Q(broker__user=user) | Q(verification_status='verified')
+            ).order_by('-priority', '-created_at')
+
+        if has_role(user, 'buyer'):
+            # Buyers just see verified cars
+            # return Car.objects.filter(verification_status='verified').order_by('-priority', '-created_at')
+            return Car.objects.order_by('-priority', '-created_at')
+
+        # Default: only verified cars
         return Car.objects.filter(verification_status='verified').order_by('-priority', '-created_at')
 
     def get_permissions(self):
