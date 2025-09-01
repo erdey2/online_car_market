@@ -37,6 +37,10 @@ class CarViewSet(ModelViewSet):
         if has_role(user, 'broker'):
             return Car.objects.filter(Q(broker__user=user) | Q(verification_status='verified')).order_by('-priority',
                                                                                                          '-created_at')
+        if has_role(user, 'buyers'):
+            return Car.objects.filter(Q(buyer__user=user) | Q(verification_status='verified')).order_by('-priority',
+                                                                                                         '-created_at')
+
         return Car.objects.filter(verification_status='verified').order_by('-priority', '-created_at')
 
     def get_permissions(self):

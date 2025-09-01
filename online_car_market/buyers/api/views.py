@@ -48,7 +48,8 @@ class BuyerViewSet(ModelViewSet):
         return Buyer.objects.none()
 
     def perform_create(self, serializer):
-        """ Admins can create a buyer profile for any user by posting a user id. Buyers should not create again
+        """
+        Admins can create a buyer profile for any user by posting a user id. Buyers should not create again
         if they already have one.
         """
         user = self.request.user
