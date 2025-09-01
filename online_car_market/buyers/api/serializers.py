@@ -16,11 +16,12 @@ import re, bleach
 
 class BuyerSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    loyalty_points = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Buyer
         fields = ['id', 'user', 'contact', 'address', 'loyalty_points', 'loyalty_created_at', 'updated_at']
-        read_only_fields = ['id', 'loyalty_created_at', 'updated_at']
+        read_only_fields = ['id', 'user', 'loyalty_points', 'loyalty_created_at', 'updated_at']
 
     def validate_contact(self, value):
         """Validate and sanitize phone number."""

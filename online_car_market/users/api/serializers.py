@@ -2,11 +2,12 @@ from rest_framework import serializers
 from dj_rest_auth.registration.serializers import RegisterSerializer
 from dj_rest_auth.serializers import LoginSerializer
 from rolepermissions.checkers import has_role
-from rolepermissions.roles import get_user_roles
+from rolepermissions.roles import get_user_roles, assign_role
 from drf_spectacular.utils import extend_schema_field
 from django.contrib.auth import get_user_model
 import re
 import bleach
+from online_car_market.buyers.models import Buyer
 
 User = get_user_model()
 
@@ -113,6 +114,8 @@ class CustomRegisterSerializer(RegisterSerializer):
     username = None
     first_name = serializers.CharField(required=False)
     last_name = serializers.CharField(required=False)
+    contact = serializers.CharField(required=False, allow_blank=True)
+    address = serializers.CharField(required=False, allow_blank=True)
 
     def validate_email(self, value):
         """Sanitize and validate email."""
@@ -150,11 +153,32 @@ class CustomRegisterSerializer(RegisterSerializer):
             return cleaned_value
         return value
 
+    def validate_contact(self, value):
+        if not value:
+            return value  # optional at signup
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        phone_regex = r'^\+251[79]\d{8}$'
+        if not re.match(phone_regex, cleaned_value):
+            raise serializers.ValidationError("Contact must be a valid phone (e.g., +251912345678).")
+        if len(cleaned_value) > 100:
+            raise serializers.ValidationError("Contact cannot exceed 100 characters.")
+        return cleaned_value
+
+    def validate_address(self, value):
+        if not value:
+            return value
+        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
+        if len(cleaned_value) > 100:
+            raise serializers.ValidationError("Address cannot exceed 100 characters.")
+        return cleaned_value
+
     def get_cleaned_data(self):
         """Include sanitized first_name and last_name in cleaned data."""
         cleaned_data = super().get_cleaned_data()
         cleaned_data['first_name'] = self.validated_data.get('first_name', '')
         cleaned_data['last_name'] = self.validated_data.get('last_name', '')
+        cleaned_data['contact'] = self.validated_data.get('contact', '')
+        cleaned_data['address'] = self.validated_data.get('address', '')
         return cleaned_data
 
     def _has_phone_field(self):
@@ -168,3 +192,20 @@ class CustomRegisterSerializer(RegisterSerializer):
         if user.is_authenticated and not has_role(user, ['super_admin', 'admin']):
             raise serializers.ValidationError("Only super admins or admins can create users via this endpoint.")
         return data
+
+    def save(self, request):
+        # creates the User (email/password/first/last handled by dj-rest-auth)
+        user = super().save(request)
+
+        # assign buyer role using django-role-permissions (no column on User)
+        assign_role(user, 'buyer')
+
+        # create Buyer profile if missing; contact/address optional at signup
+        Buyer.objects.get_or_create(
+            user=user,
+            defaults={
+                "contact": self.validated_data.get('contact', '') or '',
+                "address": self.validated_data.get('address', '') or '',
+            }
+        )
+        return user
