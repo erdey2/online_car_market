@@ -8,6 +8,7 @@ from online_car_market.users.models import Profile
 from online_car_market.buyers.models import BuyerProfile, LoyaltyProgram
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
+import cloudinary.uploader
 import re
 import bleach
 import logging
@@ -116,10 +117,11 @@ class ProfileSerializer(serializers.ModelSerializer):
     buyer_profile = BuyerProfileSerializer(read_only=True)
     dealer_profile = DealerProfileSerializer(required=False, allow_null=True)
     broker_profile = BrokerProfileSerializer(required=False, allow_null=True)
+    image = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = Profile
-        fields = ['id', 'user', 'first_name', 'last_name', 'contact', 'address', 'created_at', 'updated_at', 'buyer_profile', 'dealer_profile', 'broker_profile']
+        fields = ['id', 'user', 'first_name', 'last_name', 'contact', 'address', 'image', 'created_at', 'updated_at', 'buyer_profile', 'dealer_profile', 'broker_profile']
         read_only_fields = ['id', 'user', 'created_at', 'updated_at', 'buyer_profile']
 
     def validate_first_name(self, value):
@@ -156,6 +158,18 @@ class ProfileSerializer(serializers.ModelSerializer):
             return cleaned
         return value
 
+    def validate_image(self, value):
+        if value:
+            # Validate image size (e.g., max 5MB)
+            max_size = 5 * 1024 * 1024  # 5MB in bytes
+            if value.size > max_size:
+                raise serializers.ValidationError("Image size cannot exceed 5MB.")
+            # Validate file type
+            allowed_types = ['image/jpeg', 'image/png', 'image/gif']
+            if value.content_type not in allowed_types:
+                raise serializers.ValidationError("Image must be JPEG, PNG, or GIF.")
+        return value
+
     def validate(self, data):
         user = self.context['request'].user
         if self.instance and self.instance.user != user and not has_role(user, ['super_admin', 'admin']):
@@ -169,9 +183,26 @@ class ProfileSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         dealer_profile_data = validated_data.pop('dealer_profile', None)
         broker_profile_data = validated_data.pop('broker_profile', None)
+        image = validated_data.pop('image', None)
 
         # Update Profile fields
         instance = super().update(instance, validated_data)
+
+        # Handle image upload to Cloudinary
+        if image:
+            try:
+                upload_result = cloudinary.uploader.upload(
+                    image,
+                    folder='profiles',
+                    resource_type='image',
+                    overwrite=True
+                )
+                instance.image = upload_result['public_id']
+                instance.save()
+                logger.info(f"Profile image uploaded for {instance.user.email}: {upload_result['public_id']}")
+            except Exception as e:
+                logger.error(f"Failed to upload profile image for {instance.user.email}: {str(e)}")
+                raise serializers.ValidationError({"image": "Failed to upload image to Cloudinary."})
 
         # Update DealerProfile if applicable
         if dealer_profile_data and has_role(instance.user, 'dealer'):

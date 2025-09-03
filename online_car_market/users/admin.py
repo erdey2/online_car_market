@@ -6,6 +6,7 @@ from online_car_market.users.models import Profile
 from online_car_market.buyers.models import BuyerProfile, LoyaltyProgram
 from online_car_market.dealers.models import DealerProfile, DealerRating
 from online_car_market.brokers.models import BrokerProfile, BrokerRating
+from django.utils.html import format_html
 
 User = get_user_model()
 
@@ -20,8 +21,14 @@ class ProfileInline(admin.StackedInline):
     model = Profile
     can_delete = False
     verbose_name_plural = 'Profile'
-    fields = ['first_name', 'last_name', 'contact', 'address', 'created_at', 'updated_at']
-    readonly_fields = ['created_at', 'updated_at']
+    fields = ['first_name', 'last_name', 'contact', 'address', 'image', 'image_preview', 'created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'image_preview']
+
+    def image_preview(self, obj):
+        if obj.image:
+            return format_html('<img src="{}" width="100" height="100" />', obj.image.url)
+        return "No image"
+    image_preview.short_description = "Image Preview"
 
 # Inline for BuyerProfile under Profile
 class BuyerProfileInline(admin.StackedInline):
@@ -62,15 +69,21 @@ class CustomUserAdmin(RolePermissionsUserAdmin):
 # Profile Admin
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ("id", "user_email", "first_name", "last_name", "contact", "address", "created_at")
+    list_display = ("id", "user_email", "first_name", "last_name", "contact", "address", "image_preview", "created_at")
     search_fields = ("user__email", "first_name", "last_name", "contact", "address")
     list_filter = ("created_at",)
-    readonly_fields = ("created_at", "updated_at")
+    readonly_fields = ("created_at", "updated_at", "image_preview")
     inlines = [BuyerProfileInline, DealerProfileInline, BrokerProfileInline]
 
     def user_email(self, obj):
         return obj.user.email
     user_email.short_description = "User Email"
+
+    def image_preview(self, obj):
+        if obj.image:
+            return format_html('<img src="{}" width="100" height="100" />', obj.image.url)
+        return "No image"
+    image_preview.short_description = "Image Preview"
 
 # BuyerProfile Admin
 @admin.register(BuyerProfile)
