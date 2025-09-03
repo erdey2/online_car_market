@@ -1,15 +1,15 @@
 from rest_framework import serializers
 from rolepermissions.checkers import has_role
 from ..models import Sale, Lead, Car, User
-from online_car_market.buyers.models import Buyer
-from online_car_market.brokers.models import Broker
+from online_car_market.buyers.models import BuyerProfile
+from online_car_market.brokers.models import BrokerProfile
 import re
 import bleach
 
 class SaleSerializer(serializers.ModelSerializer):
-    buyer = serializers.PrimaryKeyRelatedField(queryset=Buyer.objects.all())
+    buyer = serializers.PrimaryKeyRelatedField(queryset=BuyerProfile.objects.all())
     car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all())
-    broker = serializers.PrimaryKeyRelatedField(queryset=Broker.objects.all(), required=False, allow_null=True)
+    broker = serializers.PrimaryKeyRelatedField(queryset=BrokerProfile.objects.all(), required=False, allow_null=True)
 
     class Meta:
         model = Sale

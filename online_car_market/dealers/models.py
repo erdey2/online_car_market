@@ -1,29 +1,30 @@
 from django.db import models
-from online_car_market.users.models import User
-from django.urls import reverse
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from online_car_market.users.models import User, Profile
+from rolepermissions.checkers import has_role
 
-class Dealer(models.Model):
-    company_name = models.CharField(max_length=100, db_index=True)
-    phone = models.CharField(max_length=100, null=True, blank=True)
-    address = models.CharField(max_length=100, db_index=True)
-
+class DealerProfile(models.Model):
+    profile = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name='dealer_profile')
+    company_name = models.CharField(max_length=255)
     license_number = models.CharField(max_length=50)
     tax_id = models.CharField(max_length=100, null=True, blank=True)
     telebirr_account = models.CharField(max_length=100, null=True)
-    is_verified = models.BooleanField(default=True) # Dealers are verified by default
-
+    is_verified = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='dealer')
 
     def __str__(self):
-        return f"Dealer: {self.user.email}"
+        return self.company_name
 
-    def get_absolute_url(self):
-        return reverse("users:detail", kwargs={"pk": self.pk})
+    class Meta:
+        ordering = ['company_name']
+        indexes = [
+            models.Index(fields=['profile'], name='idx_dealerprofile_profile'),
+        ]
 
 class DealerRating(models.Model):
-    dealer = models.ForeignKey(Dealer, on_delete=models.CASCADE, related_name='ratings')
+    dealer = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, related_name='ratings')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='dealer_ratings')
     rating = models.PositiveIntegerField()  # 1-5 scale
     comment = models.TextField(blank=True, null=True)
@@ -43,3 +44,11 @@ class DealerRating(models.Model):
             models.UniqueConstraint(fields=['dealer', 'user'], name='unique_dealer_user_rating'),
             models.CheckConstraint(check=models.Q(rating__gte=1, rating__lte=5), name='dealerrating_valid_range'),
         ]
+
+@receiver(post_save, sender=Profile)
+def create_dealer_profile(sender, instance, created, **kwargs):
+    if has_role(instance.user, 'dealer'):
+        DealerProfile.objects.get_or_create(
+            profile=instance,
+            defaults={'company_name': instance.user.email, 'license_number': '', 'telebirr_account': ''}
+        )

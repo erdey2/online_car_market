@@ -17,36 +17,38 @@ class UserManager(BaseUserManager):
     def create_superuser(self, email, password=None, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
-
         if not extra_fields.get('is_staff'):
             raise ValueError('Superuser must have is_staff=True.')
         if not extra_fields.get('is_superuser'):
             raise ValueError('Superuser must have is_superuser=True.')
-
         return self.create_user(email, password, **extra_fields)
 
 class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(_('Email address'), unique=True)
-    first_name = models.CharField(max_length=50, blank=True)
-    last_name = models.CharField(max_length=50, blank=True)
     description = models.TextField(max_length=500, blank=True, null=True)
     date_joined = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
-
     objects = UserManager()
-
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['first_name', 'last_name']
+    REQUIRED_FIELDS = []
 
     def __str__(self):
         return self.email
 
-    def get_full_name(self):
-        return f"{self.first_name} {self.last_name}".strip()
+class Profile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    first_name = models.CharField(max_length=50, blank=True)
+    last_name = models.CharField(max_length=50, blank=True)
+    contact = models.CharField(max_length=20, blank=True)  # e.g., phone number
+    address = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-    def get_short_name(self):
-        return self.first_name
+    def __str__(self):
+        return f"Profile for {self.user.email}"
 
-class Meta:
-        app_label = 'online_car_market.users'
+    class Meta:
+        indexes = [
+            models.Index(fields=['user'], name='idx_profile_user'),
+        ]

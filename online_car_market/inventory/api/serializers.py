@@ -4,8 +4,8 @@ from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
 from ..models import Car, CarImage, Bid, Payment, CarMake, CarModel
-from online_car_market.dealers.models import Dealer
-from online_car_market.brokers.models import Broker
+from online_car_market.dealers.models import DealerProfile
+from online_car_market.brokers.models import BrokerProfile
 from django.contrib.auth import get_user_model
 import re
 import bleach
@@ -127,8 +127,8 @@ class PaymentSerializer(serializers.ModelSerializer):
         return data
 
 class CarSerializer(serializers.ModelSerializer):
-    dealer = serializers.PrimaryKeyRelatedField(queryset=Dealer.objects.all(), required=False, allow_null=True)
-    broker = serializers.PrimaryKeyRelatedField(queryset=Broker.objects.all(), required=False, allow_null=True)
+    dealer = serializers.PrimaryKeyRelatedField(queryset=DealerProfile.objects.all(), required=False, allow_null=True)
+    broker = serializers.PrimaryKeyRelatedField(queryset=BrokerProfile.objects.all(), required=False, allow_null=True)
     posted_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
     images = CarImageSerializer(many=True, read_only=True)
     uploaded_images = CarImageSerializer(many=True, write_only=True, required=False)

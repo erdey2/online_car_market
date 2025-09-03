@@ -1,11 +1,9 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import BuyerViewSet, LoyaltyProgramViewSet  # example view
+from .views import RoleUpgradeViewSet
 
 router = DefaultRouter()
-router.register(r'profiles', BuyerViewSet, basename='buyer-profiles')
-# router.register(r'me', BuyerViewSet, basename='buyer')
-router.register(r'loyalty', LoyaltyProgramViewSet, basename='buyer-loyalty')
+router.register(r'upgrades', RoleUpgradeViewSet, basename='upgrade')
 
 urlpatterns = [
     path('', include(router.urls)),

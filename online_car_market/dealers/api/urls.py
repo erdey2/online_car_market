@@ -1,15 +1,11 @@
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from rest_framework_nested.routers import NestedSimpleRouter
-from .views import DealerProfileViewSet, DealerRatingViewSet
+from rest_framework_nested import routers
+from .views import DealerRatingViewSet, DealerVerificationViewSet
 
-router = DefaultRouter()
-router.register(r'profiles', DealerProfileViewSet, basename='dealer')
-
-dealers_router = NestedSimpleRouter(router, r'profiles', lookup='dealer')
-dealers_router.register(r'ratings', DealerRatingViewSet, basename='dealer-rating')
+router = routers.SimpleRouter()
+router.register(r'ratings', DealerRatingViewSet, basename='dealer-rating')
+router.register(r'verifications', DealerVerificationViewSet, basename='dealer-verification')
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('', include(dealers_router.urls)),
 ]

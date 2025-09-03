@@ -1,8 +1,8 @@
 from django.db import models
 from cloudinary.models import CloudinaryField
 from django.contrib.auth import get_user_model
-from online_car_market.dealers.models import Dealer
-from online_car_market.brokers.models import Broker
+from online_car_market.dealers.models import DealerProfile
+from online_car_market.brokers.models import BrokerProfile
 
 User = get_user_model()
 
@@ -69,8 +69,8 @@ class Car(models.Model):
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='available')
     sale_type = models.CharField(max_length=20, choices=SALE_TYPES, default='fixed_price')
     auction_end = models.DateTimeField(null=True, blank=True)  # For auction cars
-    dealer = models.ForeignKey(Dealer, on_delete=models.CASCADE, null=True, blank=True, related_name='cars')
-    broker = models.ForeignKey(Broker, on_delete=models.CASCADE, null=True, blank=True, related_name='cars')
+    dealer = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, null=True, blank=True, related_name='cars')
+    broker = models.ForeignKey(BrokerProfile, on_delete=models.CASCADE, null=True, blank=True, related_name='cars')
     posted_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posted_cars', db_index=True)
     verification_status = models.CharField(max_length=20, choices=VERIFICATION_STATUSES, default='pending')
     priority = models.BooleanField(default=False)  # For prioritizing verified cars

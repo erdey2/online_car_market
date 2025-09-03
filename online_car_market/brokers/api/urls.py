@@ -1,15 +1,11 @@
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from rest_framework_nested.routers import NestedSimpleRouter
-from .views import BrokerViewSet, BrokerRatingViewSet
+from rest_framework_nested import routers
+from .views import BrokerRatingViewSet, BrokerVerificationViewSet
 
-router = DefaultRouter()
-router.register(r'profiles', BrokerViewSet, basename='broker')
-
-brokers_router = NestedSimpleRouter(router, r'profiles', lookup='broker')
-brokers_router.register(r'ratings', BrokerRatingViewSet, basename='broker-rating')
+router = routers.SimpleRouter()
+router.register(r'ratings', BrokerRatingViewSet, basename='broker-rating')
+router.register(r'verifications', BrokerVerificationViewSet, basename='broker-verification')
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('', include(brokers_router.urls)),
 ]

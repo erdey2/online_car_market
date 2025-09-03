@@ -10,9 +10,9 @@ from django.db.models import Count, Avg, Q
 from ..models import Car, CarMake, CarModel
 from .serializers import CarSerializer, VerifyCarSerializer, BidSerializer, PaymentSerializer
 from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealerOrBroker
-from online_car_market.dealers.models import Dealer
-from online_car_market.brokers.models import Broker
-from online_car_market.buyers.models import Buyer
+from online_car_market.dealers.models import DealerProfile
+from online_car_market.brokers.models import BrokerProfile
+from online_car_market.buyers.models import BuyerProfile
 # Car ViewSet
 @extend_schema_view(
     list=extend_schema(tags=["Dealers - Inventory"], description="List all verified cars for non-admins or all cars for admins, with verified cars prioritized."),
@@ -235,7 +235,7 @@ class CarViewSet(ModelViewSet):
         serializer.is_valid(raise_exception=True)
         payment = serializer.save(user=request.user, car=car)
         if payment.payment_type == 'verification_fee' and payment.is_confirmed and has_role(request.user, 'broker'):
-            broker = Broker.objects.get(user=request.user)
+            broker = BrokerProfile.objects.get(user=request.user)
             broker.is_verified = True
             broker.save()
             Car.objects.filter(broker=broker, verification_status='pending').update(verification_status='verified',
@@ -298,12 +298,12 @@ class CarViewSet(ModelViewSet):
             return Response({"error": "Only super admins can access analytics."}, status=403)
         total_cars = Car.objects.count()
         average_price = Car.objects.filter(price__isnull=False).aggregate(Avg('price'))['price__avg'] or 0
-        dealer_stats = Dealer.objects.annotate(
+        dealer_stats = DealerProfile.objects.annotate(
             total_cars=Count('cars'),
             sold_cars=Count('cars', filter=Q(cars__status='sold')),
             avg_price=Avg('cars__price')
         ).values('id', 'name', 'total_cars', 'sold_cars', 'avg_price')
-        broker_stats = Broker.objects.annotate(
+        broker_stats = BrokerProfile.objects.annotate(
             total_cars=Count('cars'),
             sold_cars=Count('cars', filter=Q(cars__status='sold')),
             avg_price=Avg('cars__price')

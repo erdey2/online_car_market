@@ -1,62 +1,21 @@
-from rest_framework.viewsets import ModelViewSet
+from rest_framework import serializers
+from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.permissions import IsAuthenticated, BasePermission
-from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.decorators import action
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
-from ..models import Broker, BrokerRating
-from .serializers import BrokerSerializer, UpgradeToBrokerSerializer, VerifyBrokerSerializer, BrokerRatingSerializer
-from online_car_market.users.permissions import IsSuperAdminOrAdminOrBuyer
+from online_car_market.brokers.models import BrokerProfile, BrokerRating
+from online_car_market.users.api.serializers import VerifyBrokerSerializer
+from .serializers import BrokerRatingSerializer
+from online_car_market.users.permissions import IsSuperAdmin, IsAdmin
+import logging
 
-class CanManageBrokerListings(BasePermission):
-    def has_permission(self, request, view):
-        # Example: only allow users with role 'broker' to access
-        return request.user.is_authenticated and request.user.role == 'broker'
+logger = logging.getLogger(__name__)
 
-@extend_schema_view(
-    list=extend_schema(tags=["Brokers - Profiles"], description="List all brokers (admin only)."),
-    retrieve=extend_schema(tags=["Brokers - Profiles"], description="Retrieve a broker profile."),
-    create=extend_schema(tags=["Brokers - Profiles"], description="Create a broker profile (admin only)."),
-    update=extend_schema(tags=["Brokers - Profiles"], description="Update a broker profile (admin or owner)."),
-    partial_update=extend_schema(tags=["Brokers - Profiles"], description="Partially update a broker profile."),
-    destroy=extend_schema(tags=["Brokers - Profiles"], description="Delete a broker profile (admin only)."),
-)
-
-@extend_schema(parameters=[OpenApiParameter(name="id", type=OpenApiTypes.INT, location="path", description="Broker ID")])
-class BrokerViewSet(ModelViewSet):
-    serializer_class = BrokerSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        user = self.request.user
-        if has_role(user, ['super_admin', 'admin']):
-            return Broker.objects.all()
-        return Broker.objects.filter(user=user)
-
-    @extend_schema(
-        tags=["Brokers - Profiles"],
-        description="Verify a broker profile (admin/super_admin only).",
-        responses=VerifyBrokerSerializer
-    )
-    @action(detail=True, methods=['patch'], serializer_class=VerifyBrokerSerializer)
-    def verify(self, request, pk=None):
-        broker = self.get_object()
-        serializer = self.get_serializer(broker, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
-
-    @extend_schema(
-        tags=["Brokers - Profiles"],
-        description="Request to upgrade to broker role.",
-        responses=BrokerSerializer
-    )
-    @action(detail=False, methods=['post'], serializer_class=UpgradeToBrokerSerializer)
-    def upgrade(self, request):
-        serializer = self.get_serializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        broker = serializer.save()
-        return Response(BrokerSerializer(broker).data)
+class IsRatingOwnerOrAdmin(BasePermission):
+    def has_object_permission(self, request, view, obj):
+        return request.user == obj.user or has_role(request.user, ['super_admin', 'admin'])
 
 @extend_schema_view(
     list=extend_schema(tags=["Brokers - Ratings"], description="List all ratings for a broker."),
@@ -77,20 +36,47 @@ class BrokerRatingViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        broker_id = self.kwargs.get('broker_id')
+        broker_pk = self.kwargs.get('broker_pk')
         user = self.request.user
         if has_role(user, ['super_admin', 'admin']):
-            return BrokerRating.objects.filter(broker_id=broker_id)
-        return BrokerRating.objects.filter(broker_id=broker_id, user=user)
+            return BrokerRating.objects.filter(broker_id=broker_pk)
+        return BrokerRating.objects.filter(broker_id=broker_pk, user=user)
 
     def get_permissions(self):
-        if self.action in ['create', 'list', 'retrieve']:
-            return [IsAuthenticated()]
         if self.action in ['update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), IsSuperAdminOrAdminOrBuyer()]
+            return [IsAuthenticated(), IsRatingOwnerOrAdmin()]
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
-        broker_id = self.kwargs.get('broker_pk')
-        broker = Broker.objects.get(pk=broker_id)
-        serializer.save(broker=broker, user=self.request.user)
+        broker_pk = self.kwargs.get('broker_pk')
+        try:
+            broker = BrokerProfile.objects.get(pk=broker_pk)
+            serializer.save(broker=broker, user=self.request.user)
+            logger.info(f"Broker rating created by {self.request.user.email} for broker {broker_pk}")
+        except BrokerProfile.DoesNotExist:
+            logger.error(f"Broker {broker_pk} not found for rating creation")
+            raise serializers.ValidationError({"broker": "Broker does not exist."})
+
+@extend_schema_view(
+    verify=extend_schema(
+        tags=["Brokers - Verification"],
+        request=VerifyBrokerSerializer,
+        responses={200: VerifyBrokerSerializer},
+        description="Verify a broker profile (admin/super_admin only)."
+    )
+)
+class BrokerVerificationViewSet(ViewSet):
+    permission_classes = [IsAuthenticated, IsSuperAdmin | IsAdmin]
+
+    @action(detail=True, methods=['patch'])
+    def verify(self, request, pk=None):
+        try:
+            broker = BrokerProfile.objects.get(pk=pk)
+            serializer = VerifyBrokerSerializer(broker, data=request.data, partial=True, context={'request': request})
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            logger.info(f"Broker {broker.pk} verification updated by {request.user.email}")
+            return Response(serializer.data)
+        except BrokerProfile.DoesNotExist:
+            logger.error(f"Broker {pk} not found for verification")
+            return Response({"error": "Broker not found."}, status=404)

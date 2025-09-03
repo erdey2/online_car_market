@@ -53,7 +53,7 @@ urlpatterns = [
     # User management
     path("api/accounts/", include("allauth.urls")),
     # Your stuff: custom urls includes go here
-    path("api/users/", include("online_car_market.users.api.urls", namespace="users")),
+    path("api/users/", include("online_car_market.users.api.urls")),
     path('api/inventory/', include("online_car_market.inventory.api.urls")),
     path('api/sales/', include("online_car_market.sales.api.urls")),
     path('api/accounting/', include("online_car_market.accounting.api.urls")),
