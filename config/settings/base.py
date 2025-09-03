@@ -281,7 +281,7 @@ LOGGING = {
 }
 
 REDIS_URL = env("REDIS_URL", default="redis://localhost:6379/0")
-REDIS_SSL = REDIS_URL.startswith("rediss://")
+REDIS_SSL = REDIS_URL.startswith("redis://")
 
 # django-allauth
 # ------------------------------------------------------------------------------

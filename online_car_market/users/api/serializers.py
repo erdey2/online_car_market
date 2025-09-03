@@ -285,6 +285,10 @@ class CustomRegisterSerializer(RegisterSerializer):
     username = None
     description = serializers.CharField(max_length=500, required=False, allow_blank=True)
 
+    @property
+    def _has_phone_field(self):
+        return False
+
     def validate_email(self, value):
         cleaned = bleach.clean(value.strip(), tags=[], strip=True)
         email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
@@ -312,7 +316,7 @@ class CustomRegisterSerializer(RegisterSerializer):
 
     def save(self, request):
         user = super().save(request)
-        assign_role(user, 'Buyer')
+        assign_role(user, 'buyer')
         Profile.objects.get_or_create(user=user)
         BuyerProfile.objects.get_or_create(profile=Profile.objects.get(user=user))
         logger.info(f"User registered via dj_rest_auth: {user.email}")
