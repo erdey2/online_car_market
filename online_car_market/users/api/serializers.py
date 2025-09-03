@@ -118,11 +118,19 @@ class ProfileSerializer(serializers.ModelSerializer):
     dealer_profile = DealerProfileSerializer(required=False, allow_null=True)
     broker_profile = BrokerProfileSerializer(required=False, allow_null=True)
     image = serializers.ImageField(required=False, allow_null=True)
+    image_url = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Profile
-        fields = ['id', 'user', 'first_name', 'last_name', 'contact', 'address', 'image', 'created_at', 'updated_at', 'buyer_profile', 'dealer_profile', 'broker_profile']
-        read_only_fields = ['id', 'user', 'created_at', 'updated_at', 'buyer_profile']
+        fields = ['id', 'user', 'first_name', 'last_name', 'contact', 'address', 'image', 'image_url', 'created_at', 'updated_at', 'buyer_profile', 'dealer_profile', 'broker_profile']
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at', 'buyer_profile', 'image_url']
+
+    def get_image_url(self, obj):
+        if obj.image:
+            # Generate the full Cloudinary URL
+            url, _ = cloudinary.utils.cloudinary_url(obj.image, resource_type='image')
+            return url
+        return None
 
     def validate_first_name(self, value):
         if value:
