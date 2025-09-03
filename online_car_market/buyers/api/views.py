@@ -10,13 +10,13 @@ logger = logging.getLogger(__name__)
 
 @extend_schema_view(
     upgrade_to_dealer=extend_schema(
-        tags=["buyers"],
+        tags=["Buyers Upgrade"],
         request=UpgradeToDealerSerializer,
         responses={201: UpgradeToDealerSerializer},
         description="Request to upgrade authenticated user to dealer role."
     ),
     upgrade_to_broker=extend_schema(
-        tags=["buyers"],
+        tags=["Buyers Upgrade"],
         request=UpgradeToBrokerSerializer,
         responses={201: UpgradeToBrokerSerializer},
         description="Request to upgrade authenticated user to broker role."

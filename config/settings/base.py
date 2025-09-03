@@ -344,17 +344,16 @@ SPECTACULAR_SETTINGS = {
     "TAGS": [
         {"name": "Authentication & Users", "description": "Login, registration, user profiles, roles"},
 
-        {"name": "Dealers - Profiles", "description": "Dealer accounts and profile management"},
         {"name": "Dealers - Inventory", "description": "Manage dealer car inventory"},
         {"name": "Dealers - Sales", "description": "Orders, invoices, and sales management"},
         {"name": "Dealers - Accounting", "description": "Payments, transactions, and dealer reports"},
         {"name": "Dealers - Ratings", "description": "Manage Dealers ratings"},
+        {"name": "Dealers - Verification", "description": "Dealer verifications"},
 
-        {"name": "Brokers - Profiles", "description": "Broker accounts and profile management"},
+        {"name": "Brokers - Verification", "description": "Broker Verifications"},
         {"name": "Brokers - Ratings", "description": "Manage Brokers ratings"},
         {"name": "Brokers - Orders", "description": "Broker' orders and order details"},
 
-        {"name": "Buyers - Profiles", "description": "Buyer accounts and profile management"},
         {"name": "Buyers - Loyalty", "description": "Loyalty points and rewards for buyers"},
 
         {"name": "Analytics", "description": "Brokers and Dealers Statics"},
