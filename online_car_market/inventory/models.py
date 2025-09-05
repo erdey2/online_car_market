@@ -3,31 +3,50 @@ from cloudinary.models import CloudinaryField
 from django.contrib.auth import get_user_model
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
+from django.utils.text import slugify
 
 User = get_user_model()
 
 class CarMake(models.Model):
     name = models.CharField(max_length=100, unique=True)
+    # slug = models.SlugField(max_length=100, unique=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return self.name
+    # updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['name']
+        verbose_name = 'Car Make'
+        verbose_name_plural = 'Car Makes'
+
+    ''' def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs) '''
+
+    def __str__(self):
+        return self.name
 
 
 class CarModel(models.Model):
     make = models.ForeignKey(CarMake, on_delete=models.CASCADE, related_name='models')
     name = models.CharField(max_length=100)
+    # slug = models.SlugField(max_length=100, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['make__name', 'name']
+        verbose_name = 'Car Model'
+        verbose_name_plural = 'Car Models'
+        unique_together = ('make', 'name')
+
+    ''' def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(f"{self.make.name}-{self.name}")
+        super().save(*args, **kwargs) '''
 
     def __str__(self):
         return f"{self.make.name} {self.name}"
-
-    class Meta:
-        unique_together = ('make', 'name')
-        ordering = ['make__name', 'name']
 
 class Car(models.Model):
     VERIFICATION_STATUSES = [
@@ -60,7 +79,7 @@ class Car(models.Model):
 
     make = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     model = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    make_ref = models.ForeignKey(CarMake, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars', db_index=True)
+    make_ref = models.ForeignKey(CarMake, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars', db_index=True),
     model_ref = models.ForeignKey(CarModel, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars', db_index=True)
     year = models.IntegerField()
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.0, db_index=True)

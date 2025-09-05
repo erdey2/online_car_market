@@ -11,10 +11,85 @@ import re
 import bleach
 from datetime import datetime
 
-
 User = get_user_model()
 
-# ---------------- CarImage Serializer ----------------
+class CarMakeSerializer(serializers.ModelSerializer):
+    """
+    Serializer for CarMake model.
+    Provides read-only access to id, name, and slug.
+    Validates unique make names and sanitizes input for create/update.
+    """
+    class Meta:
+        model = CarMake
+        fields = ['id', 'name']
+        read_only_fields = ['id']
+
+    def validate_name(self, value):
+        """
+        Validate make name: non-empty, max 100 chars, unique, sanitized.
+        """
+        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+        if not cleaned:
+            raise serializers.ValidationError("Make name cannot be empty.")
+        if len(cleaned) > 100:
+            raise serializers.ValidationError("Make name cannot exceed 100 characters.")
+        if CarMake.objects.filter(name=cleaned).exclude(id=self.instance.id if self.instance else None).exists():
+            raise serializers.ValidationError("This make name already exists.")
+        return cleaned
+
+    def validate(self, data):
+        """
+        Restrict create/update to admin or superadmin users.
+        """
+        if self.context['request'].method in ['POST', 'PUT', 'PATCH']:
+            user = self.context['request'].user
+            if not has_role(user, ['admin', 'super_admin']) and not user.is_superuser:
+                raise serializers.ValidationError("Only admins or super admins can create or update makes.")
+        return data
+
+class CarModelSerializer(serializers.ModelSerializer):
+    """
+    Serializer for CarModel model.
+    Provides read-only access to id, name, slug, and nested make details.
+    Validates unique model names per make and sanitizes input for create/update.
+    """
+    make = CarMakeSerializer(read_only=True)
+    make_id = serializers.PrimaryKeyRelatedField(
+        queryset=CarMake.objects.all(),
+        source='make',
+        write_only=True,
+        required=True
+    )
+
+    class Meta:
+        model = CarModel
+        fields = ['id', 'name', 'make', 'make_id']
+        read_only_fields = ['id', 'make']
+
+    def validate_name(self, value):
+        """
+        Validate model name: non-empty, max 100 chars, unique per make, sanitized.
+        """
+        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+        if not cleaned:
+            raise serializers.ValidationError("Model name cannot be empty.")
+        if len(cleaned) > 100:
+            raise serializers.ValidationError("Model name cannot exceed 100 characters.")
+        make = self.initial_data.get('make_id') or (self.instance.make.id if self.instance else None)
+        if make and CarModel.objects.filter(make_id=make, name=cleaned).exclude(id=self.instance.id if self.instance else None).exists():
+            raise serializers.ValidationError("This model name already exists for the selected make.")
+        return cleaned
+
+    def validate(self, data):
+        """
+        Restrict create/update to admin or superadmin users.
+        """
+        if self.context['request'].method in ['POST', 'PUT', 'PATCH']:
+            user = self.context['request'].user
+            if not has_role(user, ['admin', 'super_admin']) and not user.is_superuser:
+                raise serializers.ValidationError("Only admins or super admins can create or update models.")
+        return data
+
 class CarImageSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField(read_only=True)
     image_file = serializers.ImageField(write_only=True, required=False)  # for uploads

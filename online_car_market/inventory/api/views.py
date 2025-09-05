@@ -1,19 +1,80 @@
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.viewsets import ReadOnlyModelViewSet
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 from django.db.models import Count, Avg, Q
 from ..models import Car, CarMake, CarModel
-from .serializers import CarSerializer, VerifyCarSerializer, BidSerializer, PaymentSerializer
+from .serializers import CarSerializer, VerifyCarSerializer, BidSerializer, PaymentSerializer, CarMakeSerializer, CarModelSerializer
 from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealerOrBroker
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
-from online_car_market.buyers.models import BuyerProfile
-# Car ViewSet
+
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Cars - Makes"],
+        description="List all car makes."
+    ),
+    retrieve=extend_schema(
+        tags=["Cars - Makes"],
+        description="Retrieve details of a specific car make."
+    ),
+    create=extend_schema(
+        tags=["Cars - Makes"],
+        description="Create a new car make (admin only)."
+    ),
+    update=extend_schema(
+        tags=["Cars - Makes"],
+        description="Update an existing car make (admin only)."
+    ),
+    partial_update=extend_schema(
+        tags=["Cars - Makes"],
+        description="Partially update a car make (admin only)."
+    ),
+    destroy=extend_schema(
+        tags=["Cars - Makes"],
+        description="Delete a car make (admin only)."
+    ),
+)
+class CarMakeViewSet(ModelViewSet):
+    queryset = CarMake.objects.all()
+    serializer_class = CarMakeSerializer
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Cars - Models"],
+        description="List all car models."
+    ),
+    retrieve=extend_schema(
+        tags=["Cars - Models"],
+        description="Retrieve details of a specific car model."
+    ),
+    create=extend_schema(
+        tags=["Cars - Models"],
+        description="Create a new car model (admin only)."
+    ),
+    update=extend_schema(
+        tags=["Cars - Models"],
+        description="Update an existing car model (admin only)."
+    ),
+    partial_update=extend_schema(
+        tags=["Cars - Models"],
+        description="Partially update a car model (admin only)."
+    ),
+    destroy=extend_schema(
+        tags=["Cars - Models"],
+        description="Delete a car model (admin only)."
+    ),
+)
+class CarModelViewSet(ModelViewSet):
+    queryset = CarModel.objects.select_related('make').all()
+    serializer_class = CarModelSerializer
+
 @extend_schema_view(
     list=extend_schema(tags=["Dealers - Inventory"], description="List all verified cars for non-admins or all cars for admins, with verified cars prioritized."),
     retrieve=extend_schema(tags=["Dealers - Inventory"], description="Retrieve a specific car if verified or user is admin."),
