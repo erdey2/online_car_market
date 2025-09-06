@@ -134,10 +134,7 @@ class ProfileSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'user', 'created_at', 'updated_at', 'buyer_profile', 'image_url']
 
     def get_image_url(self, obj):
-        if obj.image:
-            url, _ = cloudinary.utils.cloudinary_url(obj.image, resource_type='image')
-            return url
-        return None
+        return obj.image.url if obj.image else None
 
     def validate_first_name(self, value):
         if value:
