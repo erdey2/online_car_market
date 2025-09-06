@@ -24,7 +24,6 @@ class LoyaltyProgramSerializer(serializers.ModelSerializer):
         fields = ['id', 'points', 'reward', 'created_at']
         read_only_fields = ['id', 'points', 'reward', 'created_at']
 
-
 class BuyerProfileSerializer(serializers.ModelSerializer):
     loyalty_programs = LoyaltyProgramSerializer(many=True, read_only=True)
 
@@ -32,7 +31,6 @@ class BuyerProfileSerializer(serializers.ModelSerializer):
         model = BuyerProfile
         fields = ['loyalty_points', 'loyalty_programs']
         read_only_fields = ['loyalty_points', 'loyalty_programs']
-
 
 class DealerProfileSerializer(serializers.ModelSerializer):
     class Meta:
@@ -90,7 +88,6 @@ class BrokerProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Telebirr account cannot exceed 100 characters.")
         return cleaned
 
-
 class VerifyBrokerSerializer(serializers.ModelSerializer):
     is_verified = serializers.BooleanField()
 
@@ -103,7 +100,6 @@ class VerifyBrokerSerializer(serializers.ModelSerializer):
         if not has_role(user, ['super_admin', 'admin']) and not user.is_superuser:
             raise serializers.ValidationError("Only super admins or admins can verify brokers.")
         return value
-
 
 class VerifyDealerSerializer(serializers.ModelSerializer):
     is_verified = serializers.BooleanField()
@@ -118,9 +114,8 @@ class VerifyDealerSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Only super admins or admins can verify dealers.")
         return value
 
-
 class ProfileSerializer(serializers.ModelSerializer):
-    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
     buyer_profile = BuyerProfileSerializer(read_only=True)
     dealer_profile = DealerProfileSerializer(required=False, allow_null=True)
     broker_profile = BrokerProfileSerializer(required=False, allow_null=True)
@@ -129,12 +124,20 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ['id', 'user', 'first_name', 'last_name', 'contact', 'address', 'image', 'image_url', 'created_at',
-                  'updated_at', 'buyer_profile', 'dealer_profile', 'broker_profile']
-        read_only_fields = ['id', 'user', 'created_at', 'updated_at', 'buyer_profile', 'image_url']
+        fields = [
+            'id', 'user', 'first_name', 'last_name', 'contact', 'address',
+            'image', 'image_url', 'created_at', 'updated_at',
+            'buyer_profile', 'dealer_profile', 'broker_profile'
+        ]
+        read_only_fields = [
+            'id', 'user', 'created_at', 'updated_at', 'buyer_profile', 'image_url'
+        ]
 
     def get_image_url(self, obj):
-        return obj.image.url if obj.image else None
+        if obj.image:
+            url, _ = cloudinary.utils.cloudinary_url(str(obj.image), resource_type="image")
+            return url
+        return None
 
     def validate_first_name(self, value):
         if value:
@@ -182,8 +185,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         user = self.context['request'].user
-        if self.instance and self.instance.user != user and not has_role(user, ['super_admin',
-                                                                                'admin']) and not user.is_superuser:
+        if self.instance and self.instance.user != user and not has_role(user, ['super_admin', 'admin']) and not user.is_superuser:
             raise serializers.ValidationError("You can only update your own profile.")
         if data.get('dealer_profile') and not has_role(user, 'dealer'):
             raise serializers.ValidationError("Only dealers can update dealer profile fields.")
@@ -192,6 +194,10 @@ class ProfileSerializer(serializers.ModelSerializer):
         return data
 
     def update(self, instance, validated_data):
+        request = self.context.get("request")
+        user_id = request.user.id  # ID from token
+        logger.info(f"Updating profile for user_id={user_id}")
+
         dealer_profile_data = validated_data.pop('dealer_profile', None)
         broker_profile_data = validated_data.pop('broker_profile', None)
         image = validated_data.pop('image', None)
@@ -208,9 +214,9 @@ class ProfileSerializer(serializers.ModelSerializer):
                 )
                 instance.image = upload_result['public_id']
                 instance.save()
-                logger.info(f"Profile image uploaded for {instance.user.email}: {upload_result['public_id']}")
+                logger.info(f"Profile image uploaded for user_id={user_id}: {upload_result['public_id']}")
             except Exception as e:
-                logger.error(f"Failed to upload profile image for {instance.user.email}: {str(e)}")
+                logger.error(f"Failed to upload profile image for user_id={user_id}: {str(e)}")
                 raise serializers.ValidationError({"image": "Failed to upload image to Cloudinary."})
 
         if dealer_profile_data and has_role(instance.user, 'dealer'):
@@ -222,7 +228,6 @@ class ProfileSerializer(serializers.ModelSerializer):
             BrokerProfileSerializer().update(broker_profile, broker_profile_data)
 
         return instance
-
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
