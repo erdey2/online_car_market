@@ -4,15 +4,20 @@ from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from .serializers import UserRoleSerializer, ProfileSerializer
 from online_car_market.users.models import Profile
-from online_car_market.users.permissions import IsSuperAdmin, IsAdmin
+from online_car_market.users.permissions import IsSuperAdmin, IsAdmin, IsSuperAdminOrAdmin
 from rolepermissions.checkers import has_role
 from rest_framework.decorators import action
+from drf_spectacular.utils import extend_schema
 import logging
 
 logger = logging.getLogger(__name__)
 
-from drf_spectacular.utils import extend_schema
-
+@extend_schema_view(
+    list=extend_schema(tags=["Authentication & Users"]),
+    retrieve=extend_schema(tags=["Authentication & Users"]),
+    partial_update=extend_schema(tags=["Authentication & Users"]),
+    me=extend_schema(tags=["Authentication & Users"]),
+)
 class ProfileViewSet(ModelViewSet):
     serializer_class = ProfileSerializer
     permission_classes = [IsAuthenticated]
@@ -24,14 +29,12 @@ class ProfileViewSet(ModelViewSet):
             return Profile.objects.all()
         return Profile.objects.filter(user=user)
 
-    @extend_schema(tags=["Authentication & Users"])
     def retrieve(self, request, *args, **kwargs):
         profile = self.get_object()
         serializer = self.get_serializer(profile)
         logger.info(f"Profile retrieved for {request.user.email}")
         return Response(serializer.data)
 
-    @extend_schema(tags=["Authentication & Users"])
     def partial_update(self, request, *args, **kwargs):
         profile = self.get_object()
         serializer = self.get_serializer(profile, data=request.data, partial=True)
@@ -40,12 +43,11 @@ class ProfileViewSet(ModelViewSet):
         logger.info(f"Profile updated for {request.user.email}")
         return Response(serializer.data)
 
+    @action(detail=False, methods=["get", "patch"], url_path="me")
     @extend_schema(
-        tags=["Authentication & Users"],
         summary="Get or update your own profile",
         responses=ProfileSerializer,
     )
-    @action(detail=False, methods=["get", "patch"], url_path="me")
     def me(self, request):
         profile = self.get_queryset().first()
         if not profile:
@@ -63,17 +65,24 @@ class ProfileViewSet(ModelViewSet):
 
         return Response({"detail": "Method not allowed."}, status=405)
 
-class UserRoleViewSet(ViewSet):
-    permission_classes = [IsAuthenticated, IsSuperAdmin | IsAdmin]
-
-    @extend_schema(
+@extend_schema_view(
+    create=extend_schema(
         tags=["Authentication & Users"],
+        summary="Assign a role to a user",
         request=UserRoleSerializer,
-        responses={200: UserRoleSerializer}
+        responses={200: UserRoleSerializer},
     )
+)
+class UserRoleViewSet(ViewSet):
+    permission_classes = [IsSuperAdminOrAdmin]
+
     def create(self, request):
-        serializer = UserRoleSerializer(data=request.data, context={'request': request})
+        serializer = UserRoleSerializer(
+            data=request.data, context={'request': request}
+        )
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        logger.info(f"Role assigned to {user.email}: {serializer.validated_data['role']}")
+        logger.info(
+            f"Role assigned to {user.email}: {serializer.validated_data['role']}"
+        )
         return Response(serializer.data)
