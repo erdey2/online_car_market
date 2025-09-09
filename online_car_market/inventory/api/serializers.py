@@ -289,6 +289,43 @@ class CarSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(f"Fuel type must be one of: {', '.join(valid_types)}.")
         return cleaned
 
+    def validate_exterior_color(self, value):
+        if value:
+            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+            valid_types = [choice[0] for choice in Car.EXTERIOR_COLORS]
+            if cleaned not in valid_types:
+                raise serializers.ValidationError(f"Exterior color must be one of: {', '.join(valid_types)}.")
+            return cleaned
+        return value
+
+    def validate_interior_color(self, value):
+        if value:
+            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+            valid_types = [choice[0] for choice in Car.INTERIOR_COLORS]
+            if cleaned not in valid_types:
+                raise serializers.ValidationError(f"Interior color must be one of: {', '.join(valid_types)}.")
+            return cleaned
+        return value
+
+    def validate_engine(self, value):
+        if value:
+            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+            if len(cleaned) > 100:
+                raise serializers.ValidationError("Engine specification cannot exceed 100 characters.")
+            if not re.match(r'^[a-zA-Z0-9\s\.\-L]+$', cleaned):
+                raise serializers.ValidationError("Invalid characters in engine specification.")
+            return cleaned
+        return value
+
+    def validate_drivetrain(self, value):
+        if value:
+            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+            valid_types = [choice[0] for choice in Car.DRIVETRAIN_TYPES]
+            if cleaned not in valid_types:
+                raise serializers.ValidationError(f"Drivetrain type must be one of: {', '.join(valid_types)}.")
+            return cleaned
+        return value
+
     def validate_status(self, value):
         valid_statuses = [c[0] for c in Car.STATUS_CHOICES]
         cleaned = bleach.clean(value.strip(), tags=[], strip=True)

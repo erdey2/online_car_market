@@ -84,6 +84,32 @@ class Car(models.Model):
         ('fixed_price', 'Fixed Price'),
         ('auction', 'Auction'),
     )
+    EXTERIOR_COLORS = [
+        ('black', 'Black'),
+        ('white', 'White'),
+        ('red', 'Red'),
+        ('blue', 'Blue'),
+        ('silver', 'Silver'),
+        ('gray', 'Gray'),
+        ('green', 'Green'),
+        ('yellow', 'Yellow'),
+        ('other', 'Other'),
+    ]
+    INTERIOR_COLORS = [
+        ('black', 'Black'),
+        ('beige', 'Beige'),
+        ('gray', 'Gray'),
+        ('brown', 'Brown'),
+        ('white', 'White'),
+        ('other', 'Other'),
+    ]
+
+    DRIVETRAIN_TYPES = [
+        ('fwd', 'Front-Wheel Drive'),
+        ('rwd', 'Rear-Wheel Drive'),
+        ('awd', 'All-Wheel Drive'),
+        ('4wd', 'Four-Wheel Drive'),
+    ]
 
     make = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     model = models.CharField(max_length=100, null=True, blank=True, db_index=True)
@@ -94,6 +120,16 @@ class Car(models.Model):
     mileage = models.IntegerField()
     fuel_type = models.CharField(max_length=20, choices=FUEL_TYPES, db_index=True)
     body_type = models.CharField(max_length=20, choices=BODY_TYPES, default='sedan', db_index=True)
+    exterior_color = models.CharField(max_length=20, choices=EXTERIOR_COLORS, default='white')
+    interior_color = models.CharField(max_length=20, choices=INTERIOR_COLORS, default='white')
+    engine = models.CharField(max_length=100, null=True, blank=True)
+    bluetooth = models.BooleanField(default=False)
+    drivetrain = models.CharField(
+        max_length=20,
+        choices=DRIVETRAIN_TYPES,
+        default='fwd',
+        db_index=True
+    )
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='available')
     sale_type = models.CharField(max_length=20, choices=SALE_TYPES, default='fixed_price')
     auction_end = models.DateTimeField(null=True, blank=True)
