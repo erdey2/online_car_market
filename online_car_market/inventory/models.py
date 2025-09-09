@@ -7,6 +7,15 @@ from django.utils.text import slugify
 
 User = get_user_model()
 
+def get_default_body_type():
+    """
+    Return the most frequent body_type from existing Car records.
+    Fallback to 'sedan' if no records or no body_type set.
+    """
+    from django.db.models import Count
+    result = Car.objects.exclude(body_type='').values('body_type').annotate(count=Count('body_type')).order_by('-count').first()
+    return result['body_type'] if result and result['body_type'] else 'sedan'
+
 class CarMake(models.Model):
     name = models.CharField(max_length=100, unique=True)
     # slug = models.SlugField(max_length=100, unique=True, blank=True)
@@ -54,14 +63,23 @@ class Car(models.Model):
         ('verified', 'Verified'),
         ('rejected', 'Rejected'),
     ]
-
+    BODY_TYPES = [
+        ('sedan', 'Sedan'),
+        ('suv', 'SUV'),
+        ('truck', 'Truck'),
+        ('coupe', 'Coupe'),
+        ('hatchback', 'Hatchback'),
+        ('convertible', 'Convertible'),
+        ('wagon', 'Wagon'),
+        ('van', 'Van'),
+        ('other', 'Other'),
+    ]
     FUEL_TYPES = (
         ('electric', 'Electric'),
         ('hybrid', 'Hybrid'),
         ('petrol', 'Petrol'),
         ('diesel', 'Diesel'),
     )
-
     STATUS_CHOICES = [
         ('available', 'Available'),
         ('reserved', 'Reserved'),
@@ -71,7 +89,6 @@ class Car(models.Model):
         ('delivered', 'Delivered'),
         ('archived', 'Archived'),
     ]
-
     SALE_TYPES = (
         ('fixed_price', 'Fixed Price'),
         ('auction', 'Auction'),
@@ -79,25 +96,30 @@ class Car(models.Model):
 
     make = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     model = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    make_ref = models.ForeignKey(CarMake, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars', db_index=True),
+    make_ref = models.ForeignKey(CarMake, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars', db_index=True)
     model_ref = models.ForeignKey(CarModel, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars', db_index=True)
     year = models.IntegerField()
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.0, db_index=True)
     mileage = models.IntegerField()
     fuel_type = models.CharField(max_length=20, choices=FUEL_TYPES, db_index=True)
+    body_type = models.CharField(
+        max_length=20,
+        choices=BODY_TYPES,
+        default=get_default_body_type,
+        db_index=True
+    )
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='available')
     sale_type = models.CharField(max_length=20, choices=SALE_TYPES, default='fixed_price')
-    auction_end = models.DateTimeField(null=True, blank=True)  # For auction cars
+    auction_end = models.DateTimeField(null=True, blank=True)
     dealer = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, null=True, blank=True, related_name='cars')
     broker = models.ForeignKey(BrokerProfile, on_delete=models.CASCADE, null=True, blank=True, related_name='cars')
     posted_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posted_cars', db_index=True)
     verification_status = models.CharField(max_length=20, choices=VERIFICATION_STATUSES, default='pending')
-    priority = models.BooleanField(default=False)  # For prioritizing verified cars
+    priority = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        # Auto-fill from refs if not provided
         if self.make_ref and not self.make:
             self.make = self.make_ref.name
         if self.model_ref and not self.model:
@@ -105,7 +127,7 @@ class Car(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.make} {self.model} ({self.year})"
+        return f"{self.make} {self.model} ({self.year}) - {self.get_body_type_display()}"
 
     class Meta:
         constraints = [
@@ -114,6 +136,9 @@ class Car(models.Model):
                 name='dealer_or_broker_required'
             )
         ]
+        ordering = ['make', 'model', 'year']
+        verbose_name = 'Car'
+        verbose_name_plural = 'Cars'
 
 class CarImage(models.Model):
     car = models.ForeignKey(Car, on_delete=models.CASCADE, related_name='images')

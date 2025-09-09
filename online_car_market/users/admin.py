@@ -7,6 +7,7 @@ from online_car_market.users.models import Profile
 from online_car_market.buyers.models import BuyerProfile, LoyaltyProgram
 from online_car_market.dealers.models import DealerProfile, DealerRating
 from online_car_market.brokers.models import BrokerProfile, BrokerRating
+from online_car_market.inventory.models import Car, CarImage
 from django.utils.html import format_html
 from rolepermissions.checkers import has_role
 
@@ -261,3 +262,64 @@ class DealerRatingAdmin(admin.ModelAdmin):
         return obj.user.email
 
     user_email.short_description = "User Email"
+
+
+class CarImageInline(admin.TabularInline):
+    model = CarImage
+    extra = 1
+    fields = ('image', 'is_featured', 'caption', 'uploaded_at', 'image_preview')
+    readonly_fields = ('uploaded_at', 'image_preview')
+    def image_preview(self, obj):
+        if obj.image:
+            return format_html('<img src="{}" width="100" height="100" />', str(obj.image))
+        return "No image"
+    image_preview.short_description = "Image Preview"
+
+@admin.register(Car)
+class CarAdmin(admin.ModelAdmin):
+    list_display = (
+        'make', 'model', 'year', 'price', 'mileage', 'fuel_type', 'body_type',
+        'status', 'sale_type', 'verification_status', 'priority', 'created_at'
+    )
+    search_fields = ('make', 'model', 'year', 'fuel_type', 'body_type', 'status')
+    list_filter = (
+        'make_ref', 'year', 'fuel_type', 'body_type', 'status', 'sale_type',
+        'verification_status', 'priority'
+    )
+    autocomplete_fields = ['make_ref', 'model_ref']
+    readonly_fields = ('created_at', 'updated_at')
+    inlines = [CarImageInline]
+    fields = (
+        'make', 'model', 'make_ref', 'model_ref', 'year', 'price', 'mileage',
+        'fuel_type', 'body_type', 'status', 'sale_type', 'auction_end', 'dealer',
+        'broker', 'posted_by', 'verification_status', 'priority',
+        'created_at', 'updated_at'
+    )
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if not has_role(request.user, ['admin', 'super_admin']) and not request.user.is_superuser:
+            return qs.filter(verification_status='verified')
+        return qs
+
+    def has_add_permission(self, request):
+        return has_role(request.user, ['dealer', 'broker', 'admin', 'super_admin']) or request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return has_role(request.user, ['dealer', 'broker', 'admin', 'super_admin']) or request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return has_role(request.user, ['admin', 'super_admin']) or request.user.is_superuser
+
+@admin.register(CarImage)
+class CarImageAdmin(admin.ModelAdmin):
+    list_display = ('car', 'is_featured', 'caption', 'uploaded_at', 'image_preview')
+    search_fields = ('car__make', 'car__model', 'caption')
+    list_filter = ('is_featured', 'uploaded_at')
+    readonly_fields = ('uploaded_at', 'image_preview')
+
+    def image_preview(self, obj):
+        if obj.image:
+            return format_html('<img src="{}" width="100" height="100" />', str(obj.image))
+        return "No image"
+    image_preview.short_description = "Image Preview"

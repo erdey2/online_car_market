@@ -3,7 +3,7 @@ from django.db.models import Avg
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
-from ..models import Car, CarImage, Bid, Payment, CarMake, CarModel
+from ..models import Car, CarImage, Bid, Payment, CarMake, CarModel, get_default_body_type
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from django.contrib.auth import get_user_model
@@ -213,6 +213,7 @@ class CarSerializer(serializers.ModelSerializer):
     model_ref = serializers.PrimaryKeyRelatedField(queryset=CarModel.objects.all(), required=False, allow_null=True)
     dealer_average_rating = serializers.SerializerMethodField(read_only=True)
     broker_average_rating = serializers.SerializerMethodField(read_only=True)
+    body_type = serializers.ChoiceField(choices=Car.BODY_TYPES, required=False, allow_blank=True, default=get_default_body_type)
 
     class Meta:
         model = Car
@@ -270,6 +271,15 @@ class CarSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Mileage cannot be negative.")
         if value > 1000000:
             raise serializers.ValidationError("Mileage cannot exceed 1,000,000 km.")
+        return value
+
+    def validate_body_type(self, value):
+        if value:
+            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+            valid_types = [choice[0] for choice in Car.BODY_TYPES]
+            if cleaned not in valid_types:
+                raise serializers.ValidationError(f"Body type must be one of: {', '.join(valid_types)}.")
+            return cleaned
         return value
 
     def validate_fuel_type(self, value):
