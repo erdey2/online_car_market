@@ -283,11 +283,16 @@ class CarImageInline(admin.TabularInline):
 class CarAdmin(admin.ModelAdmin):
     list_display = (
         'make', 'model', 'year', 'price', 'mileage', 'fuel_type', 'body_type',
+        'exterior_color', 'interior_color', 'engine', 'bluetooth', 'drivetrain',
         'status', 'sale_type', 'verification_status', 'priority', 'created_at'
     )
-    search_fields = ('make', 'model', 'year', 'fuel_type', 'body_type', 'status')
+    search_fields = (
+        'make', 'model', 'year', 'fuel_type', 'body_type', 'exterior_color',
+        'interior_color', 'engine', 'drivetrain', 'status'
+    )
     list_filter = (
-        'make_ref', 'year', 'fuel_type', 'body_type', 'status', 'sale_type',
+        'make_ref', 'year', 'fuel_type', 'body_type', 'exterior_color',
+        'interior_color', 'engine', 'drivetrain', 'status', 'sale_type',
         'verification_status', 'priority'
     )
     autocomplete_fields = ['make_ref', 'model_ref']
@@ -295,7 +300,8 @@ class CarAdmin(admin.ModelAdmin):
     inlines = [CarImageInline]
     fields = (
         'make', 'model', 'make_ref', 'model_ref', 'year', 'price', 'mileage',
-        'fuel_type', 'body_type', 'status', 'sale_type', 'auction_end', 'dealer',
+        'fuel_type', 'body_type', 'exterior_color', 'interior_color', 'engine',
+        'bluetooth', 'drivetrain', 'status', 'sale_type', 'auction_end', 'dealer',
         'broker', 'posted_by', 'verification_status', 'priority',
         'created_at', 'updated_at'
     )

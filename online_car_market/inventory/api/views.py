@@ -1,5 +1,5 @@
 from rest_framework.viewsets import ModelViewSet, ViewSet
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
@@ -76,44 +76,117 @@ class CarModelViewSet(ModelViewSet):
     serializer_class = CarModelSerializer
 
 @extend_schema_view(
-    list=extend_schema(tags=["Dealers - Inventory"], description="List all verified cars for non-admins or all cars for admins, with verified cars prioritized."),
-    retrieve=extend_schema(tags=["Dealers - Inventory"], description="Retrieve a specific car if verified or user is admin."),
-    create=extend_schema(tags=["Dealers - Inventory"], description="Create a car listing (dealers/brokers/admins only)."),
-    update=extend_schema(tags=["Dealers - Inventory"], description="Update a car listing (dealers/brokers/admins only)."),
-    partial_update=extend_schema(tags=["Dealers - Inventory"], description="Partially update a car listing."),
-    destroy=extend_schema(tags=["Dealers - Inventory"], description="Delete a car listing (dealers/brokers/admins only)."),
+    list=extend_schema(
+        tags=["Dealers - Inventory"],
+        description="List all verified cars for non-admins or all cars for admins, with verified cars prioritized.",
+        parameters=[
+            OpenApiParameter(
+                name='broker_email',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Filter cars by broker email address.',
+                required=False
+            ),
+        ]
+    ),
+    retrieve=extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Retrieve a specific car if verified or user is admin."
+    ),
+    create=extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Create a car listing (dealers/brokers/admins only)."
+    ),
+    update=extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Update a car listing (dealers/brokers/admins only)."
+    ),
+    partial_update=extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Partially update a car listing."
+    ),
+    destroy=extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Delete a car listing (dealers/brokers/admins only)."
+    ),
+)
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Dealers - Inventory"],
+        description="List all verified cars for non-admins or all cars for admins, with verified cars prioritized.",
+        parameters=[
+            OpenApiParameter(
+                name='broker_email',
+                type=str,
+                location='query',
+                description='Filter cars by broker email address.',
+                required=False
+            ),
+        ]
+    ),
+    retrieve=extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Retrieve a specific car if verified or user is admin."
+    ),
+    create=extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Create a car listing (dealers/brokers/admins only)."
+    ),
+    update=extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Update a car listing (dealers/brokers/admins only)."
+    ),
+    partial_update=extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Partially update a car listing."
+    ),
+    destroy=extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Delete a car listing (dealers/brokers/admins only)."
+    ),
 )
 class CarViewSet(ModelViewSet):
     serializer_class = CarSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticatedOrReadOnly]
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
         user = self.request.user
+        queryset = Car.objects.all()
 
+        # Apply role-based filtering
         if has_role(user, ['super_admin', 'admin']):
-            return Car.objects.all().order_by('-priority', '-created_at')
-
-        if has_role(user, 'dealer'):
-            return Car.objects.filter(
+            queryset = queryset.order_by('-priority', '-created_at')
+        elif has_role(user, 'dealer'):
+            queryset = queryset.filter(
                 Q(dealer__user=user) | Q(verification_status='verified')
             ).order_by('-priority', '-created_at')
-
-        if has_role(user, 'broker'):
-            return Car.objects.filter(
-                Q(broker__user=user) | Q(verification_status='verified')
+        elif has_role(user, 'broker'):
+            queryset = queryset.filter(
+                Q(broker__profile__user=user) | Q(verification_status='verified')
+            ).order_by('-priority', '-created_at')
+        elif has_role(user, 'buyer') or not user.is_authenticated:
+            queryset = queryset.filter(
+                verification_status='verified'
+            ).order_by('-priority', '-created_at')
+        else:
+            queryset = queryset.filter(
+                verification_status='verified'
             ).order_by('-priority', '-created_at')
 
-        if has_role(user, 'buyer'):
-            # Buyers just see verified cars
-            # return Car.objects.filter(verification_status='verified').order_by('-priority', '-created_at')
-            return Car.objects.order_by('-priority', '-created_at')
+        # Filter by broker_email query parameter
+        broker_email = self.request.query_params.get('broker_email')
+        if broker_email:
+            try:
+                broker_profile = BrokerProfile.objects.get(profile__user__email=broker_email)
+                queryset = queryset.filter(broker=broker_profile)   
+            except BrokerProfile.DoesNotExist:
+                queryset = queryset.none()
 
-        # Default: only verified cars
-        return Car.objects.filter(verification_status='verified').order_by('-priority', '-created_at')
+        return queryset
 
     def get_permissions(self):
-        if self.action in ["create", "update", "partial_update", "destroy",  "bid", "pay"]:
+        if self.action in ["create", "update", "partial_update", "destroy", "bid", "pay"]:
             return [IsSuperAdminOrAdminOrDealerOrBroker()]
         return super().get_permissions()
 
@@ -122,48 +195,6 @@ class CarViewSet(ModelViewSet):
         serializer.is_valid(raise_exception=True)
         car = serializer.save()
         return Response(self.get_serializer(car).data, status=status.HTTP_201_CREATED)
-
-    # upload-images
-    '''
-    @extend_schema(
-        tags=["Dealers - Inventory"],
-        description="Upload additional images to an existing car. Use form field `images`.",
-        request={
-            "multipart/form-data": {
-                "type": "object",
-                "properties": {
-                    "images": {
-                        "type": "array",
-                        "items": {"type": "string", "format": "binary"}
-                    }
-                },
-                "required": ["images"]
-            }
-        },
-        responses=CarImageSerializer(many=True),
-    )
-    @action(
-        detail=True,
-        methods=['post'],
-        url_path='upload-images',
-        serializer_class=CarImageSerializer,
-        parser_classes=[MultiPartParser]
-    )
-    def upload_images(self, request, pk=None):
-        car = self.get_object()
-        files = request.FILES.getlist('images')
-        if not files:
-            return Response(
-                {"detail": "No files provided. Use form field name 'images'."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        created = []
-        for f in files:
-            ser = CarImageSerializer(data={'car': car.pk, 'image_file': f}, context={'request': request})
-            ser.is_valid(raise_exception=True)
-            ser.save()
-            created.append(ser.data)
-        return Response(created, status=status.HTTP_201_CREATED) '''
 
     # verify
     @extend_schema(

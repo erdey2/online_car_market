@@ -24,30 +24,8 @@ class CarImageInline(admin.TabularInline):  # or StackedInline if you prefer ver
     image_preview.short_description = "Preview"
 
 class CarAdmin(admin.ModelAdmin):
-    list_display = (
-        'make', 'model', 'year', 'price', 'mileage', 'fuel_type', 'body_type',
-        'exterior_color', 'interior_color', 'engine', 'bluetooth', 'drivetrain',
-        'status', 'sale_type', 'verification_status', 'priority', 'created_at'
-    )
-    search_fields = (
-        'make', 'model', 'year', 'fuel_type', 'body_type', 'exterior_color',
-        'interior_color', 'engine', 'drivetrain', 'status'
-    )
-    list_filter = (
-        'make_ref', 'year', 'fuel_type', 'body_type', 'exterior_color',
-        'interior_color', 'engine', 'drivetrain', 'status', 'sale_type',
-        'verification_status', 'priority'
-    )
-    autocomplete_fields = ['make_ref', 'model_ref']
-    readonly_fields = ('created_at', 'updated_at')
+    list_display = ['make', 'model', 'year', 'price', 'featured_image_preview']
     inlines = [CarImageInline]
-    fields = (
-        'make', 'model', 'make_ref', 'model_ref', 'year', 'price', 'mileage',
-        'fuel_type', 'body_type', 'exterior_color', 'interior_color', 'engine',
-        'bluetooth', 'drivetrain', 'status', 'sale_type', 'auction_end', 'dealer',
-        'broker', 'posted_by', 'verification_status', 'priority',
-        'created_at', 'updated_at'
-    )
 
     def featured_image_preview(self, obj):
         featured = obj.images.filter(is_featured=True).first()
