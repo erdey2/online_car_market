@@ -179,7 +179,7 @@ class CarViewSet(ModelViewSet):
         if broker_email:
             try:
                 broker_profile = BrokerProfile.objects.get(profile__user__email=broker_email)
-                queryset = queryset.filter(broker=broker_profile)   
+                queryset = queryset.filter(broker=broker_profile)
             except BrokerProfile.DoesNotExist:
                 queryset = queryset.none()
 
