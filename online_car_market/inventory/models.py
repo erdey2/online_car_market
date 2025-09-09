@@ -7,15 +7,6 @@ from django.utils.text import slugify
 
 User = get_user_model()
 
-def get_default_body_type():
-    """
-    Return the most frequent body_type from existing Car records.
-    Fallback to 'sedan' if no records or no body_type set.
-    """
-    from django.db.models import Count
-    result = Car.objects.exclude(body_type='').values('body_type').annotate(count=Count('body_type')).order_by('-count').first()
-    return result['body_type'] if result and result['body_type'] else 'sedan'
-
 class CarMake(models.Model):
     name = models.CharField(max_length=100, unique=True)
     # slug = models.SlugField(max_length=100, unique=True, blank=True)
@@ -102,12 +93,7 @@ class Car(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.0, db_index=True)
     mileage = models.IntegerField()
     fuel_type = models.CharField(max_length=20, choices=FUEL_TYPES, db_index=True)
-    body_type = models.CharField(
-        max_length=20,
-        choices=BODY_TYPES,
-        default=get_default_body_type,
-        db_index=True
-    )
+    body_type = models.CharField(max_length=20, choices=BODY_TYPES, default='sedan', db_index=True)
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='available')
     sale_type = models.CharField(max_length=20, choices=SALE_TYPES, default='fixed_price')
     auction_end = models.DateTimeField(null=True, blank=True)
@@ -127,7 +113,7 @@ class Car(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.make} {self.model} ({self.year}) - {self.get_body_type_display()}"
+        return f"{self.make} {self.model} ({self.year}) - {self.BODY_TYPES}"
 
     class Meta:
         constraints = [

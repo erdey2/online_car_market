@@ -3,7 +3,7 @@ from django.db.models import Avg
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
-from ..models import Car, CarImage, Bid, Payment, CarMake, CarModel, get_default_body_type
+from ..models import Car, CarImage, Bid, Payment, CarMake, CarModel
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from django.contrib.auth import get_user_model
@@ -213,7 +213,7 @@ class CarSerializer(serializers.ModelSerializer):
     model_ref = serializers.PrimaryKeyRelatedField(queryset=CarModel.objects.all(), required=False, allow_null=True)
     dealer_average_rating = serializers.SerializerMethodField(read_only=True)
     broker_average_rating = serializers.SerializerMethodField(read_only=True)
-    body_type = serializers.ChoiceField(choices=Car.BODY_TYPES, required=False, allow_blank=True, default=get_default_body_type)
+    #body_type = serializers.ChoiceField(choices=Car.BODY_TYPES, required=False, allow_blank=True)
 
     class Meta:
         model = Car

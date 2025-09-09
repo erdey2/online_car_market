@@ -10,7 +10,7 @@ class CarMakeAdmin(admin.ModelAdmin):
 @admin.register(CarModel)
 class CarModelAdmin(admin.ModelAdmin):
     search_fields = ["name"]
-    
+
 class CarImageInline(admin.TabularInline):  # or StackedInline if you prefer vertical
     model = CarImage
     extra = 1

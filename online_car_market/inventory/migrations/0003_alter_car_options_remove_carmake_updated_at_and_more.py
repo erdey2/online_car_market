@@ -19,6 +19,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='car',
             name='body_type',
-            field=models.CharField(choices=[('sedan', 'Sedan'), ('suv', 'SUV'), ('truck', 'Truck'), ('coupe', 'Coupe'), ('hatchback', 'Hatchback'), ('convertible', 'Convertible'), ('wagon', 'Wagon'), ('van', 'Van'), ('other', 'Other')], db_index=True, default=online_car_market.inventory.models.get_default_body_type, max_length=20),
+            field=models.CharField(choices=[('sedan', 'Sedan'), ('suv', 'SUV'), ('truck', 'Truck'), ('coupe', 'Coupe'), ('hatchback', 'Hatchback'), ('convertible', 'Convertible'), ('wagon', 'Wagon'), ('van', 'Van'), ('other', 'Other')], db_index=True, default='sedan', max_length=20),
         ),
     ]
