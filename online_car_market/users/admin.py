@@ -10,6 +10,7 @@ from online_car_market.brokers.models import BrokerProfile, BrokerRating
 from online_car_market.inventory.models import Car, CarImage
 from django.utils.html import format_html
 from rolepermissions.checkers import has_role
+from django.db.models import Count
 
 User = get_user_model()
 
@@ -269,11 +270,14 @@ class CarImageInline(admin.TabularInline):
     extra = 1
     fields = ('image', 'is_featured', 'caption', 'uploaded_at', 'image_preview')
     readonly_fields = ('uploaded_at', 'image_preview')
+
     def image_preview(self, obj):
         if obj.image:
             return format_html('<img src="{}" width="100" height="100" />', str(obj.image))
         return "No image"
+
     image_preview.short_description = "Image Preview"
+
 
 @admin.register(Car)
 class CarAdmin(admin.ModelAdmin):
@@ -296,6 +300,21 @@ class CarAdmin(admin.ModelAdmin):
         'created_at', 'updated_at'
     )
 
+    def get_changeform_initial_data(self, request):
+        """
+        Pre-fill 'body_type' with the most frequent value in the database.
+        """
+        initial = super().get_changeform_initial_data(request)
+        most_common_body = (
+            Car.objects.values('body_type')
+            .annotate(count=Count('body_type'))
+            .order_by('-count')
+            .first()
+        )
+        if most_common_body:
+            initial['body_type'] = most_common_body['body_type']
+        return initial
+
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         if not has_role(request.user, ['admin', 'super_admin']) and not request.user.is_superuser:
@@ -311,6 +330,7 @@ class CarAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return has_role(request.user, ['admin', 'super_admin']) or request.user.is_superuser
 
+
 @admin.register(CarImage)
 class CarImageAdmin(admin.ModelAdmin):
     list_display = ('car', 'is_featured', 'caption', 'uploaded_at', 'image_preview')
@@ -322,4 +342,5 @@ class CarImageAdmin(admin.ModelAdmin):
         if obj.image:
             return format_html('<img src="{}" width="100" height="100" />', str(obj.image))
         return "No image"
+
     image_preview.short_description = "Image Preview"
