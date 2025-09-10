@@ -3,11 +3,11 @@ from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.permissions import IsAuthenticated, BasePermission
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework import status
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 from online_car_market.brokers.models import BrokerProfile, BrokerRating
-from online_car_market.users.api.serializers import VerifyBrokerSerializer
-from .serializers import BrokerRatingSerializer
+from .serializers import VerifyBrokerSerializer, BrokerProfileSerializer, BrokerRatingSerializer
 from online_car_market.users.permissions import IsSuperAdmin, IsAdmin
 import logging
 
@@ -16,6 +16,28 @@ logger = logging.getLogger(__name__)
 class IsRatingOwnerOrAdmin(BasePermission):
     def has_object_permission(self, request, view, obj):
         return request.user == obj.user or has_role(request.user, ['super_admin', 'admin'])
+
+class BrokerProfileViewSet(ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = BrokerProfileSerializer
+
+    def get_queryset(self):
+        return BrokerProfile.objects.filter(profile__user=self.request.user)
+
+    @extend_schema(
+        tags=["Brokers - Profile"],
+        description="Retrieve the authenticated broker's profile.",
+        responses={200: BrokerProfileSerializer}
+    )
+    def retrieve(self, request, *args, **kwargs):
+        broker_profile = BrokerProfile.objects.filter(profile__user=request.user).first()
+        if not broker_profile:
+            return Response(
+                {"detail": "Broker profile not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        serializer = self.get_serializer(broker_profile)
+        return Response(serializer.data)
 
 @extend_schema_view(
     list=extend_schema(tags=["Brokers - Ratings"], description="List all ratings for a broker."),

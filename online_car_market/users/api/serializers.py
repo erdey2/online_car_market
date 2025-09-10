@@ -6,9 +6,12 @@ from rolepermissions.roles import get_user_roles, assign_role, remove_role
 from rolepermissions.exceptions import RoleDoesNotExist
 from django.contrib.auth import get_user_model
 from online_car_market.users.models import Profile
-from online_car_market.buyers.models import BuyerProfile, LoyaltyProgram
+from online_car_market.buyers.models import BuyerProfile
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
+from online_car_market.brokers.api.serializers import BrokerProfileSerializer
+from online_car_market.dealers.api.serializers import DealerProfileSerializer
+from online_car_market.buyers.api.serializers import BuyerProfileSerializer
 import cloudinary.uploader
 import re
 import bleach
@@ -17,108 +20,11 @@ import logging
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
-
-class LoyaltyProgramSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = LoyaltyProgram
-        fields = ['id', 'points', 'reward', 'created_at']
-        read_only_fields = ['id', 'points', 'reward', 'created_at']
-
-class BuyerProfileSerializer(serializers.ModelSerializer):
-    loyalty_programs = LoyaltyProgramSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = BuyerProfile
-        fields = ['loyalty_points', 'loyalty_programs']
-        read_only_fields = ['loyalty_points', 'loyalty_programs']
-
-class DealerProfileSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DealerProfile
-        fields = ['company_name', 'license_number', 'tax_id', 'telebirr_account', 'is_verified']
-        read_only_fields = ['is_verified']
-
-    def validate_company_name(self, value):
-        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-        if len(cleaned) > 255:
-            raise serializers.ValidationError("Company name cannot exceed 255 characters.")
-        return cleaned
-
-    def validate_license_number(self, value):
-        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-        if len(cleaned) > 50:
-            raise serializers.ValidationError("License number cannot exceed 50 characters.")
-        return cleaned
-
-    def validate_tax_id(self, value):
-        if value:
-            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-            if len(cleaned) > 100:
-                raise serializers.ValidationError("Tax ID cannot exceed 100 characters.")
-            return cleaned
-        return value
-
-    def validate_telebirr_account(self, value):
-        if value:
-            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-            if len(cleaned) > 100:
-                raise serializers.ValidationError("Telebirr account cannot exceed 100 characters.")
-            return cleaned
-        return value
-
-
-class BrokerProfileSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = BrokerProfile
-        fields = ['national_id', 'telebirr_account', 'is_verified']
-        read_only_fields = ['is_verified']
-
-    def validate_national_id(self, value):
-        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-        if len(cleaned) > 100:
-            raise serializers.ValidationError("National ID cannot exceed 100 characters.")
-        if BrokerProfile.objects.filter(national_id=cleaned).exclude(
-            profile=self.instance.profile if self.instance else None).exists():
-            raise serializers.ValidationError("This national ID is already in use.")
-        return cleaned
-
-    def validate_telebirr_account(self, value):
-        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-        if len(cleaned) > 100:
-            raise serializers.ValidationError("Telebirr account cannot exceed 100 characters.")
-        return cleaned
-
-class VerifyBrokerSerializer(serializers.ModelSerializer):
-    is_verified = serializers.BooleanField()
-
-    class Meta:
-        model = BrokerProfile
-        fields = ['is_verified']
-
-    def validate_is_verified(self, value):
-        user = self.context['request'].user
-        if not has_role(user, ['super_admin', 'admin']) and not user.is_superuser:
-            raise serializers.ValidationError("Only super admins or admins can verify brokers.")
-        return value
-
-class VerifyDealerSerializer(serializers.ModelSerializer):
-    is_verified = serializers.BooleanField()
-
-    class Meta:
-        model = DealerProfile
-        fields = ['is_verified']
-
-    def validate_is_verified(self, value):
-        user = self.context['request'].user
-        if not has_role(user, ['super_admin', 'admin']) and not user.is_superuser:
-            raise serializers.ValidationError("Only super admins or admins can verify dealers.")
-        return value
-
 class ProfileSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)
     buyer_profile = BuyerProfileSerializer(read_only=True)
     dealer_profile = DealerProfileSerializer(required=False, allow_null=True)
-    broker_profile = BrokerProfileSerializer(required=False, allow_null=True)
+    broker_profile = serializers.SerializerMethodField(read_only=True)
     image = serializers.ImageField(required=False, allow_null=True)
     image_url = serializers.SerializerMethodField(read_only=True)
 

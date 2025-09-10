@@ -3,15 +3,41 @@ from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.permissions import IsAuthenticated, BasePermission
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework import status
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 from online_car_market.dealers.models import DealerProfile, DealerRating
-from online_car_market.users.api.serializers import VerifyDealerSerializer
-from .serializers import DealerRatingSerializer
+from .serializers import DealerRatingSerializer, DealerProfileSerializer, VerifyDealerSerializer
 from online_car_market.users.permissions import IsSuperAdmin, IsAdmin
 import logging
 
 logger = logging.getLogger(__name__)
+
+class DealerProfileViewSet(ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    queryset = DealerProfile.objects.all()
+    serializer_class = DealerProfileSerializer
+
+    @extend_schema(
+        tags=["Dealers - Profile"],
+        description="Retrieve the authenticated user's DealerProfile information.",
+        responses={200: DealerProfileSerializer}
+    )
+    def list(self, request):
+        if not has_role(request.user, 'dealer'):
+            return Response(
+                {"detail": "User does not have dealer role."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        try:
+            dealer_profile = DealerProfile.objects.get(profile__user=request.user)
+            serializer = DealerProfileSerializer(dealer_profile)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except DealerProfile.DoesNotExist:
+            return Response(
+                {"detail": "Dealer profile not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
 class IsRatingOwnerOrAdmin(BasePermission):
     def has_object_permission(self, request, view, obj):

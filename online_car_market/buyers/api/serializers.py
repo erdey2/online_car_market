@@ -4,7 +4,8 @@ from rolepermissions.roles import assign_role
 from online_car_market.buyers.models import BuyerProfile, LoyaltyProgram
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
-from online_car_market.users.api.serializers import DealerProfileSerializer, BrokerProfileSerializer
+from online_car_market.users.api.serializers import DealerProfileSerializer
+from online_car_market.brokers.api.serializers import BrokerProfileSerializer
 from online_car_market.users.models import Profile
 import logging
 

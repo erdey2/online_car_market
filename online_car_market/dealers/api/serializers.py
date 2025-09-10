@@ -7,6 +7,53 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+class VerifyDealerSerializer(serializers.ModelSerializer):
+    is_verified = serializers.BooleanField()
+
+    class Meta:
+        model = DealerProfile
+        fields = ['is_verified']
+
+    def validate_is_verified(self, value):
+        user = self.context['request'].user
+        if not has_role(user, ['super_admin', 'admin']) and not user.is_superuser:
+            raise serializers.ValidationError("Only super admins or admins can verify dealers.")
+        return value
+
+class DealerProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DealerProfile
+        fields = ['company_name', 'license_number', 'tax_id', 'telebirr_account', 'is_verified']
+        read_only_fields = ['is_verified']
+
+    def validate_company_name(self, value):
+        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+        if len(cleaned) > 255:
+            raise serializers.ValidationError("Company name cannot exceed 255 characters.")
+        return cleaned
+
+    def validate_license_number(self, value):
+        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+        if len(cleaned) > 50:
+            raise serializers.ValidationError("License number cannot exceed 50 characters.")
+        return cleaned
+
+    def validate_tax_id(self, value):
+        if value:
+            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+            if len(cleaned) > 100:
+                raise serializers.ValidationError("Tax ID cannot exceed 100 characters.")
+            return cleaned
+        return value
+
+    def validate_telebirr_account(self, value):
+        if value:
+            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+            if len(cleaned) > 100:
+                raise serializers.ValidationError("Telebirr account cannot exceed 100 characters.")
+            return cleaned
+        return value
+
 class DealerRatingSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
 
