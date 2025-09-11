@@ -27,17 +27,26 @@ class ProfileSerializer(serializers.ModelSerializer):
     broker_profile = serializers.SerializerMethodField(read_only=True)
     image = serializers.ImageField(required=False, allow_null=True)
     image_url = serializers.SerializerMethodField(read_only=True)
+    role = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Profile
         fields = [
-            'id', 'user', 'first_name', 'last_name', 'contact', 'address',
+            'id', 'user', 'first_name', 'last_name', 'contact', 'address', 'role',
             'image', 'image_url', 'created_at', 'updated_at',
             'buyer_profile', 'dealer_profile', 'broker_profile'
         ]
         read_only_fields = [
-            'id', 'user', 'created_at', 'updated_at', 'buyer_profile', 'image_url'
+            'id', 'user', 'role', 'created_at', 'updated_at', 'buyer_profile', 'image_url'
         ]
+
+    def get_role(self, obj):
+        """ Return the user's role name(s) from django-role-permissions. """
+        role = get_user_roles(obj.profile.user)
+        if not role:
+            return None
+        # If a user can only have one role, return the first
+        return role[0].role_name
 
     def get_image_url(self, obj):
         if obj.image:
