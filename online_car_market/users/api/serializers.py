@@ -30,8 +30,20 @@ class ProfileSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField(read_only=True)
 
     def get_role(self, obj):
-        roles = get_user_roles(obj.profile.user)
+        roles = get_user_roles(obj.user)
         return roles[0].get_name() if roles else None
+
+    def get_dealer_profile(self, obj):
+        dealer_profile = getattr(obj, "dealer_profile", None)
+        if dealer_profile:
+            return DealerProfileSerializer(dealer_profile).data
+        return None
+
+    def get_broker_profile(self, obj):
+        broker_profile = getattr(obj, "broker_profile", None)
+        if broker_profile:
+            return BrokerProfileSerializer(broker_profile).data
+        return None
 
     class Meta:
         model = Profile
