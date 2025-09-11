@@ -1,30 +1,35 @@
 from rest_framework import serializers
 from rolepermissions.checkers import has_role
 from online_car_market.dealers.models import DealerProfile, DealerRating
+from online_car_market.common.serializers import ProfileLiteSerializer
 from online_car_market.users.models import User
+from rolepermissions.checkers import get_user_roles
 import bleach
 import logging
 
 logger = logging.getLogger(__name__)
 
-class VerifyDealerSerializer(serializers.ModelSerializer):
-    is_verified = serializers.BooleanField()
-
-    class Meta:
-        model = DealerProfile
-        fields = ['is_verified']
-
-    def validate_is_verified(self, value):
-        user = self.context['request'].user
-        if not has_role(user, ['super_admin', 'admin']) and not user.is_superuser:
-            raise serializers.ValidationError("Only super admins or admins can verify dealers.")
-        return value
-
 class DealerProfileSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(read_only=True)
+    profile = ProfileLiteSerializer(read_only=True)
+    company_name = serializers.CharField()
+    license_number = serializers.CharField()
+    tax_id = serializers.CharField()
+    telebirr_account = serializers.CharField()
+    is_verified = serializers.BooleanField(read_only=True)
+    role = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = DealerProfile
-        fields = ['company_name', 'license_number', 'tax_id', 'telebirr_account', 'is_verified']
-        read_only_fields = ['is_verified']
+        fields = ['id', 'profile', 'role', 'company_name', 'license_number', 'tax_id', 'telebirr_account', 'is_verified']
+        read_only_fields = ['id', 'profile', 'role', 'is_verified']
+
+    def get_role(self, obj):
+        """Return the user's role name(s) from django-role-permissions."""
+        roles = get_user_roles(obj.profile.user)  # obj.profile.user is the User instance
+        if not roles:
+            return None
+        return [role.get_name() for role in roles]
 
     def validate_company_name(self, value):
         cleaned = bleach.clean(value.strip(), tags=[], strip=True)
@@ -53,6 +58,7 @@ class DealerProfileSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Telebirr account cannot exceed 100 characters.")
             return cleaned
         return value
+
 
 class DealerRatingSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
@@ -86,3 +92,16 @@ class DealerRatingSerializer(serializers.ModelSerializer):
         if DealerRating.objects.filter(dealer=dealer, user=user).exists():
             raise serializers.ValidationError("You have already rated this dealer.")
         return data
+
+class VerifyDealerSerializer(serializers.ModelSerializer):
+    is_verified = serializers.BooleanField()
+
+    class Meta:
+        model = DealerProfile
+        fields = ['is_verified']
+
+    def validate_is_verified(self, value):
+        user = self.context['request'].user
+        if not has_role(user, ['super_admin', 'admin']) and not user.is_superuser:
+            raise serializers.ValidationError("Only super admins or admins can verify dealers.")
+        return value

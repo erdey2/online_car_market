@@ -1,9 +1,10 @@
 from rest_framework import serializers
 from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.permissions import IsAuthenticated, BasePermission
-from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework import status
+from rest_framework import viewsets, status, mixins
+from rest_framework.response import Response
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 from online_car_market.dealers.models import DealerProfile, DealerRating
@@ -13,35 +14,49 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class DealerProfileViewSet(ModelViewSet):
-    permission_classes = [IsAuthenticated]
-    queryset = DealerProfile.objects.all()
-    serializer_class = DealerProfileSerializer
-
-    @extend_schema(
-        tags=["Dealers - Profile"],
-        description="Retrieve the authenticated user's DealerProfile information.",
-        responses={200: DealerProfileSerializer}
-    )
-    def list(self, request):
-        if not has_role(request.user, 'dealer'):
-            return Response(
-                {"detail": "User does not have dealer role."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        try:
-            dealer_profile = DealerProfile.objects.get(profile__user=request.user)
-            serializer = DealerProfileSerializer(dealer_profile)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except DealerProfile.DoesNotExist:
-            return Response(
-                {"detail": "Dealer profile not found."},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
 class IsRatingOwnerOrAdmin(BasePermission):
     def has_object_permission(self, request, view, obj):
         return request.user == obj.user or has_role(request.user, ['super_admin', 'admin'])
+
+class DealerProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    """
+    A singleton-style endpoint for the authenticated broker's profile.
+    Only supports GET (retrieve) and PATCH (update).
+    """
+    serializer_class = DealerProfileSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        try:
+            broker_profile = DealerProfile.objects.get(profile__user=self.request.user)
+        except DealerProfile.DoesNotExist:
+            raise NotFound(detail="Broker profile not found.")
+
+        if not has_role(self.request.user, 'broker'):
+            raise PermissionDenied(detail="User does not have broker role.")
+
+        return broker_profile
+
+    @extend_schema(
+        tags=["Dealers - Profile"],
+        description="Retrieve the authenticated broker's profile."
+    )
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+    @extend_schema(
+        tags=["Dealers - Profile"],
+        description="Partially update the authenticated broker's profile."
+    )
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
 
 @extend_schema_view(
     list=extend_schema(tags=["Dealers - Ratings"], description="List all ratings for a dealer."),

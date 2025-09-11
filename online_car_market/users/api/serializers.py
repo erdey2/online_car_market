@@ -23,7 +23,7 @@ User = get_user_model()
 class ProfileSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)
     buyer_profile = BuyerProfileSerializer(read_only=True)
-    dealer_profile = DealerProfileSerializer(required=False, allow_null=True)
+    dealer_profile = serializers.SerializerMethodField(read_only=True)
     broker_profile = serializers.SerializerMethodField(read_only=True)
     image = serializers.ImageField(required=False, allow_null=True)
     image_url = serializers.SerializerMethodField(read_only=True)

@@ -1,14 +1,16 @@
 from rest_framework import serializers
 from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.permissions import IsAuthenticated, BasePermission
-from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework import status
+from rest_framework import viewsets, status, mixins
+from rest_framework.response import Response
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 from online_car_market.brokers.models import BrokerProfile, BrokerRating
 from .serializers import VerifyBrokerSerializer, BrokerProfileSerializer, BrokerRatingSerializer
 from online_car_market.users.permissions import IsSuperAdmin, IsAdmin
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,26 +19,45 @@ class IsRatingOwnerOrAdmin(BasePermission):
     def has_object_permission(self, request, view, obj):
         return request.user == obj.user or has_role(request.user, ['super_admin', 'admin'])
 
-class BrokerProfileViewSet(ModelViewSet):
-    permission_classes = [IsAuthenticated]
+class BrokerProfileViewSet(mixins.RetrieveModelMixin,
+                           mixins.UpdateModelMixin,
+                           viewsets.GenericViewSet):
+    """
+    A singleton-style endpoint for the authenticated broker's profile.
+    Only supports GET (retrieve) and PATCH (update).
+    """
     serializer_class = BrokerProfileSerializer
+    permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        return BrokerProfile.objects.filter(profile__user=self.request.user)
+    def get_object(self):
+        try:
+            broker_profile = BrokerProfile.objects.get(profile__user=self.request.user)
+        except BrokerProfile.DoesNotExist:
+            raise NotFound(detail="Broker profile not found.")
+
+        if not has_role(self.request.user, 'broker'):
+            raise PermissionDenied(detail="User does not have broker role.")
+
+        return broker_profile
 
     @extend_schema(
         tags=["Brokers - Profile"],
-        description="Retrieve the authenticated broker's profile.",
-        responses={200: BrokerProfileSerializer}
+        description="Retrieve the authenticated broker's profile."
     )
     def retrieve(self, request, *args, **kwargs):
-        broker_profile = BrokerProfile.objects.filter(profile__user=request.user).first()
-        if not broker_profile:
-            return Response(
-                {"detail": "Broker profile not found."},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        serializer = self.get_serializer(broker_profile)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
+    @extend_schema(
+        tags=["Brokers - Profile"],
+        description="Partially update the authenticated broker's profile."
+    )
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
         return Response(serializer.data)
 
 @extend_schema_view(

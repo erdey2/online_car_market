@@ -4,7 +4,7 @@ from .views import ProfileViewSet, UserRoleViewSet
 
 router = DefaultRouter()
 router.register(r'profiles', ProfileViewSet, basename='profile')
-router.register(r'roles', UserRoleViewSet, basename='role')
+router.register(r'me/roles', UserRoleViewSet, basename='user-roles')
 
 urlpatterns = [
     path('', include(router.urls)),
