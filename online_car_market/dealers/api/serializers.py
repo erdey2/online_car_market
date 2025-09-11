@@ -19,17 +19,14 @@ class DealerProfileSerializer(serializers.ModelSerializer):
     is_verified = serializers.BooleanField(read_only=True)
     role = serializers.SerializerMethodField(read_only=True)
 
+    def get_role(self, obj):
+        roles = get_user_roles(obj.profile.user)
+        return roles[0].get_name() if roles else None
+
     class Meta:
         model = DealerProfile
         fields = ['id', 'profile', 'role', 'company_name', 'license_number', 'tax_id', 'telebirr_account', 'is_verified']
         read_only_fields = ['id', 'profile', 'role', 'is_verified']
-
-    def get_role(self, obj):
-        """Return the user's role name(s) from django-role-permissions."""
-        roles = get_user_roles(obj.profile.user)  # obj.profile.user is the User instance
-        if not roles:
-            return None
-        return [role.get_name() for role in roles]
 
     def validate_company_name(self, value):
         cleaned = bleach.clean(value.strip(), tags=[], strip=True)

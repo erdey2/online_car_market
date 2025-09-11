@@ -3,7 +3,7 @@ from rolepermissions.checkers import has_role
 from online_car_market.brokers.models import BrokerRating, BrokerProfile
 from online_car_market.users.models import User
 from online_car_market.common.serializers import ProfileLiteSerializer
-from rolepermissions.checkers import get_user_roles
+from rolepermissions.roles import get_user_roles
 import bleach
 import logging
 
@@ -17,17 +17,14 @@ class BrokerProfileSerializer(serializers.ModelSerializer):
     is_verified = serializers.BooleanField(read_only=True)
     role = serializers.SerializerMethodField(read_only=True)
 
+    def get_role(self, obj):
+        roles = get_user_roles(obj.profile.user)
+        return roles[0].get_name() if roles else None
+
     class Meta:
         model = BrokerProfile
         fields = ['id', 'profile', 'national_id', 'telebirr_account', 'is_verified', 'role']
         read_only_fields = ['id', 'profile','is_verified', 'role']
-
-    def get_role(self, obj):
-        """Return the user's role name(s) from django-role-permissions."""
-        roles = get_user_roles(obj.profile.user)  # obj.profile.user is the User instance
-        if not roles:
-            return None
-        return [role.get_name() for role in roles]
 
     def validate_national_id(self, value):
         cleaned = bleach.clean(value.strip(), tags=[], strip=True)
