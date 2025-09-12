@@ -346,17 +346,24 @@ class CarSerializer(serializers.ModelSerializer):
         return value
 
     def validate_dealer(self, value):
-        if not has_role(value.user, 'dealer'):
+        if not has_role(value.profile.user, 'dealer'):
             raise serializers.ValidationError("Dealer user must have dealer role.")
         user = self.context['request'].user
         if value.user != user and not has_role(user, ['super_admin', 'admin']):
             raise serializers.ValidationError("Only dealer owner or admins can assign this dealer.")
         return value
 
-    def validate_broker(self, value):
+    """ def validate_broker(self, value):
         if value:
             if not has_role(value.user, 'broker'):
                 raise serializers.ValidationError("Broker user must have broker role.")
+        return value """
+    def validate_broker(self, value):
+        if not has_role(value.profile.user, 'broker'):
+            raise serializers.ValidationError("Broker user must have broker role.")
+        user = self.context['request'].user
+        if value.profile.user != user and not has_role(user, ['super_admin', 'admin']):
+            raise serializers.ValidationError("Only broker owner or admins can assign this broker.")
         return value
 
     def validate_model_ref(self, value):
@@ -398,7 +405,7 @@ class CarSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Only brokers, admins, or super admins can assign a broker.")
         if dealer and dealer.user != user and not has_role(user, ['super_admin', 'admin']):
             raise serializers.ValidationError("Only the dealer owner or admins can assign this dealer.")
-        if broker and broker.user != user and not has_role(user, ['super_admin', 'admin']):
+        if broker and broker.profile.user != user and not has_role(user, ['super_admin', 'admin']):
             raise serializers.ValidationError("Only the broker owner or admins can assign this broker.")
 
         # Auto-verify dealer cars if dealer is verified
@@ -410,8 +417,8 @@ class CarSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Auction cars cannot have a fixed price.")
         if sale_type == 'auction' and not auction_end:
             raise serializers.ValidationError("Auction end time is required for auction cars.")
-        if self.instance is None and not has_role(user, ['super_admin', 'admin', 'dealer']):
-            raise serializers.ValidationError("Only dealers, admins, or super admins can create cars.")
+        if self.instance is None and not has_role(user, ['super_admin', 'admin', 'dealer', 'broker']):
+            raise serializers.ValidationError("Only brokers, dealers, admins, or super admins can create cars.")
         if self.instance and data.get('posted_by') and data['posted_by'] != user and not has_role(user, ['super_admin', 'admin']):
             raise serializers.ValidationError("Only the car owner or admins can update this car.")
 
