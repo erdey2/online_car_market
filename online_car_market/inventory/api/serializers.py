@@ -124,8 +124,8 @@ class CarImageSerializer(serializers.ModelSerializer):
         car = data.get("car") or getattr(self.instance, "car", None)
         user = self.context["request"].user
         if self.instance is None:
-            if not has_role(user, ["super_admin", "admin", "dealer"]):
-                raise serializers.ValidationError("Only dealers, admins, or super admins can create car images.")
+            if not has_role(user, ["super_admin", "admin", "dealer", "broker"]):
+                raise serializers.ValidationError("Only brokers, dealers, admins, or super admins can create car images.")
             if car and not has_role(user, ["super_admin", "admin"]) and getattr(car, "posted_by", None) != user:
                 raise serializers.ValidationError("Only the car owner or admins can add images.")
         return data
