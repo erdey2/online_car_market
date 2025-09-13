@@ -20,11 +20,173 @@ import logging
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
+class UserRegistrationSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True)
+    description = serializers.CharField(max_length=500, required=False, allow_blank=True)
+
+    class Meta:
+        model = User
+        fields = ['email', 'password', 'confirm_password', 'description']
+        extra_kwargs = {
+            'email': {'required': True},
+        }
+
+    def validate_email(self, value):
+        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+        if User.objects.filter(email=cleaned).exists():
+            raise serializers.ValidationError("This email is already in use.")
+        return cleaned
+
+    def validate_password(self, value):
+        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+        if not any(char.isupper() for char in cleaned):
+            raise serializers.ValidationError("Password must contain at least one uppercase letter.")
+        if not any(char.isdigit() for char in cleaned):
+            raise serializers.ValidationError("Password must contain at least one digit.")
+        return cleaned
+
+    def validate_description(self, value):
+        if value:
+            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+            if len(cleaned) > 500:
+                raise serializers.ValidationError("Description cannot exceed 500 characters.")
+            return cleaned
+        return value
+
+    def validate(self, data):
+        if data['password'] != data['confirm_password']:
+            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
+        return data
+
+    def create(self, validated_data):
+        validated_data.pop('confirm_password')
+        user = User.objects.create_user(**validated_data)
+        Profile.objects.get_or_create(user=user)
+        try:
+            if not has_role(user, ['dealer', 'broker', 'admin', 'super_admin']):
+                assign_role(user, 'buyer')
+                BuyerProfile.objects.get_or_create(profile=Profile.objects.get(user=user))
+            logger.info(f"User created: {user.email}")
+        except RoleDoesNotExist:
+            logger.error(f"Role buyer does not exist for {user.email}")
+            raise serializers.ValidationError("Role buyer does not exist.")
+        return user
+
+class UserRoleSerializer(serializers.Serializer):
+    user_id = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+    role = serializers.ChoiceField(choices=[
+        ('buyer', 'Buyer'),
+        ('dealer', 'Dealer'),
+        ('broker', 'Broker'),
+        ('admin', 'Admin'),
+        ('superadmin', 'SuperAdmin'),
+    ])
+
+    def validate(self, data):
+        user = self.context['request'].user
+        target_user = data.get('user_id')
+        role = data.get('role')
+
+        if not has_role(user, ['super_admin', 'admin']) and not user.is_superuser:
+            raise serializers.ValidationError("Only super admins or admins can assign roles.")
+        if target_user == user and role != 'admin':
+            raise serializers.ValidationError("You cannot change your own role unless assigning Admin.")
+        if not target_user.is_active:
+            raise serializers.ValidationError("Cannot assign role to inactive user.")
+        return data
+
+    def save(self):
+        user = self.validated_data['user_id']
+        role = self.validated_data['role']
+        current_roles = [role.get_name() for role in get_user_roles(user)]
+
+        for current_role in current_roles:
+            try:
+                remove_role(user, current_role)
+                logger.info(f"Removed role {current_role} from user {user.email}")
+            except RoleDoesNotExist:
+                logger.warning(f"Role {current_role} does not exist for {user.email}")
+
+        try:
+            assign_role(user, role)
+        except RoleDoesNotExist:
+            logger.error(f"Role {role} does not exist for {user.email}")
+            raise serializers.ValidationError(f"Role {role} does not exist.")
+
+        Profile.objects.get_or_create(user=user)
+        if role == 'buyer':
+            BuyerProfile.objects.get_or_create(profile=Profile.objects.get(user=user))
+        elif role == 'dealer':
+            DealerProfile.objects.get_or_create(
+                profile=Profile.objects.get(user=user),
+                defaults={'company_name': user.email, 'license_number': '', 'telebirr_account': ''}
+            )
+        elif role == 'broker':
+            BrokerProfile.objects.get_or_create(
+                profile=Profile.objects.get(user=user),
+                defaults={'national_id': f"ID_{user.id}", 'telebirr_account': ''}
+            )
+        logger.info(f"Assigned role {role} to user {user.email}")
+        return user
+
+class CustomLoginSerializer(LoginSerializer):
+    username = None
+    email = serializers.EmailField(required=True)
+
+    def validate(self, attrs):
+        return super().validate(attrs)
+
+class CustomRegisterSerializer(RegisterSerializer):
+    username = None
+    description = serializers.CharField(max_length=500, required=False, allow_blank=True)
+
+    @property
+    def _has_phone_field(self):
+        return False
+
+    def validate_email(self, value):
+        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+        email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+        if not re.match(email_regex, cleaned):
+            raise serializers.ValidationError("Email must be a valid email address.")
+        if len(cleaned) > 254:
+            raise serializers.ValidationError("Email cannot exceed 254 characters.")
+        if User.objects.filter(email=cleaned).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return cleaned
+
+    def validate_description(self, value):
+        if value:
+            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+            if len(cleaned) > 500:
+                raise serializers.ValidationError("Description cannot exceed 500 characters.")
+            return cleaned
+        return value
+
+    def validate(self, data):
+        user = self.context['request'].user
+        if user.is_authenticated and not has_role(user, ['super_admin', 'admin']) and not user.is_superuser:
+            raise serializers.ValidationError("Only super admins or admins can create users via this endpoint.")
+        return data
+
+    def save(self, request):
+        user = super().save(request)
+        try:
+            assign_role(user, 'buyer')
+            Profile.objects.get_or_create(user=user)
+            BuyerProfile.objects.get_or_create(profile=Profile.objects.get(user=user))
+            logger.info(f"User registered via dj_rest_auth: {user.email}")
+        except RoleDoesNotExist:
+            logger.error(f"Role buyer does not exist for {user.email}")
+            raise serializers.ValidationError("Role buyer does not exist.")
+        return user
+
 class ProfileSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)
     buyer_profile = BuyerProfileSerializer(read_only=True)
-    dealer_profile = serializers.SerializerMethodField(read_only=True)
-    broker_profile = serializers.SerializerMethodField(read_only=True)
+    dealer_profile = DealerProfileSerializer(required=False)
+    broker_profile = BrokerProfileSerializer(required=False)
     image = serializers.ImageField(required=False, allow_null=True)
     image_url = serializers.SerializerMethodField(read_only=True)
     role = serializers.SerializerMethodField(read_only=True)
@@ -151,168 +313,3 @@ class ProfileSerializer(serializers.ModelSerializer):
             BrokerProfileSerializer().update(broker_profile, broker_profile_data)
 
         return instance
-
-class UserRegistrationSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=8)
-    confirm_password = serializers.CharField(write_only=True)
-    description = serializers.CharField(max_length=500, required=False, allow_blank=True)
-
-    class Meta:
-        model = User
-        fields = ['email', 'password', 'confirm_password', 'description']
-        extra_kwargs = {
-            'email': {'required': True},
-        }
-
-    def validate_email(self, value):
-        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-        if User.objects.filter(email=cleaned).exists():
-            raise serializers.ValidationError("This email is already in use.")
-        return cleaned
-
-    def validate_password(self, value):
-        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-        if not any(char.isupper() for char in cleaned):
-            raise serializers.ValidationError("Password must contain at least one uppercase letter.")
-        if not any(char.isdigit() for char in cleaned):
-            raise serializers.ValidationError("Password must contain at least one digit.")
-        return cleaned
-
-    def validate_description(self, value):
-        if value:
-            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-            if len(cleaned) > 500:
-                raise serializers.ValidationError("Description cannot exceed 500 characters.")
-            return cleaned
-        return value
-
-    def validate(self, data):
-        if data['password'] != data['confirm_password']:
-            raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
-        return data
-
-    def create(self, validated_data):
-        validated_data.pop('confirm_password')
-        user = User.objects.create_user(**validated_data)
-        Profile.objects.get_or_create(user=user)
-        try:
-            if not has_role(user, ['dealer', 'broker', 'admin', 'super_admin']):
-                assign_role(user, 'buyer')
-                BuyerProfile.objects.get_or_create(profile=Profile.objects.get(user=user))
-            logger.info(f"User created: {user.email}")
-        except RoleDoesNotExist:
-            logger.error(f"Role buyer does not exist for {user.email}")
-            raise serializers.ValidationError("Role buyer does not exist.")
-        return user
-
-
-class UserRoleSerializer(serializers.Serializer):
-    user_id = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
-    role = serializers.ChoiceField(choices=[
-        ('buyer', 'Buyer'),
-        ('dealer', 'Dealer'),
-        ('broker', 'Broker'),
-        ('admin', 'Admin'),
-        ('superadmin', 'SuperAdmin'),
-    ])
-
-    def validate(self, data):
-        user = self.context['request'].user
-        target_user = data.get('user_id')
-        role = data.get('role')
-
-        if not has_role(user, ['super_admin', 'admin']) and not user.is_superuser:
-            raise serializers.ValidationError("Only super admins or admins can assign roles.")
-        if target_user == user and role != 'admin':
-            raise serializers.ValidationError("You cannot change your own role unless assigning Admin.")
-        if not target_user.is_active:
-            raise serializers.ValidationError("Cannot assign role to inactive user.")
-        return data
-
-    def save(self):
-        user = self.validated_data['user_id']
-        role = self.validated_data['role']
-        current_roles = [role.get_name() for role in get_user_roles(user)]
-
-        for current_role in current_roles:
-            try:
-                remove_role(user, current_role)
-                logger.info(f"Removed role {current_role} from user {user.email}")
-            except RoleDoesNotExist:
-                logger.warning(f"Role {current_role} does not exist for {user.email}")
-
-        try:
-            assign_role(user, role)
-        except RoleDoesNotExist:
-            logger.error(f"Role {role} does not exist for {user.email}")
-            raise serializers.ValidationError(f"Role {role} does not exist.")
-
-        Profile.objects.get_or_create(user=user)
-        if role == 'buyer':
-            BuyerProfile.objects.get_or_create(profile=Profile.objects.get(user=user))
-        elif role == 'dealer':
-            DealerProfile.objects.get_or_create(
-                profile=Profile.objects.get(user=user),
-                defaults={'company_name': user.email, 'license_number': '', 'telebirr_account': ''}
-            )
-        elif role == 'broker':
-            BrokerProfile.objects.get_or_create(
-                profile=Profile.objects.get(user=user),
-                defaults={'national_id': f"ID_{user.id}", 'telebirr_account': ''}
-            )
-        logger.info(f"Assigned role {role} to user {user.email}")
-        return user
-
-
-class CustomLoginSerializer(LoginSerializer):
-    username = None
-    email = serializers.EmailField(required=True)
-
-    def validate(self, attrs):
-        return super().validate(attrs)
-
-
-class CustomRegisterSerializer(RegisterSerializer):
-    username = None
-    description = serializers.CharField(max_length=500, required=False, allow_blank=True)
-
-    @property
-    def _has_phone_field(self):
-        return False
-
-    def validate_email(self, value):
-        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-        email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
-        if not re.match(email_regex, cleaned):
-            raise serializers.ValidationError("Email must be a valid email address.")
-        if len(cleaned) > 254:
-            raise serializers.ValidationError("Email cannot exceed 254 characters.")
-        if User.objects.filter(email=cleaned).exists():
-            raise serializers.ValidationError("A user with this email already exists.")
-        return cleaned
-
-    def validate_description(self, value):
-        if value:
-            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-            if len(cleaned) > 500:
-                raise serializers.ValidationError("Description cannot exceed 500 characters.")
-            return cleaned
-        return value
-
-    def validate(self, data):
-        user = self.context['request'].user
-        if user.is_authenticated and not has_role(user, ['super_admin', 'admin']) and not user.is_superuser:
-            raise serializers.ValidationError("Only super admins or admins can create users via this endpoint.")
-        return data
-
-    def save(self, request):
-        user = super().save(request)
-        try:
-            assign_role(user, 'buyer')
-            Profile.objects.get_or_create(user=user)
-            BuyerProfile.objects.get_or_create(profile=Profile.objects.get(user=user))
-            logger.info(f"User registered via dj_rest_auth: {user.email}")
-        except RoleDoesNotExist:
-            logger.error(f"Role buyer does not exist for {user.email}")
-            raise serializers.ValidationError("Role buyer does not exist.")
-        return user
