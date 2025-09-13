@@ -3,9 +3,10 @@ from django.db.models import Avg
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
-from ..models import Car, CarImage, Bid, Payment, CarMake, CarModel
+from ..models import Car, CarImage, Payment, CarMake, CarModel
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
+from online_car_market.bids.api.serializers import BidSerializer
 from django.contrib.auth import get_user_model
 import re
 import bleach
@@ -139,33 +140,6 @@ class CarImageSerializer(serializers.ModelSerializer):
         instance.image = image_file  # CloudinaryField handles the upload automatically
         instance.save()
         return instance
-
-class BidSerializer(serializers.ModelSerializer):
-    user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
-
-    class Meta:
-        model = Bid
-        fields = ['id', 'car', 'user', 'amount', 'created_at']
-        read_only_fields = ['id', 'created_at']
-
-    def validate_amount(self, value):
-        if value <= 0:
-            raise serializers.ValidationError("Bid amount must be positive.")
-        return value
-
-    def validate_car(self, value):
-        if value.sale_type != 'auction':
-            raise serializers.ValidationError("Bids can only be placed on auction cars.")
-        if value.auction_end and value.auction_end < timezone.now():
-            raise serializers.ValidationError("Auction has ended.")
-        return value
-
-    def validate(self, data):
-        user = self.context['request'].user
-        car = data.get('car')
-        if car.posted_by == user:
-            raise serializers.ValidationError("You cannot bid on your own car.")
-        return data
 
 class PaymentSerializer(serializers.ModelSerializer):
     class Meta:

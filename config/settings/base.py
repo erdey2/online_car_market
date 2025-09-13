@@ -99,6 +99,7 @@ LOCAL_APPS = [
     # custom apps
     "online_car_market.users",
     "online_car_market.inventory",
+    "online_car_market.bids",
     "online_car_market.sales",
     "online_car_market.accounting",
     "online_car_market.dealers",

@@ -178,15 +178,6 @@ class CarImage(models.Model):
             CarImage.objects.filter(car=self.car, is_featured=True).exclude(pk=self.pk).update(is_featured=False)
         super().save(*args, **kwargs)
 
-class Bid(models.Model):
-    car = models.ForeignKey(Car, on_delete=models.CASCADE, related_name='bids')
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"Bid of {self.amount} by {self.user.email} on {self.car}"
-
 class Payment(models.Model):
     PAYMENT_TYPES = (
         ('commission', 'Commission'),
