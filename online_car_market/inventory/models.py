@@ -97,6 +97,7 @@ class Car(models.Model):
         ('used', 'Used'),
     ]
 
+    # core fields
     make = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     model = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     make_ref = models.ForeignKey(CarMake, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars', db_index=True)
@@ -109,13 +110,7 @@ class Car(models.Model):
     exterior_color = models.CharField(max_length=20, default='white')
     interior_color = models.CharField(max_length=20,  default='white')
     engine = models.CharField(max_length=100, null=True, blank=True)
-    bluetooth = models.BooleanField(default=False)
-    drivetrain = models.CharField(
-        max_length=20,
-        choices=DRIVETRAIN_TYPES,
-        default='fwd',
-        db_index=True
-    )
+    drivetrain = models.CharField(max_length=20, choices=DRIVETRAIN_TYPES, default='fwd', db_index=True)
     condition = models.CharField(max_length=20, choices=CONDITIONS, default='new')
     trim = models.CharField(max_length=50, blank=True, null=True)
     description = models.TextField(blank=True, null=True)
@@ -129,6 +124,60 @@ class Car(models.Model):
     priority = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Extra
+    bluetooth = models.BooleanField(default=False)
+    heated_seats = models.BooleanField(default=False)
+    cd_player = models.BooleanField(default=False)
+    power_locks = models.BooleanField(default=False)
+    premium_wheels_rims = models.BooleanField(default=False)
+    winch = models.BooleanField(default=False)
+    alarm_anti_theft = models.BooleanField(default=False)
+    cooled_seats = models.BooleanField(default=False)
+    keyless_start = models.BooleanField(default=False)
+    body_kit = models.BooleanField(default=False)
+    navigation_system = models.BooleanField(default=False)
+    premium_lights = models.BooleanField(default=False)
+    cassette_player = models.BooleanField(default=False)
+    fog_lights = models.BooleanField(default=False)
+    leather_seats = models.BooleanField(default=False)
+    roof_rack = models.BooleanField(default=False)
+    dvd_player = models.BooleanField(default=False)
+    power_mirrors = models.BooleanField(default=False)
+    power_sunroof = models.BooleanField(default=False)
+    aux_audio_in = models.BooleanField(default=False)
+    brush_guard = models.BooleanField(default=False)
+    air_conditioning = models.BooleanField(default=False)
+    performance_tyres = models.BooleanField(default=False)
+    premium_sound_system = models.BooleanField(default=False)
+    heat = models.BooleanField(default=False)
+    vhs_player = models.BooleanField(default=False)
+    off_road_kit = models.BooleanField(default=False)
+    am_fm_radio = models.BooleanField(default=False)
+    moonroof = models.BooleanField(default=False)
+    racing_seats = models.BooleanField(default=False)
+    premium_paint = models.BooleanField(default=False)
+    spoiler = models.BooleanField(default=False)
+    power_windows = models.BooleanField(default=False)
+    sunroof = models.BooleanField(default=False)
+    climate_control = models.BooleanField(default=False)
+    parking_sensors = models.BooleanField(default=False)
+    rear_view_camera = models.BooleanField(default=False)
+    keyless_entry = models.BooleanField(default=False)
+    off_road_tyres = models.BooleanField(default=False)
+    satellite_radio = models.BooleanField(default=False)
+    power_seats = models.BooleanField(default=False)
+
+    # Technical Features (Boolean)
+    tiptronic_gears = models.BooleanField(default=False)
+    dual_exhaust = models.BooleanField(default=False)
+    power_steering = models.BooleanField(default=False)
+    cruise_control = models.BooleanField(default=False)
+    all_wheel_steering = models.BooleanField(default=False)
+    front_airbags = models.BooleanField(default=False)
+    side_airbags = models.BooleanField(default=False)
+    n2o_system = models.BooleanField(default=False)
+    anti_lock_brakes = models.BooleanField(default=False)
 
     def save(self, *args, **kwargs):
         if self.make_ref and not self.make:
