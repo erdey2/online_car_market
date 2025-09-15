@@ -216,6 +216,19 @@ class CarImage(models.Model):
             CarImage.objects.filter(car=self.car, is_featured=True).exclude(pk=self.pk).update(is_featured=False)
         super().save(*args, **kwargs)
 
+class FavoriteCar(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='favorite_cars')
+    car = models.ForeignKey(Car, on_delete=models.CASCADE, related_name='favorited_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'car')  # Prevent duplicate favorites
+        verbose_name = 'Favorite Car'
+        verbose_name_plural = 'Favorite Cars'
+
+    def __str__(self):
+        return f"{self.user.email} favors {self.car}"
+
 class Payment(models.Model):
     PAYMENT_TYPES = (
         ('commission', 'Commission'),

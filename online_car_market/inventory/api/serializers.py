@@ -3,7 +3,7 @@ from django.db.models import Avg
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
-from ..models import Car, CarImage, Payment, CarMake, CarModel
+from ..models import Car, CarImage, Payment, CarMake, CarModel, FavoriteCar
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.bids.api.serializers import BidSerializer
@@ -266,18 +266,20 @@ class CarSerializer(serializers.ModelSerializer):
     def validate_exterior_color(self, value):
         if value:
             cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-            valid_types = [choice[0] for choice in Car.EXTERIOR_COLORS]
-            if cleaned not in valid_types:
-                raise serializers.ValidationError(f"Exterior color must be one of: {', '.join(valid_types)}.")
+            if len(cleaned) > 20:
+                raise serializers.ValidationError("Exterior color cannot exceed 20 characters.")
+            if not re.match(r'^[a-zA-Z\s-]+$', cleaned):
+                raise serializers.ValidationError("Invalid characters in exterior color.")
             return cleaned
         return value
 
     def validate_interior_color(self, value):
         if value:
             cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-            valid_types = [choice[0] for choice in Car.INTERIOR_COLORS]
-            if cleaned not in valid_types:
-                raise serializers.ValidationError(f"Interior color must be one of: {', '.join(valid_types)}.")
+            if len(cleaned) > 20:
+                raise serializers.ValidationError("Interior color cannot exceed 20 characters.")
+            if not re.match(r'^[a-zA-Z\s-]+$', cleaned):
+                raise serializers.ValidationError("Invalid characters in interior color.")
             return cleaned
         return value
 
@@ -458,6 +460,27 @@ class CarSerializer(serializers.ModelSerializer):
 
         return super().update(instance, validated_data)
 
+class FavoriteCarSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(read_only=True)
+    car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all())
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+
+    class Meta:
+        model = FavoriteCar
+        fields = ['id', 'car', 'user', 'created_at']
+        read_only_fields = ['id', 'user', 'created_at']
+
+    def validate_car(self, value):
+        # Ensure the car is available
+        if not value.is_available:
+            raise serializers.ValidationError("This car is not available to favorite.")
+        return value
+
+    def create(self, validated_data):
+        # Automatically set the user to the authenticated user
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data)
 
 # ---------------- Verify Car Serializer ----------------
 class VerifyCarSerializer(serializers.ModelSerializer):

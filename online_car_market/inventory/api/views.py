@@ -5,11 +5,13 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.viewsets import ReadOnlyModelViewSet
+from rest_framework.permissions import IsAuthenticated
+from rest_framework import viewsets, mixins
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
 from django.db.models import Count, Avg, Q
-from ..models import Car, CarMake, CarModel
-from .serializers import CarSerializer, VerifyCarSerializer, BidSerializer, PaymentSerializer, CarMakeSerializer, CarModelSerializer
+from ..models import Car, CarMake, CarModel, FavoriteCar
+from .serializers import CarSerializer, VerifyCarSerializer, BidSerializer, PaymentSerializer, CarMakeSerializer, CarModelSerializer, FavoriteCarSerializer
 from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealerOrBroker
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
@@ -83,7 +85,7 @@ class CarModelViewSet(ModelViewSet):
             OpenApiParameter(
                 name='broker_email',
                 type=str,
-                location=OpenApiParameter.QUERY,
+                location='query',
                 description='Filter cars by broker email address.',
                 required=False
             ),
@@ -411,6 +413,92 @@ class CarViewSet(ModelViewSet):
             "broker_stats": list(broker_stats),
             "make_stats": list(make_stats)
         })
+
+class FavoriteCarViewSet(
+    mixins.CreateModelMixin, mixins.RetrieveModelMixin,
+    mixins.DestroyModelMixin, mixins.ListModelMixin,
+    viewsets.GenericViewSet
+):
+    permission_classes = [IsAuthenticated]
+    serializer_class = FavoriteCarSerializer
+    queryset = FavoriteCar.objects.all()
+
+    def get_queryset(self):
+        # Restrict to favorites by the authenticated user
+        return self.queryset.filter(user=self.request.user)
+
+    @extend_schema(
+        tags=["Favorites"],
+        description="List all favorite cars for the authenticated user.",
+        responses={200: FavoriteCarSerializer(many=True)}
+    )
+    def list(self, request, *args, **kwargs):
+        if not has_role(request.user, 'buyer'):
+            return Response(
+                {"detail": "User does not have buyer role."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().list(request, *args, **kwargs)
+
+    @extend_schema(
+        tags=["Favorites"],
+        description="Add a car to the user's favorites. User must have buyer role.",
+        request=FavoriteCarSerializer,
+        responses={201: FavoriteCarSerializer}
+    )
+    def create(self, request, *args, **kwargs):
+        if not has_role(request.user, 'buyer'):
+            return Response(
+                {"detail": "User does not have buyer role."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @extend_schema(
+        tags=["Favorites"],
+        description="Retrieve a specific favorite car entry. User must be the owner.",
+        responses={200: FavoriteCarSerializer}
+    )
+    def retrieve(self, request, *args, **kwargs):
+        if not has_role(request.user, 'buyer'):
+            return Response(
+                {"detail": "User does not have buyer role."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        try:
+            favorite = self.get_queryset().get(pk=kwargs['pk'])
+            serializer = self.get_serializer(favorite)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except FavoriteCar.DoesNotExist:
+            return Response(
+                {"detail": "Favorite car not found or you do not have permission to view it."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @extend_schema(
+        tags=["Favorites"],
+        description="Remove a car from the user's favorites. User must be the owner.",
+        responses={204: None}
+    )
+    def destroy(self, request, *args, **kwargs):
+        if not has_role(request.user, 'buyer'):
+            return Response(
+                {"detail": "User does not have buyer role."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        try:
+            favorite = self.get_queryset().get(pk=kwargs['pk'])
+            favorite.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except FavoriteCar.DoesNotExist:
+            return Response(
+                {"detail": "Favorite car not found or you do not have permission to delete it."},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
 # CarImage ViewSet
 '''
