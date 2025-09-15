@@ -1,3 +1,4 @@
+from django.db.models import Avg, Count, Q, Sum
 from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.decorators import action
@@ -412,6 +413,123 @@ class CarViewSet(ModelViewSet):
             "dealer_stats": list(dealer_stats),
             "broker_stats": list(broker_stats),
             "make_stats": list(make_stats)
+        })
+
+    @extend_schema(
+        tags=["Analytics"],
+        description="Get cheap cars for buyers.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "cheap_cars": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "integer"},
+                                "make_name": {"type": "string"},
+                                "price": {"type": "number"}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='buyer-analytics')
+    def buyer_analytics(self, request):
+        if not has_role(request.user, ['buyer']):
+            return Response({"error": "Only buyers can access this analytics."}, status=403)
+        cheap_cars = Car.objects.exclude(status='sold').filter(price__isnull=False).order_by('price')[:10].values('id',
+                                                                                                                  'make__name',
+                                                                                                                  'price')
+        return Response({
+            "cheap_cars": list(cheap_cars)
+        })
+
+    @extend_schema(
+        tags=["Analytics"],
+        description="Get analytics for brokers, including total money made.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "total_cars": {"type": "integer"},
+                    "sold_cars": {"type": "integer"},
+                    "average_price": {"type": "number"},
+                    "total_money_made": {"type": "number"}
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='broker-analytics')
+    def broker_analytics(self, request):
+        if not has_role(request.user, ['broker']):
+            return Response({"error": "Only brokers can access this analytics."}, status=403)
+        try:
+            broker = BrokerProfile.objects.get(user=request.user)
+        except BrokerProfile.DoesNotExist:
+            return Response({"error": "Broker profile not found."}, status=404)
+        total_cars = broker.cars.count()
+        sold_cars = broker.cars.filter(status='sold').count()
+        average_price = broker.cars.filter(price__isnull=False).aggregate(Avg('price'))['price__avg'] or 0
+        total_money_made = broker.cars.filter(status='sold', price__isnull=False).aggregate(Sum('price'))[
+                               'price__sum'] or 0
+        return Response({
+            "total_cars": total_cars,
+            "sold_cars": sold_cars,
+            "average_price": round(average_price, 2),
+            "total_money_made": round(total_money_made, 2)
+        })
+
+    @extend_schema(
+        tags=["Analytics"],
+        description="Get analytics for dealers, including detailed sales by car make/model.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "total_cars": {"type": "integer"},
+                    "sold_cars": {"type": "integer"},
+                    "average_price": {"type": "number"},
+                    "model_stats": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "make_name": {"type": "string"},
+                                "total_sold": {"type": "integer"},
+                                "total_sales": {"type": "number"},
+                                "avg_price": {"type": "number"}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='dealer-analytics')
+    def dealer_analytics(self, request):
+        if not has_role(request.user, ['dealer']):
+            return Response({"error": "Only dealers can access this analytics."}, status=403)
+        try:
+            dealer = DealerProfile.objects.get(user=request.user)
+        except DealerProfile.DoesNotExist:
+            return Response({"error": "Dealer profile not found."}, status=404)
+        total_cars = dealer.cars.count()
+        sold_cars = dealer.cars.filter(status='sold').count()
+        average_price = dealer.cars.filter(price__isnull=False).aggregate(Avg('price'))['price__avg'] or 0
+        model_stats = dealer.cars.filter(status='sold', price__isnull=False).values('make__name').annotate(
+            total_sold=Count('id'),
+            total_sales=Sum('price'),
+            avg_price=Avg('price')
+        ).order_by('-total_sold')
+        return Response({
+            "total_cars": total_cars,
+            "sold_cars": sold_cars,
+            "average_price": round(average_price, 2),
+            "model_stats": list(model_stats)
         })
 
 class FavoriteCarViewSet(
