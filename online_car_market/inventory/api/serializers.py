@@ -302,6 +302,31 @@ class CarSerializer(serializers.ModelSerializer):
             return cleaned
         return value
 
+    def validate_condition(self, value):
+        if value:
+            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+            valid_types = [choice[0] for choice in Car.CONDITIONS]
+            if cleaned not in valid_types:
+                raise serializers.ValidationError(f"Condition must be one of: {', '.join(valid_types)}.")
+            return cleaned
+        return value
+
+    def validate_trim(self, value):
+        if value:
+            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+            if len(cleaned) > 50:
+                raise serializers.ValidationError("Trim cannot exceed 50 characters.")
+            if not re.match(r'^[a-zA-Z0-9\s-]+$', cleaned):
+                raise serializers.ValidationError("Invalid characters in trim.")
+            return cleaned
+        return value
+
+    def validate_description(self, value):
+        if value:
+            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+            return cleaned
+        return value
+
     def validate_status(self, value):
         valid_statuses = [c[0] for c in Car.STATUS_CHOICES]
         cleaned = bleach.clean(value.strip(), tags=[], strip=True)
