@@ -368,7 +368,8 @@ class CarSerializer(serializers.ModelSerializer):
         return value
 
     def validate_model_ref(self, value):
-        if value and value.make != self.initial_data.get('make_ref'):
+        make_ref_id = self.initial_data.get('make_ref')
+        if value and make_ref_id and value.make.id != int(make_ref_id):
             raise serializers.ValidationError("Selected model must belong to the selected make.")
         return value
 
