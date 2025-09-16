@@ -229,6 +229,15 @@ class FavoriteCar(models.Model):
     def __str__(self):
         return f"{self.user.email} favors {self.car}"
 
+class CarView(models.Model):
+    car = models.ForeignKey(Car, on_delete=models.CASCADE, related_name="views")
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)  # for anonymous users
+    viewed_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user or self.ip_address} viewed {self.car}"
+
 class Payment(models.Model):
     PAYMENT_TYPES = (
         ('commission', 'Commission'),

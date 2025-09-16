@@ -9,11 +9,13 @@ from rest_framework.viewsets import ReadOnlyModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import viewsets, mixins
 from rolepermissions.checkers import has_role
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiExample, OpenApiResponse
 from django.db.models import Count, Avg, Q
-from ..models import Car, CarMake, CarModel, FavoriteCar
-from .serializers import CarSerializer, VerifyCarSerializer, BidSerializer, PaymentSerializer, CarMakeSerializer, CarModelSerializer, FavoriteCarSerializer
-from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealerOrBroker
+from ..models import Car, CarMake, CarModel, FavoriteCar,CarView
+from .serializers import (CarSerializer, VerifyCarSerializer, BidSerializer, PaymentSerializer, CarMakeSerializer,
+                          CarModelSerializer, FavoriteCarSerializer, CarViewSerializer, CarViewAnalyticsSerializer
+                          )
+from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealerOrBroker, IsSuperAdmin
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 
@@ -532,9 +534,91 @@ class CarViewSet(ModelViewSet):
             "model_stats": list(model_stats)
         })
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Favorites"],
+        description="List all favorite cars for the authenticated user. User must have the buyer role.",
+        responses={
+            200: FavoriteCarSerializer(many=True),
+            403: OpenApiResponse(
+                response={"type": "object", "properties": {"detail": {"type": "string"}}},
+                description="User does not have the buyer role.",
+                examples=[
+                    OpenApiExample("Forbidden", value={"detail": "User does not have buyer role."})
+                ]
+            )
+        }
+    ),
+    create=extend_schema(
+        tags=["Favorites"],
+        description="Add a car to the user's favorites. User must have the buyer role.",
+        request=FavoriteCarSerializer,
+        responses={
+            201: FavoriteCarSerializer,
+            400: OpenApiResponse(
+                response={"type": "object", "properties": {"detail": {"type": "string"}}},
+                description="Invalid input, e.g., missing or invalid car_id.",
+                examples=[
+                    OpenApiExample("Invalid input", value={"detail": "Invalid car_id"})
+                ]
+            ),
+            403: OpenApiResponse(
+                response={"type": "object", "properties": {"detail": {"type": "string"}}},
+                description="User does not have the buyer role.",
+                examples=[
+                    OpenApiExample("Forbidden", value={"detail": "User does not have buyer role."})
+                ]
+            )
+        }
+    ),
+    retrieve=extend_schema(
+        tags=["Favorites"],
+        description="Retrieve a specific favorite car entry. User must be the owner and have the buyer role.",
+        responses={
+            200: FavoriteCarSerializer,
+            403: OpenApiResponse(
+                response={"type": "object", "properties": {"detail": {"type": "string"}}},
+                description="User does not have the buyer role.",
+                examples=[
+                    OpenApiExample("Forbidden", value={"detail": "User does not have buyer role."})
+                ]
+            ),
+            404: OpenApiResponse(
+                response={"type": "object", "properties": {"detail": {"type": "string"}}},
+                description="Favorite car not found or user does not have permission.",
+                examples=[
+                    OpenApiExample("Not Found", value={"detail": "Favorite car not found or you do not have permission to view it."})
+                ]
+            )
+        }
+    ),
+    destroy=extend_schema(
+        tags=["Favorites"],
+        description="Remove a car from the user's favorites. User must be the owner and have the buyer role.",
+        responses={
+            204: None,
+            403: OpenApiResponse(
+                response={"type": "object", "properties": {"detail": {"type": "string"}}},
+                description="User does not have the buyer role.",
+                examples=[
+                    OpenApiExample("Forbidden", value={"detail": "User does not have buyer role."})
+                ]
+            ),
+            404: OpenApiResponse(
+                response={"type": "object", "properties": {"detail": {"type": "string"}}},
+                description="Favorite car not found or user does not have permission.",
+                examples=[
+                    OpenApiExample("Not Found", value={"detail": "Favorite car not found or you do not have permission to delete it."})
+                ]
+            )
+        }
+    )
+)
 class FavoriteCarViewSet(
-    mixins.CreateModelMixin, mixins.RetrieveModelMixin,
-    mixins.DestroyModelMixin, mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.DestroyModelMixin,
+    mixins.ListModelMixin,
     viewsets.GenericViewSet
 ):
     permission_classes = [IsAuthenticated]
@@ -545,11 +629,6 @@ class FavoriteCarViewSet(
         # Restrict to favorites by the authenticated user
         return self.queryset.filter(user=self.request.user)
 
-    @extend_schema(
-        tags=["Favorites"],
-        description="List all favorite cars for the authenticated user.",
-        responses={200: FavoriteCarSerializer(many=True)}
-    )
     def list(self, request, *args, **kwargs):
         if not has_role(request.user, 'buyer'):
             return Response(
@@ -558,12 +637,6 @@ class FavoriteCarViewSet(
             )
         return super().list(request, *args, **kwargs)
 
-    @extend_schema(
-        tags=["Favorites"],
-        description="Add a car to the user's favorites. User must have buyer role.",
-        request=FavoriteCarSerializer,
-        responses={201: FavoriteCarSerializer}
-    )
     def create(self, request, *args, **kwargs):
         if not has_role(request.user, 'buyer'):
             return Response(
@@ -576,11 +649,6 @@ class FavoriteCarViewSet(
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @extend_schema(
-        tags=["Favorites"],
-        description="Retrieve a specific favorite car entry. User must be the owner.",
-        responses={200: FavoriteCarSerializer}
-    )
     def retrieve(self, request, *args, **kwargs):
         if not has_role(request.user, 'buyer'):
             return Response(
@@ -597,11 +665,6 @@ class FavoriteCarViewSet(
                 status=status.HTTP_404_NOT_FOUND
             )
 
-    @extend_schema(
-        tags=["Favorites"],
-        description="Remove a car from the user's favorites. User must be the owner.",
-        responses={204: None}
-    )
     def destroy(self, request, *args, **kwargs):
         if not has_role(request.user, 'buyer'):
             return Response(
@@ -617,6 +680,211 @@ class FavoriteCarViewSet(
                 {"detail": "Favorite car not found or you do not have permission to delete it."},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+@extend_schema_view(
+    create=extend_schema(
+        tags=["Car Views"],
+        description="Create a car view record for a specific car. Records the user (if authenticated) or IP address (if anonymous).",
+        request=CarViewSerializer,
+        responses={
+            201: CarViewSerializer,
+            400: OpenApiResponse(
+                response={"type": "object", "properties": {"error": {"type": "string"}}},
+                description="Invalid input, e.g., missing or invalid car_id.",
+                examples=[
+                    OpenApiExample("Invalid car_id", value={"error": "Invalid car_id"})
+                ]
+            )
+        }
+    ),
+    list=extend_schema(
+        tags=["Car Views"],
+        description="List all car view records. Typically restricted to super admins or users with specific permissions.",
+        responses={
+            200: CarViewSerializer(many=True),
+            403: OpenApiResponse(
+                response={"type": "object", "properties": {"error": {"type": "string"}}},
+                description="User lacks permission to access this endpoint.",
+                examples=[
+                    OpenApiExample("Forbidden", value={"error": "You do not have permission to perform this action."})
+                ]
+            )
+        }
+    ),
+    retrieve=extend_schema(
+        tags=["Car Views"],
+        description="Retrieve a specific car view record by ID. Typically restricted to super admins or users with specific permissions.",
+        responses={
+            200: CarViewSerializer,
+            403: OpenApiResponse(
+                response={"type": "object", "properties": {"error": {"type": "string"}}},
+                description="User lacks permission to access this endpoint.",
+                examples=[
+                    OpenApiExample("Forbidden", value={"error": "You do not have permission to perform this action."})
+                ]
+            ),
+            404: OpenApiResponse(
+                response={"type": "object", "properties": {"error": {"type": "string"}}},
+                description="Car view not found.",
+                examples=[
+                    OpenApiExample("Not Found", value={"error": "Not found."})
+                ]
+            )
+        }
+    ),
+    update=extend_schema(
+        tags=["Car Views"],
+        description="Updating car view records is not allowed.",
+        responses={
+            405: OpenApiResponse(
+                response={"type": "object", "properties": {"error": {"type": "string"}}},
+                description="Method not allowed.",
+                examples=[
+                    OpenApiExample("Method Not Allowed", value={"error": "Updating views is not allowed."})
+                ]
+            )
+        }
+    ),
+    partial_update=extend_schema(
+        tags=["Car Views"],
+        description="Partially updating car view records is not allowed.",
+        responses={
+            405: OpenApiResponse(
+                response={"type": "object", "properties": {"error": {"type": "string"}}},
+                description="Method not allowed.",
+                examples=[
+                    OpenApiExample("Method Not Allowed", value={"error": "Updating views is not allowed."})
+                ]
+            )
+        }
+    ),
+    destroy=extend_schema(
+        tags=["Car Views"],
+        description="Deleting car view records is not allowed.",
+        responses={
+            405: OpenApiResponse(
+                response={"type": "object", "properties": {"error": {"type": "string"}}},
+                description="Method not allowed.",
+                examples=[
+                    OpenApiExample("Method Not Allowed", value={"error": "Deleting views is not allowed."})
+                ]
+            )
+        }
+    ),
+    analytics=extend_schema(
+        tags=["Analytics"],
+        description="Retrieve car view analytics for all cars, showing total views per car. Accessible only to super admins.",
+        responses={
+            200: CarViewAnalyticsSerializer(many=True),
+            403: OpenApiResponse(
+                response={"type": "object", "properties": {"error": {"type": "string"}}},
+                description="User is not a super admin.",
+                examples=[
+                    OpenApiExample("Forbidden", value={"error": "Only super admins can access this endpoint."})
+                ]
+            )
+        }
+    ),
+    dealer_analytics=extend_schema(
+        tags=["Analytics"],
+        description="Retrieve car view analytics for cars associated with the requesting dealer, showing total views per car.",
+        responses={
+            200: CarViewAnalyticsSerializer(many=True),
+            403: OpenApiResponse(
+                response={"type": "object", "properties": {"error": {"type": "string"}}},
+                description="User is not a dealer.",
+                examples=[
+                    OpenApiExample("Forbidden", value={"error": "Only dealers can access this analytics."})
+                ]
+            ),
+            404: OpenApiResponse(
+                response={"type": "object", "properties": {"error": {"type": "string"}}},
+                description="Dealer profile not found.",
+                examples=[
+                    OpenApiExample("Not Found", value={"error": "Dealer profile not found."})
+                ]
+            )
+        }
+    ),
+    broker_analytics=extend_schema(
+        tags=["Analytics"],
+        description="Retrieve car view analytics for cars associated with the requesting broker, showing total views per car.",
+        responses={
+            200: CarViewAnalyticsSerializer(many=True),
+            403: OpenApiResponse(
+                response={"type": "object", "properties": {"error": {"type": "string"}}},
+                description="User is not a broker.",
+                examples=[
+                    OpenApiExample("Forbidden", value={"error": "Only brokers can access this analytics."})
+                ]
+            ),
+            404: OpenApiResponse(
+                response={"type": "object", "properties": {"error": {"type": "string"}}},
+                description="Broker profile not found.",
+                examples=[
+                    OpenApiExample("Not Found", value={"error": "Broker profile not found."})
+                ]
+            )
+        }
+    )
+)
+class CarViewViewSet(viewsets.ModelViewSet):
+    queryset = CarView.objects.all()
+    serializer_class = CarViewSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    http_method_names = ['get', 'post']  # Restrict to GET and POST only
+
+    def perform_create(self, serializer):
+        ip_address = self.request.META.get('REMOTE_ADDR')
+        user = self.request.user if self.request.user.is_authenticated else None
+        serializer.save(user=user, ip_address=ip_address)
+
+    def update(self, request, *args, **kwargs):
+        return Response({"error": "Updating views is not allowed."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def partial_update(self, request, *args, **kwargs):
+        return Response({"error": "Updating views is not allowed."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def destroy(self, request, *args, **kwargs):
+        return Response({"error": "Deleting views is not allowed."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdminOrAdminOrDealerOrBroker])
+    def analytics(self, request):
+        if has_role(request.user, ['super_admin']):
+            analytics = CarView.objects.values('car__id', 'car__make__name').annotate(
+                total_views=Count('id')
+            ).order_by('-total_views')
+            serializer = CarViewAnalyticsSerializer(analytics, many=True)
+            return Response(serializer.data)
+        return Response({"error": "Only super admins can access this endpoint."}, status=403)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdminOrAdminOrDealerOrBroker], url_path='dealer-analytics')
+    def dealer_analytics(self, request):
+        if not has_role(request.user, ['dealer']):
+            return Response({"error": "Only dealers can access this analytics."}, status=403)
+        try:
+            dealer = DealerProfile.objects.get(user=request.user)
+        except DealerProfile.DoesNotExist:
+            return Response({"error": "Dealer profile not found."}, status=404)
+        analytics = CarView.objects.filter(car__dealer=dealer).values('car__id', 'car__make__name').annotate(
+            total_views=Count('id')
+        ).order_by('-total_views')
+        serializer = CarViewAnalyticsSerializer(analytics, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdminOrAdminOrDealerOrBroker], url_path='broker-analytics')
+    def broker_analytics(self, request):
+        if not has_role(request.user, ['broker']):
+            return Response({"error": "Only brokers can access this analytics."}, status=403)
+        try:
+            broker = BrokerProfile.objects.get(user=request.user)
+        except BrokerProfile.DoesNotExist:
+            return Response({"error": "Broker profile not found."}, status=404)
+        analytics = CarView.objects.filter(car__broker=broker).values('car__id', 'car__make__name').annotate(
+            total_views=Count('id')
+        ).order_by('-total_views')
+        serializer = CarViewAnalyticsSerializer(analytics, many=True)
+        return Response(serializer.data)
 
 # CarImage ViewSet
 '''

@@ -3,7 +3,7 @@ from django.db.models import Avg
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
-from ..models import Car, CarImage, Payment, CarMake, CarModel, FavoriteCar
+from ..models import Car, CarImage, Payment, CarMake, CarModel, FavoriteCar, CarView
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.bids.api.serializers import BidSerializer
@@ -502,6 +502,20 @@ class FavoriteCarSerializer(serializers.ModelSerializer):
         if not value.is_available:
             raise serializers.ValidationError("This car is not available to favorite.")
         return value
+
+class CarViewSerializer(serializers.ModelSerializer):
+    car_id = serializers.PrimaryKeyRelatedField(source='car', read_only=True)
+    user_id = serializers.PrimaryKeyRelatedField(source='user', read_only=True, allow_null=True)
+
+    class Meta:
+        model = CarView
+        fields = ['id', 'car_id', 'user_id', 'ip_address', 'viewed_at']
+        read_only_fields = ['viewed_at']
+
+class CarViewAnalyticsSerializer(serializers.Serializer):
+    car_id = serializers.IntegerField(source='car__id')
+    car_make = serializers.CharField(source='car__make__name')
+    total_views = serializers.IntegerField()
 
     def create(self, validated_data):
         # Automatically set the user to the authenticated user
