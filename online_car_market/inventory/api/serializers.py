@@ -3,10 +3,11 @@ from django.db.models import Avg
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
-from ..models import Car, CarImage, Payment, CarMake, CarModel, FavoriteCar, CarView
+from ..models import Car, CarImage, CarMake, CarModel, FavoriteCar, CarView
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.bids.api.serializers import BidSerializer
+from online_car_market.payment.models import Payment
 from django.contrib.auth import get_user_model
 import re
 import bleach

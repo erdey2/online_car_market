@@ -5,10 +5,11 @@ from online_car_market.users.models import User, Profile
 from rolepermissions.checkers import has_role
 
 class BrokerProfile(models.Model):
+    profile = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name='broker_profile')
     national_id = models.CharField(max_length=100, unique=True)
     telebirr_account = models.CharField(max_length=100)
-    profile = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name='broker_profile')
     is_verified = models.BooleanField(default=False)
+    can_post = models.BooleanField(default=False)  # Indicates if broker has paid to post cars
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

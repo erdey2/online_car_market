@@ -238,22 +238,5 @@ class CarView(models.Model):
     def __str__(self):
         return f"{self.user or self.ip_address} viewed {self.car}"
 
-class Payment(models.Model):
-    PAYMENT_TYPES = (
-        ('commission', 'Commission'),
-        ('purchase', 'Purchase'),
-        ('verification_fee', 'Verification Fee'),  # For brokers only
-    )
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
-    car = models.ForeignKey(Car, on_delete=models.CASCADE, null=True, blank=True)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    payment_type = models.CharField(max_length=20, choices=PAYMENT_TYPES)
-    is_confirmed = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    transaction_id = models.CharField(max_length=100, unique=True)  # From payment gateway
-
-    def __str__(self):
-        return f"{self.payment_type} of {self.amount} by {self.user.email}"
-
 
 

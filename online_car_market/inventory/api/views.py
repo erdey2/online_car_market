@@ -10,14 +10,15 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import viewsets, mixins
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiExample, OpenApiResponse
-from django.db.models import Count, Avg, Q
-from ..models import Car, CarMake, CarModel, FavoriteCar,CarView
+from django.db.models import Count, Avg, Q, F
+from ..models import Car, CarMake, CarModel, FavoriteCar, CarView
 from .serializers import (CarSerializer, VerifyCarSerializer, BidSerializer, PaymentSerializer, CarMakeSerializer,
                           CarModelSerializer, FavoriteCarSerializer, CarViewSerializer, CarViewAnalyticsSerializer
                           )
 from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealerOrBroker, IsSuperAdmin
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
+from online_car_market.payment.models import Payment
 
 
 @extend_schema_view(
@@ -80,6 +81,7 @@ class CarModelViewSet(ModelViewSet):
     queryset = CarModel.objects.select_related('make').all()
     serializer_class = CarModelSerializer
 
+
 @extend_schema_view(
     list=extend_schema(
         tags=["Dealers - Inventory"],
@@ -92,92 +94,60 @@ class CarModelViewSet(ModelViewSet):
                 description='Filter cars by broker email address.',
                 required=False
             ),
-        ]
+        ],
+        responses={200: CarSerializer(many=True)}
     ),
     retrieve=extend_schema(
         tags=["Dealers - Inventory"],
-        description="Retrieve a specific car if verified or user is admin."
+        description="Retrieve a specific car if verified or user is admin.",
+        responses={200: CarSerializer}
     ),
     create=extend_schema(
         tags=["Dealers - Inventory"],
-        description="Create a car listing (dealers/brokers/admins only)."
+        description="Create a car listing (dealers/brokers/admins only). Brokers must have paid (can_post=True).",
+        request=CarSerializer,
+        responses={201: CarSerializer}
     ),
     update=extend_schema(
         tags=["Dealers - Inventory"],
-        description="Update a car listing (dealers/brokers/admins only)."
+        description="Update a car listing (dealers/brokers/admins only).",
+        request=CarSerializer,
+        responses={200: CarSerializer}
     ),
     partial_update=extend_schema(
         tags=["Dealers - Inventory"],
-        description="Partially update a car listing."
+        description="Partially update a car listing.",
+        request=CarSerializer,
+        responses={200: CarSerializer}
     ),
     destroy=extend_schema(
         tags=["Dealers - Inventory"],
-        description="Delete a car listing (dealers/brokers/admins only)."
+        description="Delete a car listing (dealers/brokers/admins only).",
+        responses={204: None}
     ),
 )
-@extend_schema_view(
-    list=extend_schema(
-        tags=["Dealers - Inventory"],
-        description="List all verified cars for non-admins or all cars for admins, with verified cars prioritized.",
-        parameters=[
-            OpenApiParameter(
-                name='broker_email',
-                type=str,
-                location='query',
-                description='Filter cars by broker email address.',
-                required=False
-            ),
-        ]
-    ),
-    retrieve=extend_schema(
-        tags=["Dealers - Inventory"],
-        description="Retrieve a specific car if verified or user is admin."
-    ),
-    create=extend_schema(
-        tags=["Dealers - Inventory"],
-        description="Create a car listing (dealers/brokers/admins only)."
-    ),
-    update=extend_schema(
-        tags=["Dealers - Inventory"],
-        description="Update a car listing (dealers/brokers/admins only)."
-    ),
-    partial_update=extend_schema(
-        tags=["Dealers - Inventory"],
-        description="Partially update a car listing."
-    ),
-    destroy=extend_schema(
-        tags=["Dealers - Inventory"],
-        description="Delete a car listing (dealers/brokers/admins only)."
-    ),
-)
-class CarViewSet(ModelViewSet):
+class CarViewSet(viewsets.ModelViewSet):
     serializer_class = CarSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
     parser_classes = [MultiPartParser, FormParser]
+    queryset = Car.objects.all()
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Car.objects.all()
-
+        queryset = self.queryset
         # Apply role-based filtering
         if has_role(user, ['super_admin', 'admin']):
             queryset = queryset.order_by('-priority', '-created_at')
         elif has_role(user, 'dealer'):
             queryset = queryset.filter(
-                Q(dealer__user=user) | Q(verification_status='verified')
+                Q(dealer__profile__user=user) | Q(verification_status='verified')
             ).order_by('-priority', '-created_at')
         elif has_role(user, 'broker'):
             queryset = queryset.filter(
                 Q(broker__profile__user=user) | Q(verification_status='verified')
             ).order_by('-priority', '-created_at')
-        elif has_role(user, 'buyer') or not user.is_authenticated:
-            queryset = queryset.filter(
-                verification_status='verified'
-            ).order_by('-priority', '-created_at')
-        else:
-            queryset = queryset.filter(
-                verification_status='verified'
-            ).order_by('-priority', '-created_at')
+        else:  # buyer or unauthenticated
+            queryset = queryset.filter(verification_status='verified').order_by('-priority', '-created_at')
 
         # Filter by broker_email query parameter
         broker_email = self.request.query_params.get('broker_email')
@@ -187,62 +157,67 @@ class CarViewSet(ModelViewSet):
                 queryset = queryset.filter(broker=broker_profile)
             except BrokerProfile.DoesNotExist:
                 queryset = queryset.none()
-
         return queryset
 
     def get_permissions(self):
-        if self.action in ["create", "update", "partial_update", "destroy", "bid", "pay"]:
+        if self.action in ["create", "update", "partial_update", "destroy", "bid", "pay", "broker_payment"]:
             return [IsSuperAdminOrAdminOrDealerOrBroker()]
         return super().get_permissions()
 
     def create(self, request, *args, **kwargs):
+        if has_role(request.user, 'broker'):
+            try:
+                broker_profile = BrokerProfile.objects.get(profile__user=request.user)
+                if not broker_profile.can_post:
+                    return Response(
+                        {"detail": "Broker must complete payment to post cars."},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            except BrokerProfile.DoesNotExist:
+                return Response(
+                    {"detail": "Broker profile not found."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         car = serializer.save()
         return Response(self.get_serializer(car).data, status=status.HTTP_201_CREATED)
 
-    # verify
     @extend_schema(
         tags=["Dealers - Inventory"],
         description="Verify a car listing and set priority (admin/super_admin only).",
-        responses=VerifyCarSerializer,
+        request=VerifyCarSerializer,
+        responses={200: VerifyCarSerializer}
     )
-    @action(
-        detail=True,
-        methods=['patch'],
-        serializer_class=VerifyCarSerializer,
-    )
+    @action(detail=True, methods=['patch'], serializer_class=VerifyCarSerializer)
     def verify(self, request, pk=None):
+        if not has_role(request.user, ['super_admin', 'admin']):
+            return Response(
+                {"detail": "Only admins can verify cars."},
+                status=status.HTTP_403_FORBIDDEN
+            )
         car = self.get_object()
         serializer = self.get_serializer(car, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         car.verification_status = serializer.validated_data['verification_status']
-        if car.verification_status == 'verified':
-            car.priority = True
-        else:
-            car.priority = False
+        car.priority = (car.verification_status == 'verified')
         car.save()
         return Response(serializer.data)
 
-    # filter
     @extend_schema(
         tags=["Dealers - Inventory"],
         parameters=[
-            OpenApiParameter(name="fuel_type", type=OpenApiTypes.STR, location="query",
-                             description="Fuel type (electric, hybrid, petrol, diesel)"),
-            OpenApiParameter(name="price_min", type=OpenApiTypes.FLOAT, location="query",
-                             description="Minimum price"),
-            OpenApiParameter(name="price_max", type=OpenApiTypes.FLOAT, location="query",
-                             description="Maximum price"),
-            OpenApiParameter(name="sale_type", type=OpenApiTypes.STR, location="query",
-                             description="Sale type (fixed_price, auction)"),
-            OpenApiParameter(name="make_ref", type=OpenApiTypes.INT, location="query",
-                             description="Car make ID"),
-            OpenApiParameter(name="model_ref", type=OpenApiTypes.INT, location="query",
-                             description="Car model ID"),
+            OpenApiParameter(name="fuel_type", type=OpenApiTypes.STR, location="query", description="Fuel type (electric, hybrid, petrol, diesel)"),
+            OpenApiParameter(name="price_min", type=OpenApiTypes.FLOAT, location="query", description="Minimum price"),
+            OpenApiParameter(name="price_max", type=OpenApiTypes.FLOAT, location="query", description="Maximum price"),
+            OpenApiParameter(name="sale_type", type=OpenApiTypes.STR, location="query", description="Sale type (fixed_price, auction)"),
+            OpenApiParameter(name="make_ref", type=OpenApiTypes.INT, location="query", description="Car make ID"),
+            OpenApiParameter(name="model_ref", type=OpenApiTypes.INT, location="query", description="Car model ID"),
+            OpenApiParameter(name="make", type=OpenApiTypes.STR, location="query", description="Car make name"),
+            OpenApiParameter(name="model", type=OpenApiTypes.STR, location="query", description="Car model name"),
         ],
         description="Filter verified cars by fuel type, price range, sale type, make, or model, with verified cars prioritized.",
-        responses=CarSerializer(many=True),
+        responses={200: CarSerializer(many=True)}
     )
     @action(detail=False, methods=['get'], serializer_class=CarSerializer)
     def filter(self, request):
@@ -258,11 +233,16 @@ class CarViewSet(ModelViewSet):
 
         valid_fuel_types = [choice[0] for choice in Car.FUEL_TYPES]
         if fuel_type and fuel_type not in valid_fuel_types:
-            return Response({"error": f"Invalid fuel type. Must be one of: {', '.join(valid_fuel_types)}."}, status=400)
-
+            return Response(
+                {"error": f"Invalid fuel type. Must be one of: {', '.join(valid_fuel_types)}."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         valid_sale_types = [choice[0] for choice in Car.SALE_TYPES]
         if sale_type and sale_type not in valid_sale_types:
-            return Response({"error": f"Invalid sale type. Must be one of: {', '.join(valid_sale_types)}."}, status=400)
+            return Response(
+                {"error": f"Invalid sale type. Must be one of: {', '.join(valid_sale_types)}."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         if fuel_type:
             queryset = queryset.filter(fuel_type=fuel_type)
@@ -270,39 +250,44 @@ class CarViewSet(ModelViewSet):
             try:
                 make_ref = int(make_ref)
                 if not CarMake.objects.filter(id=make_ref).exists():
-                    return Response({"error": "Invalid make ID."}, status=400)
+                    return Response({"error": "Invalid make ID."}, status=status.HTTP_400_BAD_REQUEST)
                 queryset = queryset.filter(make_ref=make_ref)
             except ValueError:
-                return Response({"error": "Make ID must be a valid integer."}, status=400)
+                return Response({"error": "Make ID must be a valid integer."}, status=status.HTTP_400_BAD_REQUEST)
         if model_ref:
             try:
                 model_ref = int(model_ref)
                 if not CarModel.objects.filter(id=model_ref).exists():
-                    return Response({"error": "Invalid model ID."}, status=400)
+                    return Response({"error": "Invalid model ID."}, status=status.HTTP_400_BAD_REQUEST)
                 queryset = queryset.filter(model_ref=model_ref)
             except ValueError:
-                return Response({"error": "Model ID must be a valid integer."}, status=400)
-
+                return Response({"error": "Model ID must be a valid integer."}, status=status.HTTP_400_BAD_REQUEST)
         if make:
-            queryset = queryset.filter(Q(make=make) | Q(make_ref__name=make))
+            if not CarMake.objects.filter(name__iexact=make).exists():
+                return Response({"error": "Invalid make name."}, status=status.HTTP_400_BAD_REQUEST)
+            queryset = queryset.filter(Q(make=make) | Q(make_ref__name__iexact=make))
         if model:
-            queryset = queryset.filter(Q(model=model) | Q(model_ref__name=model))
-
+            if not CarModel.objects.filter(name__iexact=model).exists():
+                return Response({"error": "Invalid model name."}, status=status.HTTP_400_BAD_REQUEST)
+            queryset = queryset.filter(Q(model=model) | Q(model_ref__name__iexact=model))
         try:
             if price_min:
                 price_min = float(price_min)
                 if price_min < 0:
-                    return Response({"error": "Minimum price cannot be negative."}, status=400)
+                    return Response({"error": "Minimum price cannot be negative."}, status=status.HTTP_400_BAD_REQUEST)
                 queryset = queryset.filter(price__gte=price_min)
             if price_max:
                 price_max = float(price_max)
                 if price_max < 0:
-                    return Response({"error": "Maximum price cannot be negative."}, status=400)
+                    return Response({"error": "Maximum price cannot be negative."}, status=status.HTTP_400_BAD_REQUEST)
                 if price_min and price_max < price_min:
-                    return Response({"error": "Maximum price cannot be less than minimum price."}, status=400)
+                    return Response(
+                        {"error": "Maximum price cannot be less than minimum price."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
                 queryset = queryset.filter(price__lte=price_max)
         except ValueError:
-            return Response({"error": "Price parameters must be valid numbers."}, status=400)
+            return Response({"error": "Price parameters must be valid numbers."}, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
@@ -310,34 +295,63 @@ class CarViewSet(ModelViewSet):
     @extend_schema(
         tags=["Dealers - Inventory"],
         description="Place a bid on an auction car.",
-        responses=BidSerializer
+        request=BidSerializer,
+        responses={201: BidSerializer}
     )
     @action(detail=True, methods=['post'], serializer_class=BidSerializer)
     def bid(self, request, pk=None):
         car = self.get_object()
+        if car.sale_type != 'auction':
+            return Response(
+                {"detail": "Bids can only be placed on auction cars."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         serializer = self.get_serializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         bid = serializer.save(car=car)
-        return Response(BidSerializer(bid).data)
+        return Response(BidSerializer(bid).data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
         tags=["Dealers - Inventory"],
-        description="Record a payment (commission, purchase, or verification fee for brokers).",
-        responses=PaymentSerializer
+        description="Record a car-specific payment (e.g., commission or purchase).",
+        request=PaymentSerializer,
+        responses={201: PaymentSerializer}
     )
     @action(detail=True, methods=['post'], serializer_class=PaymentSerializer)
     def pay(self, request, pk=None):
-        car = self.get_object() if pk else None
+        car = self.get_object()
         serializer = self.get_serializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         payment = serializer.save(user=request.user, car=car)
-        if payment.payment_type == 'verification_fee' and payment.is_confirmed and has_role(request.user, 'broker'):
-            broker = BrokerProfile.objects.get(user=request.user)
-            broker.is_verified = True
-            broker.save()
-            Car.objects.filter(broker=broker, verification_status='pending').update(verification_status='verified',
-                                                                                    priority=True)
-        return Response(PaymentSerializer(payment).data)
+        return Response(PaymentSerializer(payment).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Record a payment for brokers to enable car posting.",
+        request=PaymentSerializer,
+        responses={201: PaymentSerializer}
+    )
+    @action(detail=False, methods=['post'], serializer_class=PaymentSerializer)
+    def broker_payment(self, request):
+        if not has_role(request.user, 'broker'):
+            return Response(
+                {"detail": "Only brokers can make posting payments."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        serializer = self.get_serializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        try:
+            broker = BrokerProfile.objects.get(profile__user=request.user)
+            payment = serializer.save(user=request.user, broker=broker)
+            if payment.status == 'completed':
+                broker.can_post = True
+                broker.save()
+        except BrokerProfile.DoesNotExist:
+            return Response(
+                {"detail": "Broker profile not found."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        return Response(PaymentSerializer(payment).data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
         tags=["Analytics"],
@@ -392,19 +406,21 @@ class CarViewSet(ModelViewSet):
     @action(detail=False, methods=['get'])
     def analytics(self, request):
         if not has_role(request.user, ['super_admin']):
-            return Response({"error": "Only super admins can access analytics."}, status=403)
+            return Response({"error": "Only super admins can access analytics."}, status=status.HTTP_403_FORBIDDEN)
         total_cars = Car.objects.count()
         average_price = Car.objects.filter(price__isnull=False).aggregate(Avg('price'))['price__avg'] or 0
         dealer_stats = DealerProfile.objects.annotate(
             total_cars=Count('cars'),
             sold_cars=Count('cars', filter=Q(cars__status='sold')),
-            avg_price=Avg('cars__price')
-        ).values('id', 'name', 'total_cars', 'sold_cars', 'avg_price')
+            avg_price=Avg('cars__price'),
+            dealer_name=F('company_name')
+        ).values('id', 'dealer_name', 'total_cars', 'sold_cars', 'avg_price')
         broker_stats = BrokerProfile.objects.annotate(
             total_cars=Count('cars'),
             sold_cars=Count('cars', filter=Q(cars__status='sold')),
-            avg_price=Avg('cars__price')
-        ).values('id', 'name', 'total_cars', 'sold_cars', 'avg_price')
+            avg_price=Avg('cars__price'),
+            broker_name = F('profile__user__email')
+        ).values('id', 'broker_name', 'total_cars', 'sold_cars', 'avg_price')
         make_stats = CarMake.objects.annotate(
             total_cars=Count('cars'),
             avg_price=Avg('cars__price')
@@ -442,17 +458,20 @@ class CarViewSet(ModelViewSet):
     @action(detail=False, methods=['get'], url_path='buyer-analytics')
     def buyer_analytics(self, request):
         if not has_role(request.user, ['buyer']):
-            return Response({"error": "Only buyers can access this analytics."}, status=403)
-        cheap_cars = Car.objects.exclude(status='sold').filter(price__isnull=False).order_by('price')[:10].values('id',
-                                                                                                                  'make__name',
-                                                                                                                  'price')
-        return Response({
-            "cheap_cars": list(cheap_cars)
-        })
+            return Response({"error": "Only buyers can access this analytics."}, status=status.HTTP_403_FORBIDDEN)
+
+        cheap_cars = (
+            Car.objects.exclude(status='sold')
+            .filter(price__isnull=False, verification_status='verified')
+            .annotate(make_name=F('make_ref__name'))  # alias
+            .order_by('price')[:10]
+            .values('id', 'make_name', 'price')
+        )
+        return Response({"cheap_cars": list(cheap_cars)})
 
     @extend_schema(
         tags=["Analytics"],
-        description="Get analytics for brokers, including total money made.",
+        description="Get analytics for brokers, including total money made and payment stats.",
         responses={
             200: {
                 "type": "object",
@@ -460,7 +479,15 @@ class CarViewSet(ModelViewSet):
                     "total_cars": {"type": "integer"},
                     "sold_cars": {"type": "integer"},
                     "average_price": {"type": "number"},
-                    "total_money_made": {"type": "number"}
+                    "total_money_made": {"type": "number"},
+                    "payment_stats": {
+                        "type": "object",
+                        "properties": {
+                            "total_payments": {"type": "integer"},
+                            "completed_payments": {"type": "integer"},
+                            "total_amount_paid": {"type": "number"}
+                        }
+                    }
                 }
             }
         }
@@ -468,21 +495,30 @@ class CarViewSet(ModelViewSet):
     @action(detail=False, methods=['get'], url_path='broker-analytics')
     def broker_analytics(self, request):
         if not has_role(request.user, ['broker']):
-            return Response({"error": "Only brokers can access this analytics."}, status=403)
+            return Response({"error": "Only brokers can access this analytics."}, status=status.HTTP_403_FORBIDDEN)
         try:
-            broker = BrokerProfile.objects.get(user=request.user)
+            broker = BrokerProfile.objects.get(profile__user=request.user)
         except BrokerProfile.DoesNotExist:
-            return Response({"error": "Broker profile not found."}, status=404)
+            return Response({"error": "Broker profile not found."}, status=status.HTTP_404_NOT_FOUND)
         total_cars = broker.cars.count()
         sold_cars = broker.cars.filter(status='sold').count()
         average_price = broker.cars.filter(price__isnull=False).aggregate(Avg('price'))['price__avg'] or 0
-        total_money_made = broker.cars.filter(status='sold', price__isnull=False).aggregate(Sum('price'))[
-                               'price__sum'] or 0
+        total_money_made = broker.cars.filter(status='sold', price__isnull=False).aggregate(Sum('price'))['price__sum'] or 0
+        payment_stats = Payment.objects.filter(broker=broker).aggregate(
+            total_payments=Count('id'),
+            completed_payments=Count('id', filter=Q(status='completed')),
+            total_amount_paid=Sum('amount', filter=Q(status='completed'))
+        )
         return Response({
             "total_cars": total_cars,
             "sold_cars": sold_cars,
             "average_price": round(average_price, 2),
-            "total_money_made": round(total_money_made, 2)
+            "total_money_made": round(total_money_made, 2),
+            "payment_stats": {
+                "total_payments": payment_stats['total_payments'],
+                "completed_payments": payment_stats['completed_payments'],
+                "total_amount_paid": round(payment_stats['total_amount_paid'] or 0, 2)
+            }
         })
 
     @extend_schema(
@@ -501,6 +537,7 @@ class CarViewSet(ModelViewSet):
                             "type": "object",
                             "properties": {
                                 "make_name": {"type": "string"},
+                                "model_name": {"type": "string"},
                                 "total_sold": {"type": "integer"},
                                 "total_sales": {"type": "number"},
                                 "avg_price": {"type": "number"}
@@ -514,15 +551,17 @@ class CarViewSet(ModelViewSet):
     @action(detail=False, methods=['get'], url_path='dealer-analytics')
     def dealer_analytics(self, request):
         if not has_role(request.user, ['dealer']):
-            return Response({"error": "Only dealers can access this analytics."}, status=403)
+            return Response({"error": "Only dealers can access this analytics."}, status=status.HTTP_403_FORBIDDEN)
         try:
-            dealer = DealerProfile.objects.get(user=request.user)
+            dealer = DealerProfile.objects.get(profile__user=request.user)
         except DealerProfile.DoesNotExist:
-            return Response({"error": "Dealer profile not found."}, status=404)
+            return Response({"error": "Dealer profile not found."}, status=status.HTTP_404_NOT_FOUND)
         total_cars = dealer.cars.count()
         sold_cars = dealer.cars.filter(status='sold').count()
         average_price = dealer.cars.filter(price__isnull=False).aggregate(Avg('price'))['price__avg'] or 0
-        model_stats = dealer.cars.filter(status='sold', price__isnull=False).values('make__name').annotate(
+        model_stats = dealer.cars.filter(status='sold', price__isnull=False).values(
+            'make_ref__name', 'model_ref__name'
+        ).annotate(
             total_sold=Count('id'),
             total_sales=Sum('price'),
             avg_price=Avg('price')
@@ -531,7 +570,15 @@ class CarViewSet(ModelViewSet):
             "total_cars": total_cars,
             "sold_cars": sold_cars,
             "average_price": round(average_price, 2),
-            "model_stats": list(model_stats)
+            "model_stats": [
+                {
+                    "make_name": stat['make_ref__name'],
+                    "model_name": stat['model_ref__name'],
+                    "total_sold": stat['total_sold'],
+                    "total_sales": round(stat['total_sales'], 2),
+                    "avg_price": round(stat['avg_price'], 2)
+                } for stat in model_stats
+            ]
         })
 
 @extend_schema_view(

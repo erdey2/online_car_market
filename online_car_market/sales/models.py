@@ -22,6 +22,7 @@ class Lead(models.Model):
         ('closed', 'Closed')
     ], default='inquiry')
     assigned_sales = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='leads')
+    car = models.ForeignKey(Car, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

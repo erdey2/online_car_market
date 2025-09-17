@@ -106,6 +106,7 @@ LOCAL_APPS = [
     "online_car_market.brokers",
     "online_car_market.buyers",
     "online_car_market.otp_reset",
+    "online_car_market.payment",
 ]
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
