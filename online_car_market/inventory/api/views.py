@@ -83,9 +83,9 @@ class CarModelViewSet(ModelViewSet):
 
 
 @extend_schema_view(
-    list=extend_schema(
+list=extend_schema(
         tags=["Dealers - Inventory"],
-        description="List all verified cars for non-admins or all cars for admins, with verified cars prioritized.",
+        description="List all verified cars for any user. Authenticated users with roles (broker, dealer, admin) see additional cars based on their role.",
         parameters=[
             OpenApiParameter(
                 name='broker_email',
@@ -95,12 +95,21 @@ class CarModelViewSet(ModelViewSet):
                 required=False
             ),
         ],
-        responses={200: CarSerializer(many=True)}
+        responses={
+            200: CarSerializer(many=True),
+        }
     ),
     retrieve=extend_schema(
         tags=["Dealers - Inventory"],
-        description="Retrieve a specific car if verified or user is admin.",
-        responses={200: CarSerializer}
+        description="Retrieve a specific verified car for any user. Authenticated users with roles can access additional cars.",
+        responses={
+            200: CarSerializer,
+            404: OpenApiResponse(
+                response={"type": "object", "properties": {"detail": {"type": "string"}}},
+                description="Car not found or not accessible.",
+                examples=[OpenApiExample("Not Found", value={"detail": "Not found."})]
+            )
+        }
     ),
     create=extend_schema(
         tags=["Dealers - Inventory"],
