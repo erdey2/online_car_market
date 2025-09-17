@@ -142,40 +142,6 @@ class CarImageSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
-class PaymentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Payment
-        fields = ['id', 'user', 'car', 'amount', 'payment_type', 'is_confirmed', 'transaction_id', 'created_at']
-        read_only_fields = ['id', 'user', 'is_confirmed', 'created_at']
-
-    def validate_amount(self, value):
-        if value <= 0:
-            raise serializers.ValidationError("Payment amount must be positive.")
-        return value
-
-    def validate_payment_type(self, value):
-        valid_types = [choice[0] for choice in Payment.PAYMENT_TYPES]
-        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
-        if cleaned_value not in valid_types:
-            raise serializers.ValidationError(f"Payment type must be one of: {', '.join(valid_types)}.")
-        return cleaned_value
-
-    def validate_transaction_id(self, value):
-        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
-        if not re.match(r'^[a-zA-Z0-9-]+$', cleaned_value):
-            raise serializers.ValidationError("Transaction ID can only contain letters, numbers, or hyphens.")
-        return cleaned_value
-
-    def validate(self, data):
-        user = self.context['request'].user
-        payment_type = data.get('payment_type')
-        car = data.get('car')
-        if payment_type == 'verification_fee' and not has_role(user, 'broker'):
-            raise serializers.ValidationError("Only brokers can pay verification fees.")
-        if payment_type in ['commission', 'purchase'] and not car:
-            raise serializers.ValidationError("Car is required for commission or purchase payments.")
-        return data
-
 class CarSerializer(serializers.ModelSerializer):
     dealer = serializers.PrimaryKeyRelatedField(queryset=DealerProfile.objects.all(), required=False, allow_null=True)
     broker = serializers.PrimaryKeyRelatedField(queryset=BrokerProfile.objects.all(), required=False, allow_null=True)

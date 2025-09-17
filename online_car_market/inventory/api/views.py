@@ -12,7 +12,7 @@ from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiExample, OpenApiResponse
 from django.db.models import Count, Avg, Q, F
 from ..models import Car, CarMake, CarModel, FavoriteCar, CarView
-from .serializers import (CarSerializer, VerifyCarSerializer, BidSerializer, PaymentSerializer, CarMakeSerializer,
+from .serializers import (CarSerializer, VerifyCarSerializer, BidSerializer, CarMakeSerializer,
                           CarModelSerializer, FavoriteCarSerializer, CarViewSerializer, CarViewAnalyticsSerializer
                           )
 from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealerOrBroker, IsSuperAdmin
@@ -310,48 +310,6 @@ class CarViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         bid = serializer.save(car=car)
         return Response(BidSerializer(bid).data, status=status.HTTP_201_CREATED)
-
-    @extend_schema(
-        tags=["Dealers - Inventory"],
-        description="Record a car-specific payment (e.g., commission or purchase).",
-        request=PaymentSerializer,
-        responses={201: PaymentSerializer}
-    )
-    @action(detail=True, methods=['post'], serializer_class=PaymentSerializer)
-    def pay(self, request, pk=None):
-        car = self.get_object()
-        serializer = self.get_serializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        payment = serializer.save(user=request.user, car=car)
-        return Response(PaymentSerializer(payment).data, status=status.HTTP_201_CREATED)
-
-    @extend_schema(
-        tags=["Dealers - Inventory"],
-        description="Record a payment for brokers to enable car posting.",
-        request=PaymentSerializer,
-        responses={201: PaymentSerializer}
-    )
-    @action(detail=False, methods=['post'], serializer_class=PaymentSerializer)
-    def broker_payment(self, request):
-        if not has_role(request.user, 'broker'):
-            return Response(
-                {"detail": "Only brokers can make posting payments."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        serializer = self.get_serializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        try:
-            broker = BrokerProfile.objects.get(profile__user=request.user)
-            payment = serializer.save(user=request.user, broker=broker)
-            if payment.status == 'completed':
-                broker.can_post = True
-                broker.save()
-        except BrokerProfile.DoesNotExist:
-            return Response(
-                {"detail": "Broker profile not found."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        return Response(PaymentSerializer(payment).data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
         tags=["Analytics"],
