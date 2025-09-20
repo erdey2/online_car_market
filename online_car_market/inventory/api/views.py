@@ -1,3 +1,4 @@
+import logging
 from django.db.models import Avg, Count, Q, Sum
 from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
@@ -20,6 +21,7 @@ from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.payment.models import Payment
 
+logger = logging.getLogger(__name__)
 
 @extend_schema_view(
     list=extend_schema(

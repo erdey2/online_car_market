@@ -284,12 +284,18 @@ LOGGING = {
             "level": "DEBUG",
             "propagate": True,
         },
-        "django.db.backends": {  # show SQL queries
+        "django.db.backends": {  # SQL queries
             "handlers": ["console"],
             "level": "DEBUG",
         },
+        "django.server": {  # HTTP requests
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
 }
+
 
 REDIS_URL = env("REDIS_URL", default="redis://localhost:6379/0")
 REDIS_SSL = REDIS_URL.startswith("redis://")
