@@ -515,7 +515,6 @@ class CarSerializer(serializers.ModelSerializer):
 
         return super().update(instance, validated_data)
 
-
 class FavoriteCarSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
     car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all())

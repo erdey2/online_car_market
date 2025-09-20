@@ -2,6 +2,7 @@
 """Base settings to build other settings files upon."""
 from pathlib import Path
 import os
+import sys
 from datetime import timedelta
 
 import environ
@@ -267,19 +268,27 @@ DJANGO_ADMIN_FORCE_ALLAUTH = env.bool("DJANGO_ADMIN_FORCE_ALLAUTH", default=Fals
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "formatters": {
-        "verbose": {
-            "format": "%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s",
-        },
-    },
     "handlers": {
         "console": {
-            "level": "DEBUG",
             "class": "logging.StreamHandler",
-            "formatter": "verbose",
+            "stream": sys.stdout,
         },
     },
-    "root": {"level": "INFO", "handlers": ["console"]},
+    "root": {
+        "handlers": ["console"],
+        "level": "DEBUG",
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": "DEBUG",
+            "propagate": True,
+        },
+        "django.db.backends": {  # show SQL queries
+            "handlers": ["console"],
+            "level": "DEBUG",
+        },
+    },
 }
 
 REDIS_URL = env("REDIS_URL", default="redis://localhost:6379/0")
