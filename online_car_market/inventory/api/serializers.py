@@ -1,7 +1,7 @@
 from django.utils import timezone
 from django.db.models import Avg
 from rest_framework import serializers
-from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.utils import extend_schema_field, extend_schema_serializer, OpenApiExample, OpenApiTypes, OpenApiParameter
 from rolepermissions.checkers import has_role
 from ..models import Car, CarImage, CarMake, CarModel, FavoriteCar, CarView
 from online_car_market.dealers.models import DealerProfile
@@ -92,6 +92,21 @@ class CarModelSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Only admins or super admins can create or update models.")
         return data
 
+# ---------------- CarImageSerializer ----------------
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            "Car Image Example",
+            summary="Upload a car image",
+            description="Example of how to upload images when creating/updating a car.",
+            value={
+                "image_file": "file.jpeg",
+                "is_featured": True,
+                "caption": "Description about the image"
+            },
+        )
+    ]
+)
 class CarImageSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField(read_only=True)
     image_file = serializers.ImageField(write_only=True, required=False)  # for uploads
@@ -142,6 +157,44 @@ class CarImageSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+
+# ---------------- CarSerializer ----------------
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            "Car Registration Example",
+            summary="Register a new car with images",
+            description="This is an example of how to create a car with multiple uploaded images.",
+            value={
+                "broker": 1,
+                "make_ref": 6,
+                "model_ref": 36,
+                "year": 2023,
+                "price": 45000000,
+                "mileage": 9000,
+                "engine": "3000-ds",
+                "fuel_type": "electric",
+                "uploaded_images": [
+                    {
+                        "image_file": "honda.jpeg",
+                        "is_featured": True,
+                        "caption": "Description about the image"
+                    },
+                    {
+                        "image_file": "hyund2.jpeg",
+                        "is_featured": False,
+                        "caption": "Description about the image"
+                    },
+                    {
+                        "image_file": "hyund3.jpeg",
+                        "is_featured": False,
+                        "caption": "Description about the image"
+                    }
+                ]
+            },
+        )
+    ]
+)
 class CarSerializer(serializers.ModelSerializer):
     dealer = serializers.PrimaryKeyRelatedField(
         queryset=DealerProfile.objects.all(), required=False, allow_null=True
