@@ -550,6 +550,112 @@ class CarViewSet(viewsets.ModelViewSet):
             ]
         })
 
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["User Cars"],
+        description="List all cars belonging to the authenticated dealer or broker. User must have the dealer or broker role.",
+        responses={
+            200: CarSerializer(many=True),
+            403: OpenApiResponse(
+                response={"type": "object", "properties": {"detail": {"type": "string"}}},
+                description="User does not have the dealer or broker role.",
+                examples=[
+                    OpenApiExample("Forbidden", value={"detail": "User does not have dealer or broker role."})
+                ]
+            )
+        }
+    ),
+    retrieve=extend_schema(
+        tags=["User Cars"],
+        description="Retrieve a specific car. User must have the dealer or broker role and the car must belong to them.",
+        responses={
+            200: CarSerializer,
+            403: OpenApiResponse(
+                response={"type": "object", "properties": {"detail": {"type": "string"}}},
+                description="User does not have the dealer or broker role.",
+                examples=[
+                    OpenApiExample("Forbidden", value={"detail": "User does not have dealer or broker role."})
+                ]
+            ),
+            404: OpenApiResponse(
+                response={"type": "object", "properties": {"detail": {"type": "string"}}},
+                description="Car not found or user does not have permission to view it.",
+                examples=[
+                    OpenApiExample("Not Found",
+                                   value={"detail": "Car not found or you do not have permission to view it."})
+                ]
+            )
+        }
+    )
+)
+class UserCarsViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet
+):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CarSerializer
+    queryset = Car.objects.all()
+
+    def get_queryset(self):
+        """
+        Filter cars to only show those belonging to the authenticated dealer or broker.
+        """
+        user = self.request.user
+        if not has_role(user, ['dealer', 'broker']):
+            return Car.objects.none()
+
+        try:
+            if has_role(user, 'dealer'):
+                dealer = DealerProfile.objects.get(profile__user=user)
+                return self.queryset.filter(dealer=dealer)
+            elif has_role(user, 'broker'):
+                broker = BrokerProfile.objects.get(profile__user=user)
+                return self.queryset.filter(broker=broker)
+        except (DealerProfile.DoesNotExist, BrokerProfile.DoesNotExist):
+            return Car.objects.none()
+
+        return Car.objects.none()
+
+    def list(self, request, *args, **kwargs):
+        """
+        List all cars for the authenticated dealer or broker.
+        """
+        if not has_role(request.user, ['dealer', 'broker']):
+            return Response(
+                {"detail": "User does not have dealer or broker role."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        return super().list(request, *args, **kwargs)
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Retrieve a specific car. Only accessible if the car belongs to the authenticated dealer or broker.
+        """
+        if not has_role(request.user, ['dealer', 'broker']):
+            return Response(
+                {"detail": "User does not have dealer or broker role."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        try:
+            # Get the car from the filtered queryset to ensure permission
+            car = self.get_queryset().get(pk=kwargs['pk'])
+            serializer = self.get_serializer(car)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Car.DoesNotExist:
+            return Response(
+                {"detail": "Car not found or you do not have permission to view it."},
+                status=status.HTTP_404_NOT_FOUND)
+        except (DealerProfile.DoesNotExist, BrokerProfile.DoesNotExist):
+            return Response(
+                {"detail": "User profile not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
 @extend_schema_view(
     list=extend_schema(
         tags=["Favorites"],
