@@ -266,36 +266,30 @@ DJANGO_ADMIN_FORCE_ALLAUTH = env.bool("DJANGO_ADMIN_FORCE_ALLAUTH", default=Fals
 # See https://docs.djangoproject.com/en/dev/topics/logging for
 # more details on how to customize your logging configuration.
 LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "stream": sys.stdout,
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
         },
     },
-    "root": {
-        "handlers": ["console"],
-        "level": "DEBUG",
+    'root': {
+        'handlers': ['console'],
+        'level': 'DEBUG',  # You can override this in production.py
     },
-    "loggers": {
-        "django": {
-            "handlers": ["console"],
-            "level": "DEBUG",
-            "propagate": True,
+    'loggers': {
+        'django.security.csrf': {
+            'level': 'DEBUG',
+            'handlers': ['console'],
+            'propagate': True,
         },
-        "django.db.backends": {  # SQL queries
-            "handlers": ["console"],
-            "level": "DEBUG",
-        },
-        "django.server": {  # HTTP requests
-            "handlers": ["console"],
-            "level": "INFO",
-            "propagate": False,
+        'django.request': {
+            'level': 'DEBUG',
+            'handlers': ['console'],
+            'propagate': True,
         },
     },
 }
-
 
 REDIS_URL = env("REDIS_URL", default="redis://localhost:6379/0")
 REDIS_SSL = REDIS_URL.startswith("redis://")
