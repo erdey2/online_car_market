@@ -93,7 +93,7 @@ class CarModelSerializer(serializers.ModelSerializer):
         return data
 
 # ---------------- CarImageSerializer ----------------
-@extend_schema_serializer(
+''' @extend_schema_serializer(
     examples=[
         OpenApiExample(
             "Car Image Example",
@@ -106,7 +106,7 @@ class CarModelSerializer(serializers.ModelSerializer):
             },
         )
     ]
-)
+) '''
 class CarImageSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField(read_only=True)
     image_file = serializers.ImageField(write_only=True, required=False)  # for uploads
@@ -159,7 +159,7 @@ class CarImageSerializer(serializers.ModelSerializer):
 
 
 # ---------------- CarSerializer ----------------
-@extend_schema_serializer(
+''' @extend_schema_serializer(
     examples=[
         OpenApiExample(
             "Car Registration Example",
@@ -194,7 +194,7 @@ class CarImageSerializer(serializers.ModelSerializer):
             },
         )
     ]
-)
+) '''
 class CarSerializer(serializers.ModelSerializer):
     dealer = serializers.PrimaryKeyRelatedField(
         queryset=DealerProfile.objects.all(), required=False, allow_null=True
@@ -581,9 +581,13 @@ class FavoriteCarSerializer(serializers.ModelSerializer):
 
     def validate_car(self, value):
         # Ensure the car is available
-        if not value.is_available:
+        if not value.status:
             raise serializers.ValidationError("This car is not available to favorite.")
         return value
+
+    def create(self, validated_data):
+        validated_data["user"] = self.context["request"].user
+        return super().create(validated_data)
 
 class CarViewSerializer(serializers.ModelSerializer):
     car_id = serializers.PrimaryKeyRelatedField(source='car', read_only=True)
