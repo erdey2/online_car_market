@@ -959,7 +959,14 @@ class CarViewViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         ip_address = self.request.META.get('REMOTE_ADDR')
         user = self.request.user if self.request.user.is_authenticated else None
-        serializer.save(user=user, ip_address=ip_address)
+
+        car = serializer.validated_data.get("car")
+        car_view, created = CarView.objects.update_or_create(
+            car=car,
+            user=user,
+            defaults={"ip_address": ip_address}
+        )
+        return car_view
 
     def update(self, request, *args, **kwargs):
         return Response({"error": "Updating views is not allowed."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)

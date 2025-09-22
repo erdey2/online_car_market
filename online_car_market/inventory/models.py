@@ -231,9 +231,12 @@ class FavoriteCar(models.Model):
 
 class CarView(models.Model):
     car = models.ForeignKey(Car, on_delete=models.CASCADE, related_name="views")
-    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="car_views")
     ip_address = models.GenericIPAddressField(null=True, blank=True)  # for anonymous users
     viewed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['car', 'user'], name='unique_car_user_view')]
 
     def __str__(self):
         return f"{self.user or self.ip_address} viewed {self.car}"
