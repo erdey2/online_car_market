@@ -586,8 +586,16 @@ class FavoriteCarSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        validated_data["user"] = self.context["request"].user
-        return super().create(validated_data)
+        user = self.context["request"].user
+        car = validated_data["car"]
+
+        # Use update_or_create to avoid duplicates
+        favorite, created = FavoriteCar.objects.update_or_create(
+            user=user,
+            car=car,
+            defaults={"created_at": timezone.now()}
+        )
+        return favorite
 
 class CarViewSerializer(serializers.ModelSerializer):
     car_id = serializers.PrimaryKeyRelatedField(source='car', queryset=Car.objects.all(), write_only=True)
