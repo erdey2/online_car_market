@@ -591,13 +591,13 @@ class FavoriteCarSerializer(serializers.ModelSerializer):
 
 class CarViewSerializer(serializers.ModelSerializer):
     car_id = serializers.PrimaryKeyRelatedField(source='car', queryset=Car.objects.all(), write_only=True)
-    user_id = serializers.PrimaryKeyRelatedField(source='user', read_only=True, allow_null=True)
+    user_id = serializers.PrimaryKeyRelatedField(source='user', read_only=True)
     car = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = CarView
         fields = ['id', 'car_id', 'car', 'user_id', 'ip_address', 'viewed_at']
-        read_only_fields = ['viewed_at']
+        read_only_fields = ['viewed_at', 'ip_address']
 
 class CarViewAnalyticsSerializer(serializers.Serializer):
     car_id = serializers.IntegerField(source='car__id')

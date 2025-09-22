@@ -966,7 +966,7 @@ class CarViewViewSet(viewsets.ModelViewSet):
             user=user,
             defaults={"ip_address": ip_address}
         )
-        return car_view
+        serializer.instance = car_view
 
     def update(self, request, *args, **kwargs):
         return Response({"error": "Updating views is not allowed."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
