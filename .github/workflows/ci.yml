@@ -11,10 +11,9 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      DJANGO_SETTINGS_MODULE: config.settings.production
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Django environment
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-      DJANGO_ADMIN_URL: ${{ secrets.DJANGO_ADMIN_URL }}
+      DJANGO_SETTINGS_MODULE: config.settings.production
 
       # Cloudinary
       CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
@@ -31,22 +30,52 @@ jobs:
       DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
       DJANGO_EMAIL_SUBJECT_PREFIX: ${{ secrets.DJANGO_EMAIL_SUBJECT_PREFIX }}
 
+    services:
+      # Temporary PostgreSQL DB for tests
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U test_user"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
     steps:
-      - name: Checkout code
+      # Step 1: Checkout repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      # Step 2: Setup Python
+      - name: Setup Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements/base.txt
+            requirements/local.txt
 
+      # Step 3: Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements/local.txt
+          pip install pytest pytest-django psycopg2-binary
 
-      - name: Run DB migrations
+      # Step 4: Configure test database
+      - name: Set temporary DATABASE_URL for tests
+        run: echo "DATABASE_URL=postgres://test_user:test_password@localhost:5432/test_db" >> $GITHUB_ENV
+
+      # Step 5: Run Django migrations on test DB
+      - name: Run Django migrations
         run: python manage.py migrate
 
-      - name: Run tests
-        run: pytest
+      # Step 6: Run tests
+      - name: Run tests with pytest
+        run: pytest --maxfail=1 --disable-warnings -q
+
