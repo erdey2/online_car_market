@@ -1,33 +1,35 @@
 name: CI
 
 on:
-  pull_request:
-    branches: ['master', 'main']
   push:
-    branches: ['master', 'main']
+    branches: ['main', 'master']
+  pull_request:
+    branches: ['main', 'master']
 
 jobs:
-  pytest:
+  test:
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:14
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_db
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd="pg_isready -U postgres"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
     env:
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_db
-      DJANGO_SECRET_KEY: testsecret
-      DJANGO_DEBUG: "True"
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+      DJANGO_ADMIN_URL: ${{ secrets.DJANGO_ADMIN_URL }}
+
+      # Cloudinary
+      CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+      CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+      CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+
+      # Email
+      EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
+      EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
+      EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+      EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
+      DJANGO_DEFAULT_FROM_EMAIL: ${{ secrets.DJANGO_DEFAULT_FROM_EMAIL }}
+      DJANGO_SERVER_EMAIL: ${{ secrets.DJANGO_SERVER_EMAIL }}
+      DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
+      DJANGO_EMAIL_SUBJECT_PREFIX: ${{ secrets.DJANGO_EMAIL_SUBJECT_PREFIX }}
 
     steps:
       - name: Checkout code
@@ -37,10 +39,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            requirements/base.txt
-            requirements/local.txt
 
       - name: Install dependencies
         run: |
@@ -50,5 +48,5 @@ jobs:
       - name: Run DB migrations
         run: python manage.py migrate
 
-      - name: Run pytest
+      - name: Run tests
         run: pytest
