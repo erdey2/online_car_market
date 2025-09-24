@@ -1,7 +1,7 @@
 import logging
 from django.db.models import Avg, Count, Q, Sum
 from rest_framework.viewsets import ModelViewSet, ViewSet
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
@@ -16,12 +16,13 @@ from ..models import Car, CarMake, CarModel, FavoriteCar, CarView
 from .serializers import (CarSerializer, VerifyCarSerializer, BidSerializer, CarMakeSerializer,
                           CarModelSerializer, FavoriteCarSerializer, CarViewSerializer, CarViewAnalyticsSerializer
                           )
-from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealerOrBroker, IsSuperAdmin
+from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealerOrBroker, IsSuperAdminOrAdmin
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.payment.models import Payment
 
 logger = logging.getLogger(__name__)
+
 
 @extend_schema_view(
     list=extend_schema(
@@ -53,6 +54,12 @@ class CarMakeViewSet(ModelViewSet):
     queryset = CarMake.objects.all()
     serializer_class = CarMakeSerializer
 
+    def get_permissions(self):
+        if self.action in ["list", "retrieve"]:
+            return [AllowAny()]   # No authentication required
+        return [IsSuperAdminOrAdmin()]   # Only admins for create/update/delete
+
+
 @extend_schema_view(
     list=extend_schema(
         tags=["Cars - Models"],
@@ -83,6 +90,10 @@ class CarModelViewSet(ModelViewSet):
     queryset = CarModel.objects.select_related('make').all()
     serializer_class = CarModelSerializer
 
+    def get_permissions(self):
+        if self.action in ["list", "retrieve"]:
+            return [AllowAny()]   # No authentication required
+        return [IsSuperAdminOrAdmin()]   # Only admins for create/update/delete
 
 @extend_schema_view(
 list=extend_schema(
