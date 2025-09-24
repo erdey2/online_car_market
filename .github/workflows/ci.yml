@@ -28,13 +28,25 @@ jobs:
     env:
       DJANGO_SETTINGS_MODULE: config.settings.production
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-      CLOUDINARY_URL: ${{ secrets.CLOUDINARY_URL }}
+
+      # Cloudinary (match your .env)
+      CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+      CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+      CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+
+      # Email
       EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
       EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
       EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
       EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
+      DJANGO_DEFAULT_FROM_EMAIL: ${{ secrets.DJANGO_DEFAULT_FROM_EMAIL }}
+      DJANGO_SERVER_EMAIL: ${{ secrets.DJANGO_SERVER_EMAIL }}
+      DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
+      DJANGO_EMAIL_SUBJECT_PREFIX: ${{ secrets.DJANGO_EMAIL_SUBJECT_PREFIX }}
+
+      # Django
       DJANGO_ADMIN_URL: ${{ secrets.DJANGO_ADMIN_URL }}
-      SECRET_KEY: ${{ secrets.SECRET_KEY }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
       DEBUG: "0"
 
     steps:
