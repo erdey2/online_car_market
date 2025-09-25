@@ -1,46 +1,29 @@
-"""
-With these settings, tests run faster.
-"""
-
-from .base import *  # noqa: F403
-from .base import TEMPLATES
-from .base import env
 from .base import *
 
-# GENERAL
-# ------------------------------------------------------------------------------
-# https://docs.djangoproject.com/en/dev/ref/settings/#secret-key
-SECRET_KEY = env(
-    "DJANGO_SECRET_KEY",
-    default="Nou0TXL4hXZLDg71ImHiE9rKDxGBnyVDmPBveCmps2e8fAd6VnYq3WZjjPRTKUqU",
-)
-# https://docs.djangoproject.com/en/dev/ref/settings/#test-runner
-TEST_RUNNER = "django.test.runner.DiscoverRunner"
-
-# PASSWORDS
-# ------------------------------------------------------------------------------
-# https://docs.djangoproject.com/en/dev/ref/settings/#password-hashers
-PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
-
-# EMAIL
-# ------------------------------------------------------------------------------
-# https://docs.djangoproject.com/en/dev/ref/settings/#email-backend
-EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
-
-# DEBUGGING FOR TEMPLATES
-# ------------------------------------------------------------------------------
-TEMPLATES[0]["OPTIONS"]["debug"] = True  # type: ignore[index]
-
-# MEDIA
-# ------------------------------------------------------------------------------
-# https://docs.djangoproject.com/en/dev/ref/settings/#media-url
-MEDIA_URL = "http://media.testserver/"
-# django-webpack-loader
-# ------------------------------------------------------------------------------
-WEBPACK_LOADER = {
-    "DEFAULT": {
-        "LOADER_CLASS": "webpack_loader.loaders.FakeWebpackLoader"
+# Use temporary DB for CI tests
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "test_db",
+        "USER": "postgres",
+        "PASSWORD": "postgres",
+        "HOST": "localhost",
+        "PORT": "5432",
     }
 }
-# Your stuff...
-# ------------------------------------------------------------------------------
+
+# Disable sending real emails
+EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+
+# Use fake Cloudinary for tests
+CLOUDINARY_STORAGE = {
+    "CLOUD_NAME": "test",
+    "API_KEY": "test",
+    "API_SECRET": "test",
+}
+
+# Use a fixed secret key for CI
+SECRET_KEY = "django-insecure-testkey"
+
+# Disable debug
+DEBUG = False

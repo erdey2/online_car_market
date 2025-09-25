@@ -2,9 +2,9 @@ name: Django CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   test:
@@ -27,32 +27,10 @@ jobs:
 
     env:
       DJANGO_SETTINGS_MODULE: config.settings.test
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-
-      # Cloudinary
-      CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
-      CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
-      CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
-
-      # Email
-      EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
-      EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
-      EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
-      EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
-      DJANGO_DEFAULT_FROM_EMAIL: ${{ secrets.DJANGO_DEFAULT_FROM_EMAIL }}
-      DJANGO_SERVER_EMAIL: ${{ secrets.DJANGO_SERVER_EMAIL }}
-      DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
-      DJANGO_EMAIL_SUBJECT_PREFIX: ${{ secrets.DJANGO_EMAIL_SUBJECT_PREFIX }}
-
-      # Django
-      DJANGO_ADMIN_URL: ${{ secrets.DJANGO_ADMIN_URL }}
-      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-      DEBUG: "0"
-      PYTHONPATH: online_car_market   # so apps like `users` can be found
+      PYTHONPATH: ${{ github.workspace }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -73,9 +51,7 @@ jobs:
           done
 
       - name: Run migrations
-        working-directory: online_car_market
         run: python manage.py migrate --noinput
 
       - name: Run tests
-        working-directory: online_car_market
         run: pytest -v
