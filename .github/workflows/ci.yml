@@ -48,7 +48,7 @@ jobs:
       DJANGO_ADMIN_URL: ${{ secrets.DJANGO_ADMIN_URL }}
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
       DEBUG: "0"
-      PYTHONPATH: online_car_market   # <-- this is key so `users` is found
+      PYTHONPATH: online_car_market   # so apps like `users` can be found
 
     steps:
       - name: Checkout repository
@@ -73,9 +73,9 @@ jobs:
           done
 
       - name: Run migrations
-        working-directory: online_car_market   # run inside project folder
+        working-directory: online_car_market   # one level down
         run: python manage.py migrate --noinput
 
       - name: Run tests
-        working-directory: online_car_market   # run inside project folder
+        working-directory: online_car_market   # one level down
         run: pytest -v
