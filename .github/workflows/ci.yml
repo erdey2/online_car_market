@@ -26,10 +26,10 @@ jobs:
           --health-retries=5
 
     env:
-      DJANGO_SETTINGS_MODULE: config.settings.production
+      DJANGO_SETTINGS_MODULE: config.settings.test
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
 
-      # Cloudinary (match your .env)
+      # Cloudinary
       CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
       CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
       CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
@@ -48,6 +48,7 @@ jobs:
       DJANGO_ADMIN_URL: ${{ secrets.DJANGO_ADMIN_URL }}
       DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
       DEBUG: "0"
+      PYTHONPATH: online_car_market   # <-- this is key so `users` is found
 
     steps:
       - name: Checkout repository
@@ -72,9 +73,9 @@ jobs:
           done
 
       - name: Run migrations
-        run: |
-          python manage.py migrate --noinput
+        working-directory: online_car_market   # run inside project folder
+        run: python manage.py migrate --noinput
 
       - name: Run tests
-        run: |
-          pytest -v
+        working-directory: online_car_market   # run inside project folder
+        run: pytest -v
