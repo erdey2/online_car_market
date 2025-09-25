@@ -40,7 +40,6 @@ djangorestframework_simplejwt==5.5.1
 drf-nested-routers==0.94.2
 drf-spectacular==0.28.0
 fido2==2.0.0
-graphviz==0.21
 gunicorn==23.0.0
 idna==3.10
 inflection==0.5.1
@@ -61,7 +60,6 @@ prompt_toolkit==3.0.51
 psycopg2-binary==2.9.10
 pycparser==2.22
 Pygments==2.19.2
-pygraphviz==1.14
 PyJWT==2.10.1
 pytest==8.4.2
 pytest-django==4.11.1
