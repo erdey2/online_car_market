@@ -93,29 +93,16 @@ class CarModelSerializer(serializers.ModelSerializer):
         return data
 
 # ---------------- CarImageSerializer ----------------
-''' @extend_schema_serializer(
-    examples=[
-        OpenApiExample(
-            "Car Image Example",
-            summary="Upload a car image",
-            description="Example of how to upload images when creating/updating a car.",
-            value={
-                "image_file": "file.jpeg",
-                "is_featured": True,
-                "caption": "Description about the image"
-            },
-        )
-    ]
-) '''
 class CarImageSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField(read_only=True)
-    image_file = serializers.ImageField(write_only=True, required=False)  # for uploads
+    image_file = serializers.ImageField(write_only=True, required=False)
     car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all(), required=False)
+    is_featured = serializers.BooleanField(required=False, default=False)
 
     class Meta:
         model = CarImage
         fields = ["id", "car", "image_file", "image_url", "is_featured", "caption", "uploaded_at"]
-        read_only_fields = ["id", "uploaded_at", "image_url"]
+        read_only_fields = ["id", "car", "image_url", "uploaded_at"]
 
     @extend_schema_field(serializers.CharField(allow_null=True))
     def get_image_url(self, obj):
@@ -149,52 +136,26 @@ class CarImageSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         car = validated_data.pop("car", None)
-        image_file = validated_data.pop("image_file")
+        image_file = validated_data.pop("image_file", None)
         instance = CarImage(**validated_data)
         if car:
             instance.car = car
-        instance.image = image_file  # CloudinaryField handles the upload automatically
+        if image_file:
+            instance.image = image_file
+        instance.save()
+        return instance
+
+    def update(self, instance, validated_data):
+        image_file = validated_data.pop("image_file", None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        if image_file:
+            instance.image = image_file
         instance.save()
         return instance
 
 
 # ---------------- CarSerializer ----------------
-''' @extend_schema_serializer(
-    examples=[
-        OpenApiExample(
-            "Car Registration Example",
-            summary="Register a new car with images",
-            description="This is an example of how to create a car with multiple uploaded images.",
-            value={
-                "broker": 1,
-                "make_ref": 6,
-                "model_ref": 36,
-                "year": 2023,
-                "price": 45000000,
-                "mileage": 9000,
-                "engine": "3000-ds",
-                "fuel_type": "electric",
-                "uploaded_images": [
-                    {
-                        "image_file": "honda.jpeg",
-                        "is_featured": True,
-                        "caption": "Description about the image"
-                    },
-                    {
-                        "image_file": "hyund2.jpeg",
-                        "is_featured": False,
-                        "caption": "Description about the image"
-                    },
-                    {
-                        "image_file": "hyund3.jpeg",
-                        "is_featured": False,
-                        "caption": "Description about the image"
-                    }
-                ]
-            },
-        )
-    ]
-) '''
 class CarSerializer(serializers.ModelSerializer):
     dealer = serializers.PrimaryKeyRelatedField(
         queryset=DealerProfile.objects.all(), required=False, allow_null=True
@@ -233,7 +194,6 @@ class CarSerializer(serializers.ModelSerializer):
             "broker_average_rating",
         ]
 
-    # ---------------- Average Rating ----------------
     def get_dealer_average_rating(self, obj) -> float | None:
         if obj.dealer:
             avg_rating = obj.dealer.ratings.aggregate(Avg("rating"))["rating__avg"]
@@ -246,7 +206,6 @@ class CarSerializer(serializers.ModelSerializer):
             return round(avg_rating, 1) if avg_rating else None
         return None
 
-    # ---------------- Field Validations (same as yours) ----------------
     def validate_make(self, value):
         cleaned = bleach.clean(value.strip(), tags=[], strip=True)
         if len(cleaned) > 100:
@@ -266,7 +225,7 @@ class CarSerializer(serializers.ModelSerializer):
     def validate_year(self, value):
         current_year = datetime.now().year
         if not 1900 <= value <= current_year + 1:
-            raise serializers.ValidationError(f"Year must be 1900-{current_year+1}.")
+            raise serializers.ValidationError(f"Year must be 1900-{current_year + 1}.")
         return value
 
     def validate_price(self, value):
@@ -409,7 +368,7 @@ class CarSerializer(serializers.ModelSerializer):
         if value and not has_role(value.profile.user, "dealer"):
             raise serializers.ValidationError("Dealer user must have dealer role.")
         user = self.context["request"].user
-        if value and value.user != user and not has_role(user, ["super_admin", "admin"]):
+        if value and value.profile.user != user and not has_role(user, ["super_admin", "admin"]):
             raise serializers.ValidationError(
                 "Only dealer owner or admins can assign this dealer."
             )
@@ -419,9 +378,7 @@ class CarSerializer(serializers.ModelSerializer):
         if value and not has_role(value.profile.user, "broker"):
             raise serializers.ValidationError("Broker user must have broker role.")
         user = self.context["request"].user
-        if value and value.profile.user != user and not has_role(
-            user, ["super_admin", "admin"]
-        ):
+        if value and value.profile.user != user and not has_role(user, ["super_admin", "admin"]):
             raise serializers.ValidationError(
                 "Only broker owner or admins can assign this broker."
             )
@@ -435,11 +392,8 @@ class CarSerializer(serializers.ModelSerializer):
             )
         return value
 
-    # ---------------- Object-level Validation ----------------
     def validate(self, data):
         user = self.context["request"].user
-
-        # fallback to instance values for partial updates
         make = data.get("make") or (self.instance.make if self.instance else None)
         model = data.get("model") or (self.instance.model if self.instance else None)
         make_ref = data.get("make_ref") or (self.instance.make_ref if self.instance else None)
@@ -450,123 +404,137 @@ class CarSerializer(serializers.ModelSerializer):
         price = data.get("price") or (self.instance.price if self.instance else None)
         auction_end = data.get("auction_end") or (self.instance.auction_end if self.instance else None)
 
-        # Ensure at least one pair is provided
         if not (make and model) and not (make_ref and model_ref):
             raise serializers.ValidationError(
                 "Either 'make' and 'model' or 'make_ref' and 'model_ref' must be provided."
             )
 
-        # Auto-populate make/model from references
         if make_ref:
             data["make"] = make_ref.name
         if model_ref:
             data["model"] = model_ref.name
 
-        # Ensure exactly one of dealer or broker
         if (dealer and broker) or (not dealer and not broker):
             raise serializers.ValidationError(
                 "Exactly one of 'dealer' or 'broker' must be provided."
             )
 
-        # Role-based validation
         if dealer and not has_role(user, ["super_admin", "admin", "dealer"]):
-            raise serializers.ValidationError(
-                "Only dealers, admins, or super admins can assign a dealer."
-            )
+            raise serializers.ValidationError("Only dealers, admins, or super admins can assign a dealer.")
         if broker and not has_role(user, ["super_admin", "admin", "broker"]):
-            raise serializers.ValidationError(
-                "Only brokers, admins, or super admins can assign a broker."
-            )
+            raise serializers.ValidationError("Only brokers, admins, or super admins can assign a broker.")
 
-        if dealer and dealer.user != user and not has_role(user, ["super_admin", "admin"]):
-            raise serializers.ValidationError(
-                "Only the dealer owner or admins can assign this dealer."
-            )
+        if dealer and dealer.profile.user != user and not has_role(user, ["super_admin", "admin"]):
+            raise serializers.ValidationError("Only the dealer owner or admins can assign this dealer.")
         if broker and broker.profile.user != user and not has_role(user, ["super_admin", "admin"]):
-            raise serializers.ValidationError(
-                "Only the broker owner or admins can assign this broker."
-            )
+            raise serializers.ValidationError("Only the broker owner or admins can assign this broker.")
 
-        # Auto-verify dealer cars if dealer is verified
         if dealer and dealer.is_verified:
             data["verification_status"] = "verified"
             data["priority"] = True
 
-        # Auction logic
         if sale_type == "auction" and price is not None:
             raise serializers.ValidationError("Auction cars cannot have a fixed price.")
         if sale_type == "auction" and not auction_end:
             raise serializers.ValidationError("Auction end time is required for auction cars.")
 
-        # Creation restrictions
-        if self.instance is None and not has_role(
-            user, ["super_admin", "admin", "dealer", "broker"]
-        ):
-            raise serializers.ValidationError(
-                "Only brokers, dealers, admins, or super admins can create cars."
-            )
-        if self.instance and data.get("posted_by") and data["posted_by"] != user and not has_role(
-            user, ["super_admin", "admin"]
-        ):
-            raise serializers.ValidationError(
-                "Only the car owner or admins can update this car."
-            )
+        if self.instance is None and not has_role(user, ["super_admin", "admin", "dealer", "broker"]):
+            raise serializers.ValidationError("Only brokers, dealers, admins, or super admins can create cars.")
+        if self.instance and data.get("posted_by") and data["posted_by"] != user and not has_role(user,
+                                                                                                  ["super_admin",
+                                                                                                   "admin"]):
+            raise serializers.ValidationError("Only the car owner or admins can update this car.")
 
         if make_ref and not CarMake.objects.filter(id=make_ref.id).exists():
             raise serializers.ValidationError("Selected make does not exist.")
         if model_ref and not CarModel.objects.filter(id=model_ref.id, make=make_ref).exists():
-            raise serializers.ValidationError(
-                "Selected model does not match the selected make."
-            )
+            raise serializers.ValidationError("Selected model does not match the selected make.")
 
         return data
 
-    # ---------------- Create & Update ----------------
+    def _process_uploaded_images(self, car, images_data):
+        """
+        Handles multiple uploaded images:
+        - Creates new images or updates existing ones if 'id' is provided.
+        - Ensures exactly one image is featured:
+          - If the user marks one as featured, use it.
+          - If none marked, automatically feature the first uploaded image.
+        """
+        featured_image = None
+        created_images = []
+
+        for idx, img_data in enumerate(images_data):
+            image_id = img_data.get("id")
+            is_featured = img_data.get("is_featured", False)
+
+            if image_id:
+                # Update existing image
+                image_instance = CarImage.objects.get(id=image_id, car=car)
+                serializer = CarImageSerializer(
+                    instance=image_instance,
+                    data=img_data,
+                    partial=True,
+                    context=self.context
+                )
+                serializer.is_valid(raise_exception=True)
+                image = serializer.save(car=car)
+            else:
+                # Create new image
+                serializer = CarImageSerializer(data=img_data, context=self.context)
+                serializer.is_valid(raise_exception=True)
+                image = serializer.save(car=car)
+                created_images.append(image)
+
+            if is_featured:
+                featured_image = image
+
+        # Determine the featured image
+        if featured_image:
+            # Unset all others
+            CarImage.objects.filter(car=car).update(is_featured=False)
+            featured_image.is_featured = True
+            featured_image.save()
+        else:
+            # No explicit featured; pick the first uploaded image
+            first_image = created_images[0] if created_images else car.images.order_by("uploaded_at").first()
+            if first_image:
+                CarImage.objects.filter(car=car).update(is_featured=False)
+                first_image.is_featured = True
+                first_image.save()
+
     def create(self, validated_data):
-        request = self.context["request"]
+        uploaded_images_data = validated_data.pop("uploaded_images", [])
 
-        # Extract uploaded_images from form-data
-        uploaded_images_data = []
-        for key, value in request.data.items():
-            match = re.match(r"uploaded_images\[(\d+)\]\.(\w+)", key)
-            if match:
-                index, field = int(match.group(1)), match.group(2)
-                while len(uploaded_images_data) <= index:
-                    uploaded_images_data.append({})
-                uploaded_images_data[index][field] = value
-
-        validated_data.pop("uploaded_images", None)
-
+        # Set make/model from references
         make_ref = validated_data.get("make_ref")
         model_ref = validated_data.get("model_ref")
-
         if make_ref and not validated_data.get("make"):
             validated_data["make"] = make_ref.name
         if model_ref and not validated_data.get("model"):
             validated_data["model"] = model_ref.name
 
+        # Create the car
         car = Car.objects.create(**validated_data)
 
-        for index, img_data in enumerate(uploaded_images_data):
-            img_data["car"] = car
-            if "image_file" in img_data and isinstance(img_data["image_file"], str):
-                file_key = f"uploaded_images[{index}].image_file"
-                if file_key in request.FILES:
-                    img_data["image_file"] = request.FILES[file_key]
-            CarImageSerializer(context=self.context).create(img_data)
+        # Process uploaded images
+        if uploaded_images_data:
+            self._process_uploaded_images(car, uploaded_images_data)
 
         return car
 
     def update(self, instance, validated_data):
-        make_ref = validated_data.get("make_ref", instance.make_ref)
-        model_ref = validated_data.get("model_ref", instance.model_ref)
+        uploaded_images_data = validated_data.pop("uploaded_images", [])
 
-        if make_ref:
-            validated_data["make"] = make_ref.name
-        if model_ref:
-            validated_data["model"] = model_ref.name
+        # Update car fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
 
-        return super().update(instance, validated_data)
+        # Process uploaded images
+        if uploaded_images_data:
+            self._process_uploaded_images(instance, uploaded_images_data)
+
+        return instance
 
 class FavoriteCarSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)

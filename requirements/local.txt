@@ -32,6 +32,7 @@ django-crispy-forms==2.4
 django-debug-toolbar==5.2.0
 django-environ==0.12.0
 django-extensions==4.1
+django-filter==25.1
 django-redis==6.0.0
 django-role-permissions==3.2.0
 djangorestframework==3.16.0
@@ -43,6 +44,7 @@ graphviz==0.21
 gunicorn==23.0.0
 idna==3.10
 inflection==0.5.1
+iniconfig==2.1.0
 itypes==1.2.0
 Jinja2==3.1.6
 jsonschema==4.25.0
@@ -54,11 +56,15 @@ MarkupSafe==3.0.2
 mdurl==0.1.2
 packaging==25.0
 pillow==11.3.0
+pluggy==1.6.0
 prompt_toolkit==3.0.51
 psycopg2-binary==2.9.10
 pycparser==2.22
 Pygments==2.19.2
+pygraphviz==1.14
 PyJWT==2.10.1
+pytest==8.4.2
+pytest-django==4.11.1
 python-dateutil==2.9.0.post0
 python-slugify==8.0.4
 PyYAML==6.0.2
@@ -80,5 +86,3 @@ vine==5.1.0
 wcwidth==0.2.13
 webencodings==0.5.1
 whitenoise==6.9.0
-pytest
-pytest-django

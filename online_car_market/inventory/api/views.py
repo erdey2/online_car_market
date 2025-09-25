@@ -1,5 +1,6 @@
 import logging
 from django.db.models import Avg, Count, Q, Sum
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.decorators import action
@@ -9,6 +10,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.viewsets import ReadOnlyModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import viewsets, mixins
+from rest_framework.filters import SearchFilter, OrderingFilter
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiExample, OpenApiResponse
 from django.db.models import Count, Avg, Q, F
@@ -561,7 +563,6 @@ class CarViewSet(viewsets.ModelViewSet):
             ]
         })
 
-
 @extend_schema_view(
     list=extend_schema(
         tags=["User Cars"],
@@ -1025,6 +1026,129 @@ class CarViewViewSet(viewsets.ModelViewSet):
         ).order_by('-total_views')
         serializer = CarViewAnalyticsSerializer(analytics, many=True)
         return Response(serializer.data)
+
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Popular Cars"],
+        description="List popular cars based on view count. Accessible to all users, including buyers and unauthenticated users.",
+        parameters=[
+            OpenApiParameter(
+                name='status',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Filter by car status (pending, verified, rejected)',
+                enum=['pending', 'verified', 'rejected']
+            ),
+            OpenApiParameter(
+                name='sale_type',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Filter by sale type (direct, auction)',
+                enum=['direct', 'auction']
+            ),
+            OpenApiParameter(
+                name='make_ref',
+                type=int,
+                location=OpenApiParameter.QUERY,
+                description='Filter by car make ID'
+            ),
+            OpenApiParameter(
+                name='min_price',
+                type=float,
+                location=OpenApiParameter.QUERY,
+                description='Filter by minimum price'
+            ),
+            OpenApiParameter(
+                name='max_price',
+                type=float,
+                location=OpenApiParameter.QUERY,
+                description='Filter by maximum price'
+            ),
+            OpenApiParameter(
+                name='search',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Search by make, model, or description'
+            ),
+            OpenApiParameter(
+                name='ordering',
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description='Order by views, price, or created_at (prefix with - for descending)',
+                enum=['views', '-views', 'price', '-price', 'created_at', '-created_at']
+            )
+        ],
+        responses={
+            200: CarSerializer(many=True),
+        }
+    ),
+    retrieve=extend_schema(
+        tags=["Popular Cars"],
+        description="Retrieve details of a specific popular car. Increments view count. Accessible to all users, including buyers and unauthenticated users.",
+        responses={
+            200: CarSerializer,
+            404: OpenApiResponse(
+                response={"type": "object", "properties": {"detail": {"type": "string"}}},
+                description="Car not found.",
+                examples=[
+                    OpenApiExample("Not Found", value={"detail": "Car not found."})
+                ]
+            )
+        }
+    )
+)
+class PopularCarsViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet
+):
+    permission_classes = [AllowAny]  # Public access
+    serializer_class = CarSerializer
+    queryset = Car.objects.filter(verification_status='verified')  # Only verified cars
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ['status', 'sale_type', 'make_ref']
+    search_fields = ['make', 'model', 'description']
+    ordering_fields = ['views', 'price', 'created_at']
+    ordering = ['-views']
+
+    def get_queryset(self):
+        """
+        Return verified cars ordered by view count, with optional filtering.
+        """
+        queryset = self.queryset
+
+        # Apply additional filters
+        min_price = self.request.query_params.get('min_price')
+        max_price = self.request.query_params.get('max_price')
+        if min_price:
+            queryset = queryset.filter(price__gte=min_price)
+        if max_price:
+            queryset = queryset.filter(price__lte=max_price)
+
+        return queryset.order_by('-views')
+
+    def list(self, request, *args, **kwargs):
+        """
+        List popular cars based on view count with pagination and filtering.
+        """
+        return super().list(request, *args, **kwargs)
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Retrieve a specific car and increment its view count.
+        """
+        try:
+            instance = self.get_object()
+            instance.views += 1
+            instance.save(update_fields=['views'])
+            serializer = self.get_serializer(instance)
+            return Response(serializer.data)
+        except Car.DoesNotExist:
+            return Response(
+                {"detail": "Car not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
 # CarImage ViewSet
 '''
