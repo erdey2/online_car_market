@@ -1,5 +1,6 @@
 from .base import *
 
+SECRET_KEY = "django-insecure-testkey"
 # Use temporary DB for CI tests
 DATABASES = {
     "default": {
