@@ -73,9 +73,9 @@ jobs:
           done
 
       - name: Run migrations
-        working-directory: online_car_market   # one level down
+        working-directory: online_car_market
         run: python manage.py migrate --noinput
 
       - name: Run tests
-        working-directory: online_car_market   # one level down
+        working-directory: online_car_market
         run: pytest -v
