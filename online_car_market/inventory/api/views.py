@@ -1,5 +1,6 @@
 import logging
 from django.db.models import Avg, Count, Q, Sum
+from django.db import connection
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny
@@ -992,40 +993,126 @@ class CarViewViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[IsSuperAdminOrAdminOrDealerOrBroker])
     def analytics(self, request):
         if has_role(request.user, ['super_admin']):
-            analytics = CarView.objects.values('car__id', 'car__make__name').annotate(
-                total_views=Count('id')
-            ).order_by('-total_views')
-            serializer = CarViewAnalyticsSerializer(analytics, many=True)
-            return Response(serializer.data)
+            try:
+                analytics = (
+                    CarView.objects.values("car__id", "car__make_ref__name", "car__model_ref__name")
+                    .annotate(total_views=Count("id"))
+                    .order_by("-total_views")
+                )
+
+                # Force evaluation safely
+                try:
+                    analytics_list = list(analytics)
+                    logger.debug(f"Raw analytics query result (super_admin): {analytics_list}")
+                except Exception as eval_err:
+                    logger.exception(f"Error while evaluating analytics queryset: {str(eval_err)}")
+                    return Response(
+                        {"error": f"Queryset evaluation failed: {str(eval_err)}"},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+
+                formatted = [
+                    {
+                        "car_id": item["car__id"],
+                        "car_make": item["car__make_ref__name"],
+                        "car_model": item["car__model_ref__name"],
+                        "total_views": item["total_views"]
+                    }
+                    for item in analytics_list
+                ]
+
+                serializer = CarViewAnalyticsSerializer(formatted, many=True)
+                return Response(serializer.data)
+
+            except Exception as e:
+                logger.exception(f"Unexpected error in analytics endpoint: {str(e)}")
+
+                # Optionally dump last SQL query for debugging
+                logger.debug(f"Last executed SQL: {connection.queries[-1] if connection.queries else 'No queries'}")
+
+                return Response({"error": "Internal server error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
         return Response({"error": "Only super admins can access this endpoint."}, status=403)
 
-    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdminOrAdminOrDealerOrBroker], url_path='dealer-analytics')
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdminOrAdminOrDealerOrBroker],
+            url_path='dealer-analytics')
     def dealer_analytics(self, request):
         if not has_role(request.user, ['dealer']):
-            return Response({"error": "Only dealers can access this analytics."}, status=403)
-        try:
-            dealer = DealerProfile.objects.get(user=request.user)
-        except DealerProfile.DoesNotExist:
-            return Response({"error": "Dealer profile not found."}, status=404)
-        analytics = CarView.objects.filter(car__dealer=dealer).values('car__id', 'car__make__name').annotate(
-            total_views=Count('id')
-        ).order_by('-total_views')
-        serializer = CarViewAnalyticsSerializer(analytics, many=True)
-        return Response(serializer.data)
+            return Response({"error": "Only dealers can access this analytics."}, status=status.HTTP_403_FORBIDDEN)
 
-    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdminOrAdminOrDealerOrBroker], url_path='broker-analytics')
+        try:
+            dealer = DealerProfile.objects.get(profile=request.user.profile)
+            logger.info(f"Dealer profile found: {dealer}")
+
+            analytics = (
+                CarView.objects.filter(car__dealer=dealer)
+                .values("car__id", "car__make_ref__name", "car__model_ref__name")
+                .annotate(total_views=Count("id"))
+                .order_by("-total_views")
+            )
+
+            logger.debug(f"Raw dealer analytics for {dealer}: {list(analytics)}")
+
+            formatted = [
+                {
+                    "car_id": item["car__id"],
+                    "car_make": item["car__make_ref__name"],
+                    "car_model": item["car__model_ref__name"],
+                    "total_views": item["total_views"]
+                }
+                for item in analytics
+            ]
+
+            serializer = CarViewAnalyticsSerializer(formatted, many=True)
+            return Response(serializer.data)
+
+        except DealerProfile.DoesNotExist:
+            logger.error(f"Dealer profile not found for user {request.user.id}")
+            return Response({"error": "Dealer profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            logger.exception(f"Unexpected error in dealer_analytics for user {request.user.id}: {str(e)}")
+            return Response({"error": "Internal server error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdminOrAdminOrDealerOrBroker],
+            url_path='broker-analytics')
     def broker_analytics(self, request):
         if not has_role(request.user, ['broker']):
-            return Response({"error": "Only brokers can access this analytics."}, status=403)
+            return Response({"error": "Only brokers can access this analytics."}, status=status.HTTP_403_FORBIDDEN)
+
         try:
-            broker = BrokerProfile.objects.get(user=request.user)
+            broker = BrokerProfile.objects.get(profile=request.user.profile)
+            logger.info(f"Broker profile found: {broker}")
+
+            analytics = (
+                CarView.objects.filter(car__broker=broker)
+                .values("car__id", "car__make_ref__name", "car__model_ref__name")
+                .annotate(total_views=Count("id"))
+                .order_by("-total_views")
+            )
+
+            logger.debug(f"Raw broker analytics for {broker}: {list(analytics)}")
+
+            formatted = [
+                {
+                    "car_id": item["car__id"],
+                    "car_make": item["car__make_ref__name"],
+                    "car_model": item["car__model_ref__name"],
+                    "total_views": item["total_views"]
+                }
+                for item in analytics
+            ]
+
+            serializer = CarViewAnalyticsSerializer(formatted, many=True)
+            return Response(serializer.data)
+
         except BrokerProfile.DoesNotExist:
-            return Response({"error": "Broker profile not found."}, status=404)
-        analytics = CarView.objects.filter(car__broker=broker).values('car__id', 'car__make__name').annotate(
-            total_views=Count('id')
-        ).order_by('-total_views')
-        serializer = CarViewAnalyticsSerializer(analytics, many=True)
-        return Response(serializer.data)
+            logger.error(f"Broker profile not found for user {request.user.id}")
+            return Response({"error": "Broker profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            logger.exception(f"Unexpected error in broker_analytics for user {request.user.id}: {str(e)}")
+            return Response({"error": "Internal server error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @extend_schema_view(

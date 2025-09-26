@@ -576,14 +576,10 @@ class CarViewSerializer(serializers.ModelSerializer):
         read_only_fields = ['viewed_at', 'ip_address']
 
 class CarViewAnalyticsSerializer(serializers.Serializer):
-    car_id = serializers.IntegerField(source='car__id')
-    car_make = serializers.CharField(source='car__make__name')
+    car_id = serializers.IntegerField()
+    car_make = serializers.CharField()
+    car_model = serializers.CharField()
     total_views = serializers.IntegerField()
-
-    def create(self, validated_data):
-        # Automatically set the user to the authenticated user
-        validated_data['user'] = self.context['request'].user
-        return super().create(validated_data)
 
 # ---------------- Verify Car Serializer ----------------
 class VerifyCarSerializer(serializers.ModelSerializer):
