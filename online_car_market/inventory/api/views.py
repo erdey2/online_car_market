@@ -1,5 +1,5 @@
 import logging
-from django.db.models import Avg, Count, Q, Sum
+from django.db.models import Avg, Count, Q, Sum, Min, F, Subquery, OuterRef
 from django.db import connection
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.viewsets import ModelViewSet, ViewSet
@@ -15,7 +15,7 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiExample, OpenApiResponse
 from django.db.models import Count, Avg, Q, F
-from ..models import Car, CarMake, CarModel, FavoriteCar, CarView
+from ..models import Car, CarMake, CarModel, FavoriteCar, CarView, CarImage
 from .serializers import (CarSerializer, VerifyCarSerializer, BidSerializer, CarMakeSerializer,
                           CarModelSerializer, FavoriteCarSerializer, CarViewSerializer, CarViewAnalyticsSerializer
                           )
@@ -416,7 +416,7 @@ class CarViewSet(viewsets.ModelViewSet):
             "make_stats": list(make_stats)
         })
 
-    @extend_schema(
+    ''' @extend_schema(
         tags=["Analytics"],
         description="Get cheap cars for buyers.",
         responses={
@@ -450,7 +450,70 @@ class CarViewSet(viewsets.ModelViewSet):
             .order_by('price')[:10]
             .values('id', 'make_name', 'price')
         )
-        return Response({"cheap_cars": list(cheap_cars)})
+        return Response({"cheap_cars": list(cheap_cars)}) '''
+
+    @extend_schema(
+        tags=["Analytics"],
+        description="Get car analytics for buyers with cheapest car per make/model.",
+    )
+    @action(detail=False, methods=['get'], url_path='buyer-analytics')
+    def buyer_analytics(self, request):
+        if not has_role(request.user, ['buyer']):
+            return Response({"error": "Only buyers can access this analytics."}, status=403)
+
+        try:
+            # Subquery for cheapest car per make/model
+            cheapest_car_subquery = Car.objects.filter(
+                verification_status='verified',
+                make_ref=OuterRef('make_ref'),
+                model_ref=OuterRef('model_ref')
+            ).exclude(status='sold').order_by('price').values('id', 'price')[:1]
+
+            # Main analytics
+            analytics = (
+                Car.objects.filter(verification_status='verified')
+                .exclude(status='sold')
+                .values('make_ref__name', 'model_ref__name')
+                .annotate(
+                    average_price=Avg('price'),
+                    total_cars=Count('id'),
+                    cheapest_car_id=Subquery(cheapest_car_subquery.values('id')[:1]),
+                    cheapest_car_price=Subquery(cheapest_car_subquery.values('price')[:1]),
+                )
+                .order_by('make_ref__name', 'model_ref__name')
+            )
+
+            # Fetch featured images for all cheapest cars
+            cheapest_car_ids = [item['cheapest_car_id'] for item in analytics if item['cheapest_car_id']]
+            featured_images = CarImage.objects.filter(
+                car_id__in=cheapest_car_ids,
+                is_featured=True
+            ).values('car_id', 'image')
+
+            # Convert CloudinaryResource to URL
+            featured_image_map = {img['car_id']: str(img['image'].url) for img in featured_images}
+
+            # Format response
+            formatted = []
+            for item in analytics:
+                cheapest_id = item['cheapest_car_id']
+                formatted.append({
+                    "car_make": item['make_ref__name'],
+                    "car_model": item['model_ref__name'],
+                    "average_price": item['average_price'],
+                    "total_cars": item['total_cars'],
+                    "cheapest_car": {
+                        "id": cheapest_id,
+                        "price": item['cheapest_car_price'],
+                        "image_url": featured_image_map.get(cheapest_id)
+                    } if cheapest_id else None
+                })
+
+            return Response({"car_summary": formatted})
+
+        except Exception as e:
+            logger.exception(f"Error in buyer_analytics for user {request.user.id}: {str(e)}")
+            return Response({"error": "Internal server error"}, status=500)
 
     @extend_schema(
         tags=["Analytics"],
