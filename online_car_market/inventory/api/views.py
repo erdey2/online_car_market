@@ -190,6 +190,7 @@ class CarViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
     def create(self, request, *args, **kwargs):
+        # --- 1. Broker role check ---
         if has_role(request.user, 'broker'):
             try:
                 broker_profile = BrokerProfile.objects.get(profile__user=request.user)
@@ -203,9 +204,45 @@ class CarViewSet(viewsets.ModelViewSet):
                     {"detail": "Broker profile not found."},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+
+        # --- 2. Save main car data ---
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         car = serializer.save()
+
+        # --- 3. Process uploaded images ---
+        uploaded_images = []
+        for key, file in request.FILES.items():
+            if key.startswith("uploaded_images"):
+                # Example key: uploaded_images[0].image_file
+                index = key.split('[')[1].split(']')[0]
+                caption = request.data.get(f"uploaded_images[{index}].caption")
+                is_featured = request.data.get(f"uploaded_images[{index}].is_featured", "false").lower() == "true"
+                uploaded_images.append({
+                    "image_file": file,
+                    "caption": caption,
+                    "is_featured": is_featured
+                })
+
+        # --- 4. Save CarImage instances ---
+        first_image_id = None
+        for i, img_data in enumerate(uploaded_images):
+            car_image = CarImage.objects.create(
+                car=car,
+                image=img_data['image_file'],
+                caption=img_data['caption'],
+                is_featured=img_data['is_featured']
+            )
+            if i == 0:
+                first_image_id = car_image.id
+
+        # --- 5. Ensure at least one featured image ---
+        if not CarImage.objects.filter(car=car, is_featured=True).exists() and first_image_id:
+            first_image = CarImage.objects.get(id=first_image_id)
+            first_image.is_featured = True
+            first_image.save()
+
+        # --- 6. Return full car data ---
         return Response(self.get_serializer(car).data, status=status.HTTP_201_CREATED)
 
     @extend_schema(

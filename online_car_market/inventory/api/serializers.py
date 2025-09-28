@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.utils import timezone
 from django.db.models import Avg
 from rest_framework import serializers
@@ -12,7 +13,9 @@ from django.contrib.auth import get_user_model
 import re
 import bleach
 from datetime import datetime
+import logging
 
+logger = logging.getLogger(__name__)
 User = get_user_model()
 
 class CarMakeSerializer(serializers.ModelSerializer):
@@ -98,15 +101,20 @@ class CarImageSerializer(serializers.ModelSerializer):
     image_file = serializers.ImageField(write_only=True, required=False)
     car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all(), required=False)
     is_featured = serializers.BooleanField(required=False, default=False)
+    caption = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     class Meta:
         model = CarImage
         fields = ["id", "car", "image_file", "image_url", "is_featured", "caption", "uploaded_at"]
-        read_only_fields = ["id", "car", "image_url", "uploaded_at"]
+        read_only_fields = ["id", "image_url", "uploaded_at"]
 
     @extend_schema_field(serializers.CharField(allow_null=True))
     def get_image_url(self, obj):
-        return obj.image.url if obj.image else None
+        try:
+            return obj.image.url if obj.image else None
+        except Exception as e:
+            logger.error(f"Error fetching image_url for CarImage ID={obj.id}: {e}")
+            return None
 
     def validate_caption(self, value):
         if value:
@@ -118,15 +126,15 @@ class CarImageSerializer(serializers.ModelSerializer):
 
     def validate_image_file(self, value):
         if value:
-            max_size = 5 * 1024 * 1024  # 5MB
+            max_size = 5 * 1024 * 1024
             if value.size > max_size:
                 raise serializers.ValidationError("Image file size cannot exceed 5MB.")
             return value
-        return value
+        raise serializers.ValidationError("Image file is required.")
 
     def validate(self, data):
-        car = data.get("car") or getattr(self.instance, "car", None)
         user = self.context["request"].user
+        car = data.get("car") or getattr(self.instance, "car", None)
         if self.instance is None:
             if not has_role(user, ["super_admin", "admin", "dealer", "broker"]):
                 raise serializers.ValidationError("Only brokers, dealers, admins, or super admins can create car images.")
@@ -137,12 +145,18 @@ class CarImageSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         car = validated_data.pop("car", None)
         image_file = validated_data.pop("image_file", None)
+
+        logger.debug(f"Creating CarImage with data: {validated_data} | image_file={image_file}")
+
         instance = CarImage(**validated_data)
         if car:
             instance.car = car
         if image_file:
             instance.image = image_file
         instance.save()
+
+        logger.info(
+            f"Saved CarImage ID={instance.id} | image={instance.image} | is_featured={instance.is_featured} | caption={instance.caption}")
         return instance
 
     def update(self, instance, validated_data):
@@ -157,27 +171,15 @@ class CarImageSerializer(serializers.ModelSerializer):
 
 # ---------------- CarSerializer ----------------
 class CarSerializer(serializers.ModelSerializer):
-    dealer = serializers.PrimaryKeyRelatedField(
-        queryset=DealerProfile.objects.all(), required=False, allow_null=True
-    )
-    broker = serializers.PrimaryKeyRelatedField(
-        queryset=BrokerProfile.objects.all(), required=False, allow_null=True
-    )
-    posted_by = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), default=serializers.CurrentUserDefault()
-    )
+    dealer = serializers.PrimaryKeyRelatedField(queryset=DealerProfile.objects.all(), required=False, allow_null=True)
+    broker = serializers.PrimaryKeyRelatedField(queryset=BrokerProfile.objects.all(), required=False, allow_null=True)
+    posted_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
     images = CarImageSerializer(many=True, read_only=True)
     uploaded_images = CarImageSerializer(many=True, write_only=True, required=False)
     bids = BidSerializer(many=True, read_only=True)
-    verification_status = serializers.ChoiceField(
-        choices=Car.VERIFICATION_STATUSES, read_only=True
-    )
-    make_ref = serializers.PrimaryKeyRelatedField(
-        queryset=CarMake.objects.all(), required=False, allow_null=True
-    )
-    model_ref = serializers.PrimaryKeyRelatedField(
-        queryset=CarModel.objects.all(), required=False, allow_null=True
-    )
+    verification_status = serializers.ChoiceField(choices=Car.VERIFICATION_STATUSES, read_only=True)
+    make_ref = serializers.PrimaryKeyRelatedField(queryset=CarMake.objects.all(), required=False, allow_null=True)
+    model_ref = serializers.PrimaryKeyRelatedField(queryset=CarModel.objects.all(), required=False, allow_null=True)
     dealer_average_rating = serializers.SerializerMethodField(read_only=True)
     broker_average_rating = serializers.SerializerMethodField(read_only=True)
 
@@ -440,9 +442,7 @@ class CarSerializer(serializers.ModelSerializer):
 
         if self.instance is None and not has_role(user, ["super_admin", "admin", "dealer", "broker"]):
             raise serializers.ValidationError("Only brokers, dealers, admins, or super admins can create cars.")
-        if self.instance and data.get("posted_by") and data["posted_by"] != user and not has_role(user,
-                                                                                                  ["super_admin",
-                                                                                                   "admin"]):
+        if self.instance and data.get("posted_by") and data["posted_by"] != user and not has_role(user, ["super_admin", "admin"]):
             raise serializers.ValidationError("Only the car owner or admins can update this car.")
 
         if make_ref and not CarMake.objects.filter(id=make_ref.id).exists():
@@ -453,88 +453,76 @@ class CarSerializer(serializers.ModelSerializer):
         return data
 
     def _process_uploaded_images(self, car, images_data):
-        """
-        Handles multiple uploaded images:
-        - Creates new images or updates existing ones if 'id' is provided.
-        - Ensures exactly one image is featured:
-          - If the user marks one as featured, use it.
-          - If none marked, automatically feature the first uploaded image.
-        """
-        featured_image = None
+        if not images_data:
+            return []
+
+        logger.info(f"Processing uploaded images for Car ID={car.id}: {images_data}")
+
+        featured_found = any(img.get("is_featured", False) for img in images_data)
         created_images = []
 
         for idx, img_data in enumerate(images_data):
-            image_id = img_data.get("id")
-            is_featured = img_data.get("is_featured", False)
+            if "image_file" not in img_data or not img_data["image_file"]:
+                logger.warning(f"Skipping CarImage {idx} because 'image_file' is missing: {img_data}")
+                continue
 
-            if image_id:
-                # Update existing image
-                image_instance = CarImage.objects.get(id=image_id, car=car)
-                serializer = CarImageSerializer(
-                    instance=image_instance,
-                    data=img_data,
-                    partial=True,
-                    context=self.context
-                )
-                serializer.is_valid(raise_exception=True)
-                image = serializer.save(car=car)
-            else:
-                # Create new image
-                serializer = CarImageSerializer(data=img_data, context=self.context)
-                serializer.is_valid(raise_exception=True)
-                image = serializer.save(car=car)
-                created_images.append(image)
+            serializer = CarImageSerializer(data=img_data, context=self.context)
+            serializer.is_valid(raise_exception=True)
+            image_instance = serializer.save(car=car)
+            created_images.append(image_instance)
 
-            if is_featured:
-                featured_image = image
+        # Set first image as featured if none were featured
+        if created_images and not featured_found:
+            created_images[0].is_featured = True
+            created_images[0].save()
+            logger.info(f"No featured image provided, setting first image ID={created_images[0].id} as featured")
 
-        # Determine the featured image
-        if featured_image:
-            # Unset all others
-            CarImage.objects.filter(car=car).update(is_featured=False)
-            featured_image.is_featured = True
-            featured_image.save()
-        else:
-            # No explicit featured; pick the first uploaded image
-            first_image = created_images[0] if created_images else car.images.order_by("uploaded_at").first()
-            if first_image:
-                CarImage.objects.filter(car=car).update(is_featured=False)
-                first_image.is_featured = True
-                first_image.save()
+        return created_images
 
     def create(self, validated_data):
         uploaded_images_data = validated_data.pop("uploaded_images", [])
-
-        # Set make/model from references
-        make_ref = validated_data.get("make_ref")
-        model_ref = validated_data.get("model_ref")
-        if make_ref and not validated_data.get("make"):
-            validated_data["make"] = make_ref.name
-        if model_ref and not validated_data.get("model"):
-            validated_data["model"] = model_ref.name
-
-        # Create the car
         car = Car.objects.create(**validated_data)
-
-        # Process uploaded images
         if uploaded_images_data:
             self._process_uploaded_images(car, uploaded_images_data)
-
         return car
 
     def update(self, instance, validated_data):
         uploaded_images_data = validated_data.pop("uploaded_images", [])
-
-        # Update car fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
-
-        # Process uploaded images
         if uploaded_images_data:
             self._process_uploaded_images(instance, uploaded_images_data)
-
         return instance
+
+    def _process_uploaded_images(self, car, images_data):
+        if not images_data:
+            print(f"No images received for Car ID={car.id}")
+            return []
+
+        # Check if any image is marked as featured
+        featured_found = any(img.get("is_featured", False) for img in images_data)
+        created_images = []
+
+        for i, img_data in enumerate(images_data):
+            print(f"Processing image {i} for Car ID={car.id}: {img_data}")
+
+            serializer = CarImageSerializer(data=img_data, context=self.context)
+            serializer.is_valid(raise_exception=True)
+            image = serializer.save(car=car)
+
+            print(
+                f"Saved CarImage ID={image.id} | image={image.image} | is_featured={image.is_featured} | caption={image.caption}")
+            created_images.append(image)
+
+        # Fallback featured image
+        if created_images and not featured_found:
+            created_images[0].is_featured = True
+            created_images[0].save()
+            print(f"No featured image provided, setting first image ID={created_images[0].id} as featured")
+
+        return created_images
+
 
 class FavoriteCarSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
