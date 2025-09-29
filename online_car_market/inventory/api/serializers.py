@@ -452,76 +452,17 @@ class CarSerializer(serializers.ModelSerializer):
 
         return data
 
-    def _process_uploaded_images(self, car, images_data):
-        if not images_data:
-            return []
-
-        logger.info(f"Processing uploaded images for Car ID={car.id}: {images_data}")
-
-        featured_found = any(img.get("is_featured", False) for img in images_data)
-        created_images = []
-
-        for idx, img_data in enumerate(images_data):
-            if "image_file" not in img_data or not img_data["image_file"]:
-                logger.warning(f"Skipping CarImage {idx} because 'image_file' is missing: {img_data}")
-                continue
-
-            serializer = CarImageSerializer(data=img_data, context=self.context)
-            serializer.is_valid(raise_exception=True)
-            image_instance = serializer.save(car=car)
-            created_images.append(image_instance)
-
-        # Set first image as featured if none were featured
-        if created_images and not featured_found:
-            created_images[0].is_featured = True
-            created_images[0].save()
-            logger.info(f"No featured image provided, setting first image ID={created_images[0].id} as featured")
-
-        return created_images
-
     def create(self, validated_data):
-        uploaded_images_data = validated_data.pop("uploaded_images", [])
-        car = Car.objects.create(**validated_data)
-        if uploaded_images_data:
-            self._process_uploaded_images(car, uploaded_images_data)
-        return car
+        # Drop uploaded_images so they don’t create nulls
+        validated_data.pop("uploaded_images", None)
+        return Car.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
-        uploaded_images_data = validated_data.pop("uploaded_images", [])
+        validated_data.pop("uploaded_images", None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
-        if uploaded_images_data:
-            self._process_uploaded_images(instance, uploaded_images_data)
         return instance
-
-    def _process_uploaded_images(self, car, images_data):
-        if not images_data:
-            print(f"No images received for Car ID={car.id}")
-            return []
-
-        # Check if any image is marked as featured
-        featured_found = any(img.get("is_featured", False) for img in images_data)
-        created_images = []
-
-        for i, img_data in enumerate(images_data):
-            print(f"Processing image {i} for Car ID={car.id}: {img_data}")
-
-            serializer = CarImageSerializer(data=img_data, context=self.context)
-            serializer.is_valid(raise_exception=True)
-            image = serializer.save(car=car)
-
-            print(
-                f"Saved CarImage ID={image.id} | image={image.image} | is_featured={image.is_featured} | caption={image.caption}")
-            created_images.append(image)
-
-        # Fallback featured image
-        if created_images and not featured_found:
-            created_images[0].is_featured = True
-            created_images[0].save()
-            print(f"No featured image provided, setting first image ID={created_images[0].id} as featured")
-
-        return created_images
 
 
 class FavoriteCarSerializer(serializers.ModelSerializer):
