@@ -313,3 +313,4 @@ class ProfileSerializer(serializers.ModelSerializer):
             BrokerProfileSerializer().update(broker_profile, broker_profile_data)
 
         return instance
+

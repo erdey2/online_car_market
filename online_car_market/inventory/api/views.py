@@ -1,6 +1,7 @@
 import logging
 from django.db.models import Avg, Count, Q, Sum, Min, F, Subquery, OuterRef
 from django.db import connection
+from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny
@@ -16,13 +17,14 @@ from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiExample, OpenApiResponse
 from django.db.models import Count, Avg, Q, F
 from ..models import Car, CarMake, CarModel, FavoriteCar, CarView, CarImage
-from .serializers import (CarSerializer, VerifyCarSerializer, BidSerializer, CarMakeSerializer,
+from .serializers import (CarSerializer, VerifyCarSerializer, BidSerializer, CarMakeSerializer, ContactSerializer,
                           CarModelSerializer, FavoriteCarSerializer, CarViewSerializer, CarViewAnalyticsSerializer
                           )
-from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealerOrBroker, IsSuperAdminOrAdmin
+from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealerOrBroker, IsSuperAdminOrAdmin, IsSuperAdminOrAdminOrBuyer
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.payment.models import Payment
+from online_car_market.users.models import Profile
 
 logger = logging.getLogger(__name__)
 
@@ -1336,6 +1338,99 @@ class PopularCarsViewSet(
                 {"detail": "Car not found."},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Dealers - Inventory"],
+        description="List all contacts (admin-only).",
+        responses={200: ContactSerializer(many=True)},
+    ),
+    retrieve=extend_schema(
+        tags=["Dealers - Inventory"],
+        description=(
+            "Retrieve the contact info of the user associated with a specific car, "
+            "dealer, or broker. Accessible to authenticated users (buyers) or admins."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="car_id",
+                type=int,
+                location="path",
+                description="ID of the car to get the poster's profile",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="dealer_id",
+                type=int,
+                location="query",
+                description="ID of the dealer to get contact info",
+                required=False,
+            ),
+            OpenApiParameter(
+                name="broker_id",
+                type=int,
+                location="query",
+                description="ID of the broker to get contact info",
+                required=False,
+            ),
+        ],
+        responses={
+            200: ContactSerializer,
+            404: OpenApiResponse(description="Car, dealer, or broker not found"),
+            403: OpenApiResponse(description="Permission denied"),
+        },
+    ),
+)
+class ContactViewSet(ReadOnlyModelViewSet):
+    queryset = Profile.objects.all()
+    serializer_class = ContactSerializer
+    permission_classes = [IsSuperAdminOrAdminOrBuyer]
+
+    def list(self, request, *args, **kwargs):
+        """Admin-only list of all contacts."""
+        user = request.user
+        if not (user.is_staff or getattr(user, "is_super_admin", False)):
+            return Response(
+                {"detail": "Only admins can list all contacts"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return super().list(request, *args, **kwargs)
+
+    def retrieve(self, request, *args, **kwargs):
+        car_id = kwargs.get("pk")  # From URL path
+        dealer_id = request.query_params.get("dealer_id")
+        broker_id = request.query_params.get("broker_id")
+
+        # Validate input
+        if not any([car_id, dealer_id, broker_id]):
+            return Response(
+                {"detail": "Please provide car_id, dealer_id, or broker_id"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if sum(bool(x) for x in [car_id, dealer_id, broker_id]) > 1:
+            return Response(
+                {"detail": "Please provide only one of car_id, dealer_id, or broker_id"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Retrieve profile
+        if car_id:
+            car = get_object_or_404(Car, id=car_id)
+            profile = car.posted_by.profile
+        elif dealer_id:
+            dealer = get_object_or_404(DealerProfile, id=dealer_id)
+            profile = dealer.profile
+        elif broker_id:
+            broker = get_object_or_404(BrokerProfile, id=broker_id)
+            profile = broker.profile
+        else:
+            return Response(
+                {"detail": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = self.get_serializer(profile)
+        return Response(serializer.data)
 
 # CarImage ViewSet
 '''

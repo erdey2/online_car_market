@@ -1,4 +1,4 @@
-from rest_framework.viewsets import ModelViewSet, ViewSet
+from rest_framework.viewsets import ModelViewSet, ViewSet, ReadOnlyModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view
@@ -7,7 +7,6 @@ from online_car_market.users.models import Profile
 from online_car_market.users.permissions import IsSuperAdmin, IsAdmin, IsSuperAdminOrAdmin
 from rolepermissions.checkers import has_role
 from rest_framework.decorators import action
-from drf_spectacular.utils import extend_schema
 import logging
 
 logger = logging.getLogger(__name__)

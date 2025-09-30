@@ -7,6 +7,7 @@ from rolepermissions.checkers import has_role
 from ..models import Car, CarImage, CarMake, CarModel, FavoriteCar, CarView
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
+from online_car_market.users.models import Profile
 from online_car_market.bids.api.serializers import BidSerializer
 from online_car_market.payment.models import Payment
 from django.contrib.auth import get_user_model
@@ -528,3 +529,16 @@ class VerifyCarSerializer(serializers.ModelSerializer):
         if not has_role(user, ['super_admin', 'admin']):
             raise serializers.ValidationError("Only super admins or admins can verify cars.")
         return data
+
+class ContactSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        fields = ['id', 'first_name', 'last_name', 'contact', 'address', 'image', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        # Convert CloudinaryField image to URL if it exists
+        if instance.image and hasattr(instance.image, 'url'):
+            representation['image'] = instance.image.url
+        return representation
