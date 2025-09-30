@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.viewsets import ReadOnlyModelViewSet
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import viewsets, mixins
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rolepermissions.checkers import has_role
@@ -495,10 +495,15 @@ class CarViewSet(viewsets.ModelViewSet):
         tags=["Analytics"],
         description="Get car analytics for buyers with cheapest car per make/model.",
     )
-    @action(detail=False, methods=['get'], url_path='buyer-analytics')
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path='buyer-analytics',
+        permission_classes = [AllowAny]
+    )
     def buyer_analytics(self, request):
-        if not has_role(request.user, ['buyer']):
-            return Response({"error": "Only buyers can access this analytics."}, status=403)
+        # if not has_role(request.user, ['buyer']):
+            # return Response({"error": "Only buyers can access this analytics."}, status=403)
 
         try:
             # Subquery for cheapest car per make/model
