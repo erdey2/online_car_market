@@ -74,6 +74,7 @@ class SuperAdmin(AbstractUserRole):
 
 class Admin(AbstractUserRole):
     available_permissions = {
+        'view_admin_dashboard': True,
         'manage_buyers': True,
         'manage_brokers': True,
         'manage_dealers': True,
@@ -87,6 +88,7 @@ class Admin(AbstractUserRole):
 
 class Dealer(AbstractUserRole):
     available_permissions = {
+        'view_dealer_dashboard': True,
         'view_own_dealer_profile': True,
         'edit_own_dealer_profile': True,
         'manage_own_inventory': True,
@@ -96,6 +98,7 @@ class Dealer(AbstractUserRole):
 
 class Broker(AbstractUserRole):
     available_permissions = {
+        'view_broker_dashboard': True,
         'view_own_broker_profile': True,
         'edit_own_broker_profile': True,
         'view_cars': True,
@@ -104,6 +107,7 @@ class Broker(AbstractUserRole):
 
 class Buyer(AbstractUserRole):
     available_permissions = {
+        'view_buyer_dashboard': True,
         'view_own_buyer_profile': True,
         'edit_own_buyer_profile': True,
         'view_cars': True,
@@ -113,6 +117,7 @@ class Buyer(AbstractUserRole):
 
 class Sales(AbstractUserRole):
     available_permissions = {
+        'view_sales_dashboard': True,
         'view_cars': True,
         'manage_sales': True,
         'view_own_sales': True,
