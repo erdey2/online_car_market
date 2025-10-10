@@ -20,7 +20,7 @@ class IsRatingOwnerOrAdmin(BasePermission):
 
 class DealerProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
     """
-    A singleton-style endpoint for the authenticated broker's profile.
+    A singleton-style endpoint for the authenticated dealer's profile.
     Only supports GET (retrieve) and PATCH (update).
     """
     serializer_class = DealerProfileSerializer
@@ -28,18 +28,18 @@ class DealerProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, v
 
     def get_object(self):
         try:
-            broker_profile = DealerProfile.objects.get(profile__user=self.request.user)
+            dealer_profile = DealerProfile.objects.get(profile__user=self.request.user)
         except DealerProfile.DoesNotExist:
-            raise NotFound(detail="Broker profile not found.")
+            raise NotFound(detail="Dealer profile not found.")
 
-        if not has_role(self.request.user, 'broker'):
-            raise PermissionDenied(detail="User does not have broker role.")
+        if not has_role(self.request.user, 'dealer'):
+            raise PermissionDenied(detail="User does not have dealer role.")
 
-        return broker_profile
+        return dealer_profile
 
     @extend_schema(
         tags=["Dealers - Profile"],
-        description="Retrieve the authenticated broker's profile."
+        description="Retrieve the authenticated dealer's profile."
     )
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
@@ -48,7 +48,7 @@ class DealerProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, v
 
     @extend_schema(
         tags=["Dealers - Profile"],
-        description="Partially update the authenticated broker's profile."
+        description="Partially update the authenticated dealer's profile."
     )
     def partial_update(self, request, *args, **kwargs):
         instance = self.get_object()
