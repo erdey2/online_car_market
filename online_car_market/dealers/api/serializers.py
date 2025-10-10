@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 class DealerProfileSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
     profile = ProfileLiteSerializer(read_only=True)
+    # profile = serializers.PrimaryKeyRelatedField(read_only=True)
     company_name = serializers.CharField()
     license_number = serializers.CharField()
     tax_id = serializers.CharField()
@@ -21,7 +22,7 @@ class DealerProfileSerializer(serializers.ModelSerializer):
 
     def get_role(self, obj):
         roles = get_user_roles(obj.profile.user)
-        return roles[0].get_name() if roles else None
+        return roles[1].get_name() if roles else None
 
     class Meta:
         model = DealerProfile
