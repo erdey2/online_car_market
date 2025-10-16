@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.viewsets import ReadOnlyModelViewSet
+from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import viewsets, mixins
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -253,7 +254,8 @@ class CarViewSet(viewsets.ModelViewSet):
         request=VerifyCarSerializer,
         responses={200: VerifyCarSerializer}
     )
-    @action(detail=True, methods=['patch'], serializer_class=VerifyCarSerializer)
+    @action(detail=True, methods=['patch'], serializer_class=VerifyCarSerializer,
+            parser_classes=[JSONParser, FormParser, MultiPartParser])
     def verify(self, request, pk=None):
         if not has_role(request.user, ['super_admin', 'admin']):
             return Response(
@@ -263,10 +265,19 @@ class CarViewSet(viewsets.ModelViewSet):
         car = self.get_object()
         serializer = self.get_serializer(car, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        car.verification_status = serializer.validated_data['verification_status']
+
+        verification_status = serializer.validated_data.get('verification_status')
+        if verification_status is None:
+            return Response(
+                {"error": "verification_status is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        car.verification_status = verification_status
         car.priority = (car.verification_status == 'verified')
         car.save()
-        return Response(serializer.data)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
         tags=["Dealers - Inventory"],
