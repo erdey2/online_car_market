@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
 from online_car_market.brokers.models import BrokerRating, BrokerProfile
 from online_car_market.users.models import User
@@ -17,7 +18,8 @@ class BrokerProfileSerializer(serializers.ModelSerializer):
     is_verified = serializers.BooleanField(read_only=True)
     role = serializers.SerializerMethodField(read_only=True)
 
-    def get_role(self, obj):
+    @extend_schema_field(serializers.CharField())
+    def get_role(self, obj) -> str:
         roles = get_user_roles(obj.profile.user)
         return roles[0].get_name() if roles else None
 

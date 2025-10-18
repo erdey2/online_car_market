@@ -94,6 +94,7 @@ class Dealer(AbstractUserRole):
         'manage_own_inventory': True,
         'view_cars': True,
         'post_car': True,
+        'manage_staff': True,
     }
 
 class Broker(AbstractUserRole):

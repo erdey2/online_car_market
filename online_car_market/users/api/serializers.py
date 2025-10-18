@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from dj_rest_auth.registration.serializers import RegisterSerializer
 from dj_rest_auth.serializers import LoginSerializer
 from rolepermissions.checkers import has_role
@@ -191,7 +192,8 @@ class ProfileSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField(read_only=True)
     role = serializers.SerializerMethodField(read_only=True)
 
-    def get_role(self, obj):
+    @extend_schema_field(serializers.CharField())
+    def get_role(self, obj) -> str:
         roles = get_user_roles(obj.user)
         return roles[0].get_name() if roles else None
 

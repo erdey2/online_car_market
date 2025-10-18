@@ -23,6 +23,22 @@ class DealerProfile(models.Model):
             models.Index(fields=['profile'], name='idx_dealerprofile_profile'),
         ]
 
+class DealerStaff(models.Model):
+    dealer = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, related_name='staff_members')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='dealer_staff_assignments')
+    role = models.CharField(max_length=20, choices=[('sales', 'Sales'), ('accounting', 'Accounting')])
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('dealer', 'user')
+        verbose_name = 'Dealer Staff'
+        verbose_name_plural = 'Dealer Staff'
+
+    def __str__(self):
+        return f"{self.user.email} - {self.role} for {self.dealer.company_name}"
+
+
 class DealerRating(models.Model):
     dealer = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, related_name='ratings')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='dealer_ratings')

@@ -1,9 +1,10 @@
 from django.urls import path, include
 from rest_framework_nested import routers
-from .views import DealerRatingViewSet, DealerVerificationViewSet, DealerProfileViewSet
+from .views import DealerRatingViewSet, DealerVerificationViewSet, DealerProfileViewSet, DealerStaffViewSet
 
 router = routers.SimpleRouter()
 # router.register(r'me', DealerProfileViewSet, basename='dealer-profile')
+router.register(r'staff', DealerStaffViewSet, basename='dealer-staff')
 router.register(r'ratings', DealerRatingViewSet, basename='dealer-rating')
 router.register(r'verifications', DealerVerificationViewSet, basename='dealer-verification')
 

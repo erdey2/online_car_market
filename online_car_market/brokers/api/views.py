@@ -6,7 +6,7 @@ from rest_framework import viewsets, status, mixins
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rolepermissions.checkers import has_role
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiResponse
 from online_car_market.brokers.models import BrokerProfile, BrokerRating
 from .serializers import VerifyBrokerSerializer, BrokerProfileSerializer, BrokerRatingSerializer
 from online_car_market.users.permissions import IsSuperAdmin, IsAdmin
@@ -101,21 +101,30 @@ class BrokerRatingViewSet(ModelViewSet):
             raise serializers.ValidationError({"broker": "Broker does not exist."})
 
 @extend_schema_view(
-    verify=extend_schema(
+verify=extend_schema(
         tags=["Brokers - Verification"],
         request=VerifyBrokerSerializer,
-        responses={200: VerifyBrokerSerializer},
-        description="Verify a broker profile (admin/super_admin only)."
+        responses={
+            200: VerifyBrokerSerializer,
+            404: OpenApiResponse(description="Broker not found."),
+            403: OpenApiResponse(description="Permission denied."),
+        },
+        parameters=[
+            OpenApiParameter(name='pk', type=int, location=OpenApiParameter.PATH, description='Broker ID'),
+        ],
+        description="Verify a broker profile (admin/super_admin only).",
     )
 )
-class BrokerVerificationViewSet(ViewSet):
+class BrokerVerificationViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated, IsSuperAdmin | IsAdmin]
 
     @action(detail=True, methods=['patch'])
     def verify(self, request, pk=None):
         try:
             broker = BrokerProfile.objects.get(pk=pk)
-            serializer = VerifyBrokerSerializer(broker, data=request.data, partial=True, context={'request': request})
+            serializer = VerifyBrokerSerializer(
+                broker, data=request.data, partial=True, context={'request': request}
+            )
             serializer.is_valid(raise_exception=True)
             serializer.save()
             logger.info(f"Broker {broker.pk} verification updated by {request.user.email}")

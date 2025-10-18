@@ -5,11 +5,12 @@ from rest_framework.decorators import action
 from rest_framework import viewsets, status, mixins
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound, PermissionDenied
-from rolepermissions.checkers import has_role
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes
+from rolepermissions.checkers import has_role, has_permission
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiResponse
 from online_car_market.dealers.models import DealerProfile, DealerRating
-from .serializers import DealerRatingSerializer, DealerProfileSerializer, VerifyDealerSerializer
+from .serializers import DealerRatingSerializer, DealerProfileSerializer, VerifyDealerSerializer, DealerStaffSerializer
 from online_car_market.users.permissions import IsSuperAdmin, IsAdmin
+from ..models import DealerStaff
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,6 +18,10 @@ logger = logging.getLogger(__name__)
 class IsRatingOwnerOrAdmin(BasePermission):
     def has_object_permission(self, request, view, obj):
         return request.user == obj.user or has_role(request.user, ['super_admin', 'admin'])
+
+class IsDealerWithManageStaff(BasePermission):
+    def has_permission(self, request, view):
+        return has_role(request.user, 'dealer') and has_permission(request.user, 'manage_staff') and hasattr(request.user.profile, 'dealer_profile')
 
 class DealerProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
     """
@@ -56,6 +61,58 @@ class DealerProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, v
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+@extend_schema_view(
+    create=extend_schema(
+        tags=["Dealers - Staff Management"],
+        description="Allow dealers to add sellers or accountants.",
+        request=DealerStaffSerializer,
+        responses={
+            201: DealerStaffSerializer,
+            403: OpenApiResponse(description="Permission denied")
+        },
+    ),
+    list=extend_schema(
+        tags=["Dealers - Staff Management"],
+        description="List all staff members under the dealer.",
+        responses={200: DealerStaffSerializer(many=True)},
+    ),
+    retrieve=extend_schema(
+        tags=["Dealers - Staff Management"],
+        description="Retrieve staff by ID.",
+        responses={
+            200: DealerStaffSerializer,
+            404: OpenApiResponse(description="Not found")
+        },
+    ),
+    update=extend_schema(
+        tags=["Dealers - Staff Management"],
+        description="Update staff information (PUT).",
+        request=DealerStaffSerializer,
+        responses={200: DealerStaffSerializer, 403: "Permission denied"}
+    ),
+    partial_update=extend_schema(
+        tags=["Dealers - Staff Management"],
+        description="Partially update staff information (PATCH).",
+        request=DealerStaffSerializer,
+        responses={200: DealerStaffSerializer, 403: "Permission denied"}
+    ),
+    destroy=extend_schema(
+        tags=["Dealers - Staff Management"],
+        description="Delete a staff member (DELETE).",
+        responses={204: None, 403: "Permission denied"}
+    ),
+)
+class DealerStaffViewSet(viewsets.ModelViewSet):
+    queryset = DealerStaff.objects.all()
+    serializer_class = DealerStaffSerializer
+    permission_classes = [IsDealerWithManageStaff]
+
+    def get_queryset(self):
+        return self.queryset.filter(dealer=self.request.user.profile.dealer_profile)
+
+    def perform_create(self, serializer):
+        serializer.save()
 
 
 @extend_schema_view(

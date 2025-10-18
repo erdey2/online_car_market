@@ -1,8 +1,9 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
-from online_car_market.dealers.models import DealerProfile, DealerRating
 from online_car_market.common.serializers import ProfileLiteSerializer
 from online_car_market.users.models import User
+from ..models import DealerProfile, DealerStaff, DealerRating
 from rolepermissions.checkers import get_user_roles
 import bleach
 import logging
@@ -20,7 +21,8 @@ class DealerProfileSerializer(serializers.ModelSerializer):
     is_verified = serializers.BooleanField(read_only=True)
     role = serializers.SerializerMethodField(read_only=True)
 
-    def get_role(self, obj):
+    @extend_schema_field(serializers.CharField())
+    def get_role(self, obj) -> str:
         roles = get_user_roles(obj.profile.user)
         return roles[1].get_name() if roles else None
 
@@ -57,6 +59,37 @@ class DealerProfileSerializer(serializers.ModelSerializer):
             return cleaned
         return value
 
+class DealerStaffSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(write_only=True)  # Input email to find/create user
+    role = serializers.ChoiceField(choices=[('sales', 'Sales'), ('accounting', 'Accounting')])
+
+    class Meta:
+        model = DealerStaff
+        fields = ['id', 'user_email', 'role', 'assigned_at', 'updated_at']
+        read_only_fields = ['id', 'assigned_at', 'updated_at']
+
+    def validate_user_email(self, value):
+        try:
+            user = User.objects.get(email=value)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("User with this email does not exist.")
+        if DealerStaff.objects.filter(dealer=self.context['dealer'], user=user).exists():
+            raise serializers.ValidationError("This user is already assigned to this dealer.")
+        return value
+
+    def create(self, validated_data):
+        user_email = validated_data.pop('user_email')
+        role = validated_data.pop('role')
+        try:
+            user = User.objects.get(email=user_email)
+        except User.DoesNotExist:
+            user = User.objects.create_user(email=user_email,
+                                            password='default_password')  # Set a default or require password
+        dealer = self.context['request'].user.profile.dealer_profile
+        staff_member = DealerStaff.objects.create(dealer=dealer, user=user, role=role)
+        from rolepermissions.roles import assign_role
+        assign_role(user, role)
+        return staff_member
 
 class DealerRatingSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
