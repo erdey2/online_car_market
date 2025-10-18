@@ -61,7 +61,7 @@ class DealerProfileSerializer(serializers.ModelSerializer):
 
 class DealerStaffSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(write_only=True)  # Input email to find/create user
-    role = serializers.ChoiceField(choices=[('sales', 'Sales'), ('accounting', 'Accounting')])
+    role = serializers.ChoiceField(choices=[('seller', 'Seller'), ('accountant', 'Accountant')])
 
     class Meta:
         model = DealerStaff

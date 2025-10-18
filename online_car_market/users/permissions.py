@@ -64,8 +64,8 @@ class SuperAdmin(AbstractUserRole):
         'manage_brokers': True,
         'manage_dealers': True,
         'manage_inventory': True,
-        'manage_sales': True,
-        'manage_accounting': True,
+        'manage_sellers': True,
+        'manage_accountants': True,
         'verify_car': True,
         'verify_broker': True,
         'verify_dealer': True,
@@ -79,7 +79,7 @@ class Admin(AbstractUserRole):
         'manage_brokers': True,
         'manage_dealers': True,
         'manage_inventory': True,
-        'manage_sales': True,
+        'manage_sellers': True,
         'view_accounting': True,
         'verify_car': True,
         'verify_broker': True,
@@ -116,7 +116,7 @@ class Buyer(AbstractUserRole):
         'purchase_car': True,
     }
 
-class Sales(AbstractUserRole):
+class Seller(AbstractUserRole):
     available_permissions = {
         'view_sales_dashboard': True,
         'view_cars': True,
@@ -124,7 +124,7 @@ class Sales(AbstractUserRole):
         'view_own_sales': True,
     }
 
-class Accounting(AbstractUserRole):
+class Accountant(AbstractUserRole):
     available_permissions = {
         'view_accounting': True,
         'manage_accounting': True,
