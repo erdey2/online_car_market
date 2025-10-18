@@ -106,7 +106,7 @@ class SaleViewSet(ModelViewSet):
         elif has_role(user, 'buyer'):
             try:
                 buyer_profile = BuyerProfile.objects.get(profile__user=user)
-                return self.queryset.filter(buyer=buyer_profile)
+                return self.queryset.filter(buyer=buyer_profile.profile.user)
             except BuyerProfile.DoesNotExist:
                 return self.queryset.none()
         return self.queryset.none()
