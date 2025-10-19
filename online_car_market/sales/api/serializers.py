@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
 from online_car_market.sales.models import Sale, Lead
 from online_car_market.inventory.models import Car
@@ -23,6 +24,17 @@ class SaleSerializer(serializers.ModelSerializer):
         fields = ['id', 'buyer', 'buyer_info', 'car', 'broker', 'dealer', 'price', 'date']
         read_only_fields = ['id', 'date', 'buyer_info']
 
+    @extend_schema_field({
+        "type": "object",
+        "properties": {
+            "id": {"type": "integer"},
+            "email": {"type": "string"},
+            "first_name": {"type": "string"},
+            "last_name": {"type": "string"},
+            "contact": {"type": "string"},
+            "loyalty_points": {"type": "integer"},
+        }
+    })
     def get_buyer_info(self, obj):
         """Return detailed buyer info including BuyerProfile."""
         try:

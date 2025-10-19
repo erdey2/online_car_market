@@ -195,7 +195,7 @@ class LeadViewSet(ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), has_manage_sales_permission]
+            return [IsAuthenticated(), CanManageSales]
         return [IsAuthenticated()]
 
     def get_queryset(self):
