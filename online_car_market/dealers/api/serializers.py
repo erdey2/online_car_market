@@ -69,6 +69,16 @@ class DealerStaffSerializer(serializers.ModelSerializer):
         fields = ['id', 'user_email', 'user', 'role', 'assigned_at', 'updated_at']
         read_only_fields = ['id', 'assigned_at', 'updated_at']
 
+
+    @extend_schema_field({
+        "type": "object",
+        "properties": {
+            "id": {"type": "integer"},
+            "email": {"type": "string"},
+            "first_name": {"type": "string"},
+            "last_name": {"type": "string"}
+        }
+    })
     def get_user(self, obj):
         """Return basic user info."""
         if obj.user:
