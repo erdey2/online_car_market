@@ -73,8 +73,11 @@ class DealerStaffSerializer(serializers.ModelSerializer):
             user = User.objects.get(email=value)
         except User.DoesNotExist:
             raise serializers.ValidationError("User with this email does not exist.")
-        if DealerStaff.objects.filter(dealer=self.context['dealer'], user=user).exists():
+
+        dealer = self.context['request'].user.profile.dealer_profile  # ✅ Fix here
+        if DealerStaff.objects.filter(dealer=dealer, user=user).exists():
             raise serializers.ValidationError("This user is already assigned to this dealer.")
+
         return value
 
     def create(self, validated_data):
@@ -85,7 +88,10 @@ class DealerStaffSerializer(serializers.ModelSerializer):
         except User.DoesNotExist:
             user = User.objects.create_user(email=user_email,
                                             password='default_password')  # Set a default or require password
-        dealer = self.context['request'].user.profile.dealer_profile
+        dealer = getattr(self.context['request'].user.profile, 'dealer_profile', None)
+        if not dealer:
+            raise serializers.ValidationError("You must be a dealer to assign staff.")
+
         staff_member = DealerStaff.objects.create(dealer=dealer, user=user, role=role)
         from rolepermissions.roles import assign_role
         assign_role(user, role)
