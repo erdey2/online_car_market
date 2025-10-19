@@ -61,12 +61,24 @@ class DealerProfileSerializer(serializers.ModelSerializer):
 
 class DealerStaffSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(write_only=True)  # Input email to find/create user
+    user = serializers.SerializerMethodField(read_only=True)
     role = serializers.ChoiceField(choices=[('seller', 'Seller'), ('accountant', 'Accountant')])
 
     class Meta:
         model = DealerStaff
-        fields = ['id', 'user_email', 'role', 'assigned_at', 'updated_at']
+        fields = ['id', 'user_email', 'user', 'role', 'assigned_at', 'updated_at']
         read_only_fields = ['id', 'assigned_at', 'updated_at']
+
+    def get_user(self, obj):
+        """Return basic user info."""
+        if obj.user:
+            return {
+                "id": obj.user.id,
+                "email": obj.user.email,
+                "first_name": getattr(obj.user, "first_name", ""),
+                "last_name": getattr(obj.user, "last_name", "")
+            }
+        return None
 
     def validate_user_email(self, value):
         try:
@@ -74,7 +86,7 @@ class DealerStaffSerializer(serializers.ModelSerializer):
         except User.DoesNotExist:
             raise serializers.ValidationError("User with this email does not exist.")
 
-        dealer = self.context['request'].user.profile.dealer_profile  # ✅ Fix here
+        dealer = self.context['request'].user.profile.dealer_profile
         if DealerStaff.objects.filter(dealer=dealer, user=user).exists():
             raise serializers.ValidationError("This user is already assigned to this dealer.")
 
