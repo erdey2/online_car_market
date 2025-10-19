@@ -4,7 +4,7 @@ from online_car_market.sales.models import Sale, Lead
 from online_car_market.inventory.models import Car
 from online_car_market.buyers.models import BuyerProfile
 from online_car_market.brokers.models import BrokerProfile
-from online_car_market.dealers.models import DealerProfile
+from online_car_market.dealers.models import DealerProfile, DealerStaff
 from django.contrib.auth import get_user_model
 import re
 import bleach
@@ -12,92 +12,102 @@ import bleach
 User = get_user_model()
 
 class SaleSerializer(serializers.ModelSerializer):
-    buyer = serializers.PrimaryKeyRelatedField(queryset=BuyerProfile.objects.all())
+    buyer = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
     car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all())
     broker = serializers.PrimaryKeyRelatedField(queryset=BrokerProfile.objects.all(), required=False, allow_null=True)
+    dealer = serializers.PrimaryKeyRelatedField(queryset=DealerProfile.objects.all(), required=False, allow_null=True)
+    buyer_info = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Sale
-        fields = ['id', 'buyer', 'car', 'broker', 'price', 'date']
-        read_only_fields = ['id', 'date']
+        fields = ['id', 'buyer', 'buyer_info', 'car', 'broker', 'dealer', 'price', 'date']
+        read_only_fields = ['id', 'date', 'buyer_info']
+
+    def get_buyer_info(self, obj):
+        """Return detailed buyer info including BuyerProfile."""
+        try:
+            profile = obj.buyer.profile
+            buyer_profile = getattr(profile, 'buyer_profile', None)
+            return {
+                "id": obj.buyer.id,
+                "email": obj.buyer.email,
+                "first_name": profile.first_name,
+                "last_name": profile.last_name,
+                "contact": profile.contact,
+                "loyalty_points": getattr(buyer_profile, "loyalty_points", 0)
+            }
+        except AttributeError:
+            return None
 
     def validate_price(self, value):
-        """Validate price."""
         if value < 0:
             raise serializers.ValidationError("Price cannot be negative.")
-        if value > 100000000:
+        if value > 100_000_000:
             raise serializers.ValidationError("Price cannot exceed 100,000,000.")
         return value
 
     def validate_buyer(self, value):
-        """Ensure buyer has buyer role."""
-        if not has_role(value.profile.user, 'buyer'):
+        """Ensure buyer has the 'buyer' role."""
+        if not has_role(value, 'buyer'):
             raise serializers.ValidationError("The assigned user must have the buyer role.")
         return value
 
-    def validate_broker(self, value):
-        """Ensure broker has broker role and can post cars."""
-        if value:
-            if not has_role(value.profile.user, 'broker'):
-                raise serializers.ValidationError("The assigned user must have the broker role.")
-            if not value.can_post:
-                raise serializers.ValidationError("Broker must have paid to post cars.")
-        return value
-
     def validate_car(self, value):
-        """Ensure car is available or reserved and belongs to broker or dealer."""
+        """Ensure the car is available or reserved."""
         if value.status not in ['available', 'reserved']:
             raise serializers.ValidationError("The car must be available or reserved for sale.")
         return value
 
     def validate(self, data):
-        """Ensure user has permission and car ownership is valid."""
         user = self.context['request'].user
         car = data.get('car')
-        broker = data.get('broker')
 
-        # Permission check
-        allowed_roles = ['super_admin', 'admin']
+        # Role-based access
         if has_role(user, 'broker'):
             try:
                 broker_profile = BrokerProfile.objects.get(profile__user=user)
                 if car.broker != broker_profile:
-                    raise serializers.ValidationError("Brokers can only create sales for their own cars.")
-                allowed_roles.append('broker')
+                    raise serializers.ValidationError("You can only create sales for your own cars.")
+                data['broker'] = broker_profile
             except BrokerProfile.DoesNotExist:
                 raise serializers.ValidationError("Broker profile not found.")
+
         elif has_role(user, 'dealer'):
             try:
                 dealer_profile = DealerProfile.objects.get(profile__user=user)
                 if car.dealer != dealer_profile:
-                    raise serializers.ValidationError("Dealers can only create sales for their own cars.")
-                allowed_roles.append('dealer')
+                    raise serializers.ValidationError("You can only create sales for your own cars.")
+                data['dealer'] = dealer_profile
             except DealerProfile.DoesNotExist:
                 raise serializers.ValidationError("Dealer profile not found.")
 
-        if not has_role(user, allowed_roles):
-            raise serializers.ValidationError(
-                "Only brokers (for their cars), dealers (for their cars), admins, or super admins can create/update sales."
-            )
+        elif has_role(user, 'seller'):
+            try:
+                staff = DealerStaff.objects.get(user=user, role='seller')
+                if car.dealer != staff.dealer:
+                    raise serializers.ValidationError("You can only sell cars belonging to your dealer.")
+                data['dealer'] = staff.dealer
+            except DealerStaff.DoesNotExist:
+                raise serializers.ValidationError("You are not assigned to any dealer as a seller.")
 
-        # Validate car ownership
-        if broker and car.broker != broker:
-            raise serializers.ValidationError("The car must belong to the specified broker.")
-        if not broker and not car.dealer:
-            raise serializers.ValidationError("The car must belong to a broker or dealer.")
-        if broker and car.dealer:
-            raise serializers.ValidationError("The car cannot belong to both a broker and a dealer.")
+        elif has_role(user, ['super_admin', 'admin']):
+            # Admins can assign broker or dealer freely
+            pass
+        else:
+            raise serializers.ValidationError("You don't have permission to create a sale.")
 
-        # Price validation (allow admins to override)
-        if (data.get('price') and data.get('car') and
-                data['price'] < data['car'].price * 0.9 and
-                not has_role(user, ['super_admin', 'admin'])):
-            raise serializers.ValidationError("Sale price cannot be less than 90% of the car's listed price.")
+        # Validate car ownership consistency
+        broker = data.get('broker')
+        dealer = data.get('dealer')
+        if broker and dealer:
+            raise serializers.ValidationError("Car cannot belong to both broker and dealer.")
+        if not broker and not dealer:
+            raise serializers.ValidationError("Car must belong to a broker or a dealer.")
 
         return data
 
     def create(self, validated_data):
-        """Set car status to sold upon sale creation."""
+        """Create sale and mark car as sold."""
         car = validated_data['car']
         sale = super().create(validated_data)
         car.status = 'sold'
@@ -105,7 +115,7 @@ class SaleSerializer(serializers.ModelSerializer):
         return sale
 
     def update(self, instance, validated_data):
-        """Set car status to sold upon sale update."""
+        """Update sale and mark car as sold."""
         car = validated_data.get('car', instance.car)
         sale = super().update(instance, validated_data)
         car.status = 'sold'
