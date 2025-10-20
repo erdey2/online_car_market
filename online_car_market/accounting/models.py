@@ -6,8 +6,6 @@ class Expense(models.Model):
         DealerProfile,
         on_delete=models.CASCADE,
         related_name='expenses',
-        null=True,
-        blank=True
     )
     type = models.CharField(max_length=100, choices=[
         ('maintenance', 'Maintenance'),
@@ -27,8 +25,6 @@ class FinancialReport(models.Model):
         DealerProfile,
         on_delete=models.CASCADE,
         related_name='financial_reports',
-        null=True,
-        blank=True
     )
     type = models.CharField(max_length=50, choices=[
         ('profit_loss', 'Profit/Loss'),

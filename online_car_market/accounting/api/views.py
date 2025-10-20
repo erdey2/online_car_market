@@ -38,7 +38,7 @@ class ExpenseViewSet(ModelViewSet):
         if has_role(user, 'dealer'):
             dealer_profile = DealerProfile.objects.filter(profile__user=user).first()
             return Expense.objects.filter(dealer=dealer_profile) if dealer_profile else Expense.objects.none()
-        if has_role(user, ['super_admin', 'admin', 'accounting']):
+        if has_role(user, ['super_admin', 'admin', 'accountant', 'dealer']):
             return Expense.objects.all()
         return Expense.objects.none()
 

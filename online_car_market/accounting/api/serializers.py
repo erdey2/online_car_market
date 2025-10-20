@@ -7,7 +7,7 @@ import bleach
 class ExpenseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Expense
-        fields = ['id', 'type', 'amount', 'date', 'description']
+        fields = ['id', 'type', 'amount', 'dealer', 'date', 'description']
         read_only_fields = ['id', 'date']
 
     def validate_type(self, value):
@@ -38,14 +38,14 @@ class ExpenseSerializer(serializers.ModelSerializer):
     def validate(self, data):
         """Ensure only accounting, admins, or super admins can create/update expenses."""
         user = self.context['request'].user
-        if not has_role(user, ['super_admin', 'admin', 'accounting']):
-            raise serializers.ValidationError("Only accounting, admins, or super admins can manage expenses.")
+        if not has_role(user, ['super_admin', 'admin', 'dealer', 'accountant']):
+            raise serializers.ValidationError("Only accountant, dealer, admins, or super admins can manage expenses.")
         return data
 
 class FinancialReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = FinancialReport
-        fields = ['id', 'type', 'data', 'created_at']
+        fields = ['id', 'type', 'dealer', 'data', 'created_at']
         read_only_fields = ['id', 'created_at']
 
     def validate_type(self, value):

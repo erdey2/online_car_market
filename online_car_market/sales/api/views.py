@@ -189,7 +189,7 @@ class SaleViewSet(ModelViewSet):
     ),
 )
 class LeadViewSet(ModelViewSet):
-    queryset = Lead.objects.all()
+    queryset = Lead.objects.all().order_by('-created_at')
     serializer_class = LeadSerializer
     permission_classes = [IsAuthenticated]
 
