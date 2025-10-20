@@ -1,14 +1,16 @@
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated, BasePermission
 from rolepermissions.checkers import has_role
-from ..models import Expense, FinancialReport
+from ..models import Expense, FinancialReport, DealerProfile
 from .serializers import ExpenseSerializer, FinancialReportSerializer
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
+
 class CanManageAccounting(BasePermission):
-    """Only super_admin, admin, broker, or dealer can manage sales."""
+    """Only super_admin, admin, broker, dealer, or accountant can manage sales."""
     def has_permission(self, request, view):
         return has_role(request.user, ['super_admin', 'admin', 'broker', 'dealer', 'accountant'])
+
 
 # -----------------------
 # Expense ViewSet
@@ -34,7 +36,8 @@ class ExpenseViewSet(ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if has_role(user, 'dealer'):
-            return Expense.objects.filter(dealer=user)
+            dealer_profile = DealerProfile.objects.filter(profile__user=user).first()
+            return Expense.objects.filter(dealer=dealer_profile) if dealer_profile else Expense.objects.none()
         if has_role(user, ['super_admin', 'admin', 'accounting']):
             return Expense.objects.all()
         return Expense.objects.none()
@@ -63,7 +66,8 @@ class FinancialReportViewSet(ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if has_role(user, 'dealer'):
-            return FinancialReport.objects.filter(dealer=user)
+            dealer_profile = DealerProfile.objects.filter(profile__user=user).first()
+            return FinancialReport.objects.filter(dealer=dealer_profile) if dealer_profile else FinancialReport.objects.none()
         if has_role(user, ['super_admin', 'admin', 'accounting']):
             return FinancialReport.objects.all()
         return FinancialReport.objects.none()

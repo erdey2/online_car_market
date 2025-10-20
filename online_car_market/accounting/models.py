@@ -1,7 +1,14 @@
 from django.db import models
-
+from online_car_market.dealers.models import DealerProfile
 # Financial Report
 class Expense(models.Model):
+    dealer = models.ForeignKey(
+        DealerProfile,
+        on_delete=models.CASCADE,
+        related_name='expenses',
+        null=True,
+        blank=True
+    )
     type = models.CharField(max_length=100, choices=[
         ('maintenance', 'Maintenance'),
         ('marketing', 'Marketing'),
@@ -13,9 +20,16 @@ class Expense(models.Model):
     description = models.TextField(blank=True)
 
     def __str__(self):
-        return f"{self.type} - {self.amount} on {self.date}"
+        return f"{self.type} - {self.amount} ({self.dealer}) on {self.date}"
 
 class FinancialReport(models.Model):
+    dealer = models.ForeignKey(
+        DealerProfile,
+        on_delete=models.CASCADE,
+        related_name='financial_reports',
+        null=True,
+        blank=True
+    )
     type = models.CharField(max_length=50, choices=[
         ('profit_loss', 'Profit/Loss'),
         ('balance_sheet', 'Balance Sheet')
