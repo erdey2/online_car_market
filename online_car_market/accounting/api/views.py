@@ -1,17 +1,14 @@
 from rest_framework.viewsets import ModelViewSet
-from rest_framework.permissions import IsAuthenticated
-from rolepermissions.permissions import register_object_checker
+from rest_framework.permissions import IsAuthenticated, BasePermission
 from rolepermissions.checkers import has_role
 from ..models import Expense, FinancialReport
 from .serializers import ExpenseSerializer, FinancialReportSerializer
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
-# -----------------------
-# Object-level permission
-# -----------------------
-@register_object_checker()
-def has_manage_accounting_permission(permission, user, obj):
-    return has_role(user, ['super_admin', 'admin', 'accounting', 'dealer'])
+class CanManageAccounting(BasePermission):
+    """Only super_admin, admin, broker, or dealer can manage sales."""
+    def has_permission(self, request, view):
+        return has_role(request.user, ['super_admin', 'admin', 'broker', 'dealer', 'accountant'])
 
 # -----------------------
 # Expense ViewSet
@@ -31,7 +28,7 @@ class ExpenseViewSet(ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), has_manage_accounting_permission]
+            return [IsAuthenticated(), CanManageAccounting()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
@@ -60,7 +57,7 @@ class FinancialReportViewSet(ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), has_manage_accounting_permission]
+            return [IsAuthenticated(), CanManageAccounting()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
