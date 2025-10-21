@@ -4,7 +4,7 @@ from .views import ExpenseViewSet, FinancialReportViewSet
 
 router = DefaultRouter()
 router.register(r'expenses', ExpenseViewSet)
-router.register(r'financial-reports', FinancialReportViewSet)
+router.register(r'financial-reports', FinancialReportViewSet, basename='financialreport')
 
 urlpatterns = [
     path('', include(router.urls)),

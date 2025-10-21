@@ -1,5 +1,6 @@
 from django.db import models
 from online_car_market.dealers.models import DealerProfile
+
 # Financial Report
 class Expense(models.Model):
     dealer = models.ForeignKey(

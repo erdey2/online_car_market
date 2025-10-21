@@ -1,10 +1,16 @@
 from rest_framework import serializers
 from rolepermissions.checkers import has_role
 from ..models import Expense, FinancialReport
-import re
 import bleach
 
+
 class ExpenseSerializer(serializers.ModelSerializer):
+    # Explicitly define `type` so schema shows choices
+    type = serializers.ChoiceField(
+        choices=Expense._meta.get_field('type').choices,
+        help_text="Expense type. Options: maintenance, marketing, operational, other"
+    )
+
     class Meta:
         model = Expense
         fields = ['id', 'type', 'amount', 'dealer', 'date', 'description']
@@ -39,10 +45,19 @@ class ExpenseSerializer(serializers.ModelSerializer):
         """Ensure only accounting, admins, or super admins can create/update expenses."""
         user = self.context['request'].user
         if not has_role(user, ['super_admin', 'admin', 'dealer', 'accountant']):
-            raise serializers.ValidationError("Only accountant, dealer, admins, or super admins can manage expenses.")
+            raise serializers.ValidationError(
+                "Only accountant, dealer, admins, or super admins can manage expenses."
+            )
         return data
 
+
 class FinancialReportSerializer(serializers.ModelSerializer):
+    # Explicitly define `type` field so schema shows enum
+    type = serializers.ChoiceField(
+        choices=FinancialReport._meta.get_field('type').choices,
+        help_text="Financial report type. Options: profit_loss, balance_sheet"
+    )
+
     class Meta:
         model = FinancialReport
         fields = ['id', 'type', 'dealer', 'data', 'created_at']
@@ -60,26 +75,36 @@ class FinancialReportSerializer(serializers.ModelSerializer):
         """Validate and sanitize JSON data."""
         if not isinstance(value, dict):
             raise serializers.ValidationError("Data must be a valid JSON object.")
-        required_keys = {'total_revenue', 'total_expenses', 'net_profit'} if self.initial_data.get('type') == 'profit_loss' else {'assets', 'liabilities', 'equity'}
+        report_type = self.initial_data.get('type')
+        required_keys = (
+            {'total_revenue', 'total_expenses', 'net_profit'}
+            if report_type == 'profit_loss'
+            else {'assets', 'liabilities', 'equity'}
+        )
+
         sanitized_data = {}
-        for key in value:
-            if isinstance(value[key], str):
-                sanitized_data[key] = bleach.clean(value[key].strip(), tags=[], strip=True)
-            else:
-                sanitized_data[key] = value[key]
+        for key, val in value.items():
+            sanitized_data[key] = bleach.clean(val.strip(), tags=[], strip=True) if isinstance(val, str) else val
+
         for key in required_keys:
             if key not in sanitized_data:
                 raise serializers.ValidationError(f"Data must include '{key}' key.")
             if not isinstance(sanitized_data[key], (int, float)) or sanitized_data[key] < 0:
                 raise serializers.ValidationError(f"'{key}' must be a non-negative number.")
-        if sanitized_data.get('total_revenue') and sanitized_data.get('total_expenses') and sanitized_data.get('net_profit'):
+
+        if report_type == 'profit_loss':
             if sanitized_data['net_profit'] != sanitized_data['total_revenue'] - sanitized_data['total_expenses']:
-                raise serializers.ValidationError("Net profit must equal total revenue minus total expenses for profit_loss reports.")
+                raise serializers.ValidationError(
+                    "Net profit must equal total revenue minus total expenses for profit_loss reports."
+                )
+
         return sanitized_data
 
     def validate(self, data):
         """Ensure only accounting, admins, or super admins can create/update reports."""
         user = self.context['request'].user
-        if not has_role(user, ['super_admin', 'admin', 'accounting']):
-            raise serializers.ValidationError("Only accounting, admins, or super admins can manage financial reports.")
+        if not has_role(user, ['super_admin', 'admin', 'accountant']):
+            raise serializers.ValidationError(
+                "Only accounting, admins, or super admins can manage financial reports."
+            )
         return data
