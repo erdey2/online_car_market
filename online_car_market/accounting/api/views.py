@@ -57,7 +57,7 @@ class FinancialReportViewSet(ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if has_role(user, ['dealer']):
-            return FinancialReport.objects.filter(dealer__user=user)
+            return FinancialReport.objects.filter(dealer__profile__user=user)
         return FinancialReport.objects.all()
 
     @extend_schema(

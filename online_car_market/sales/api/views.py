@@ -1,9 +1,6 @@
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.permissions import BasePermission
-from rest_framework.response import Response
-from rest_framework import status
-from rolepermissions.permissions import register_object_checker
 from rolepermissions.checkers import has_role
 from online_car_market.sales.models import Sale, Lead
 from online_car_market.dealers.models import DealerStaff
