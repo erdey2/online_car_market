@@ -2,6 +2,7 @@ from rest_framework.permissions import BasePermission
 from rolepermissions.checkers import has_role
 from rolepermissions.roles import AbstractUserRole
 from rolepermissions.roles import get_user_roles
+from rolepermissions.checkers import has_permission
 import logging
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,23 @@ class IsBroker(BasePermission):
 class IsBuyer(BasePermission):
     def has_permission(self, request, view):
         return has_role(request.user, 'buyer')
+
+class CanPostCar(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated and
+            has_permission(request.user, 'post_car')
+        )
+
+class CanViewSalesData(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated and (
+                has_permission(request.user, 'view_accounting') or
+                has_permission(request.user, 'view_sales_dashboard')
+            )
+        )
+
 
 class SuperAdmin(AbstractUserRole):
     available_permissions = {
@@ -126,6 +144,7 @@ class Seller(AbstractUserRole):
         'view_cars': True,
         'manage_sales': True,
         'view_own_sales': True,
+        'post_car': True,
     }
 
 class Accountant(AbstractUserRole):

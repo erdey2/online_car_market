@@ -26,6 +26,7 @@ from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.payment.models import Payment
 from online_car_market.users.models import Profile
+from online_car_market.users.permissions import CanPostCar
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +133,7 @@ list=extend_schema(
     ),
     create=extend_schema(
         tags=["Dealers - Inventory"],
-        description="Create a car listing (dealers/brokers/admins only). Brokers must have paid (can_post=True).",
+        description="Create a car listing (dealers/brokers/seller/admins only). Brokers must have paid (can_post=True).",
         request=CarSerializer,
         responses={201: CarSerializer}
     ),
@@ -156,7 +157,7 @@ list=extend_schema(
 )
 class CarViewSet(viewsets.ModelViewSet):
     serializer_class = CarSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticatedOrReadOnly & CanPostCar]
     parser_classes = [MultiPartParser, FormParser]
     queryset = Car.objects.all()
 
