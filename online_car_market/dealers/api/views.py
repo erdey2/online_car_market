@@ -5,10 +5,11 @@ from rest_framework.decorators import action
 from rest_framework import viewsets, status, mixins
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound, PermissionDenied
-from rolepermissions.checkers import has_role, has_permission
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rolepermissions.checkers import has_role, has_permission, get_user_roles
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiResponse
 from online_car_market.dealers.models import DealerProfile, DealerRating
-from .serializers import DealerRatingSerializer, DealerProfileSerializer, VerifyDealerSerializer, DealerStaffSerializer
+from .serializers import (DealerRatingSerializer, DealerProfileSerializer, VerifyDealerSerializer, DealerStaffSerializer)
 from online_car_market.users.permissions import IsSuperAdmin, IsAdmin
 from ..models import DealerStaff
 import logging
@@ -23,44 +24,79 @@ class IsDealerWithManageStaff(BasePermission):
     def has_permission(self, request, view):
         return has_role(request.user, 'dealer') and has_permission(request.user, 'manage_staff') and hasattr(request.user.profile, 'dealer_profile')
 
-class DealerProfileViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+class ProfileViewSet(viewsets.ViewSet):
     """
-    A singleton-style endpoint for the authenticated dealer's profile.
-    Only supports GET (retrieve) and PATCH (update).
+    Endpoint to get or update the authenticated user's profile
+    (dealer, seller, or accountant).
     """
-    serializer_class = DealerProfileSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_object(self):
-        try:
-            dealer_profile = DealerProfile.objects.get(profile__user=self.request.user)
-        except DealerProfile.DoesNotExist:
-            raise NotFound(detail="Dealer profile not found.")
+    @extend_schema(
+        tags=["Profiles"],
+        description="Retrieve the authenticated user's profile (dealer, seller, accountant)."
+    )
+    def retrieve(self, request):
+        user = request.user
 
-        if not has_role(self.request.user, 'dealer'):
-            raise PermissionDenied(detail="User does not have dealer role.")
+        # Dealer
+        if has_role(user, 'dealer'):
+            try:
+                dealer_profile = DealerProfile.objects.get(profile__user=user)
+            except DealerProfile.DoesNotExist:
+                return Response({"detail": "Dealer profile not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        return dealer_profile
+            serializer = DealerProfileSerializer(dealer_profile)
+            return Response(serializer.data)
+
+        # Seller / Accountant
+        elif has_role(user, 'seller') or has_role(user, 'accountant'):
+            staff_profile = DealerStaff.objects.filter(user=user).select_related('dealer', 'user').first()
+            if not staff_profile:
+                return Response({"detail": "Staff profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            serializer = StaffProfileSerializer(staff_profile)
+            return Response(serializer.data)
+
+        return Response(
+            {"detail": "User does not have a dealer, seller, or accountant role."},
+            status=status.HTTP_403_FORBIDDEN
+        )
 
     @extend_schema(
-        tags=["Dealers - Profile"],
-        description="Retrieve the authenticated dealer's profile."
+        tags=["Profiles"],
+        description="Partially update the authenticated user's profile (dealer, seller, accountant)."
     )
-    def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
-        serializer = self.get_serializer(instance)
-        return Response(serializer.data)
+    def partial_update(self, request):
+        user = request.user
 
-    @extend_schema(
-        tags=["Dealers - Profile"],
-        description="Partially update the authenticated dealer's profile."
-    )
-    def partial_update(self, request, *args, **kwargs):
-        instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data)
+        # Dealer update
+        if has_role(user, 'dealer'):
+            try:
+                dealer_profile = DealerProfile.objects.get(profile__user=user)
+            except DealerProfile.DoesNotExist:
+                return Response({"detail": "Dealer profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            serializer = DealerProfileSerializer(dealer_profile, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+
+        # Seller / Accountant update
+        elif has_role(user, 'seller') or has_role(user, 'accountant'):
+            staff_profile = DealerStaff.objects.filter(user=user).first()
+            if not staff_profile:
+                return Response({"detail": "Staff profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            serializer = StaffProfileSerializer(staff_profile, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(serializer.data)
+
+        return Response(
+            {"detail": "User does not have a dealer, seller, or accountant role."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
 
 @extend_schema_view(
     create=extend_schema(
@@ -113,7 +149,6 @@ class DealerStaffViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save()
-
 
 @extend_schema_view(
     list=extend_schema(tags=["Dealers - Ratings"], description="List all ratings for a dealer."),

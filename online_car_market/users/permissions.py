@@ -1,6 +1,10 @@
 from rest_framework.permissions import BasePermission
 from rolepermissions.checkers import has_role
 from rolepermissions.roles import AbstractUserRole
+from rolepermissions.roles import get_user_roles
+import logging
+
+logger = logging.getLogger(__name__)
 
 class IsSuperAdmin(BasePermission):
     def has_permission(self, request, view):
