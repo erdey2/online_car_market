@@ -310,7 +310,6 @@ ACCOUNT_ALLOW_REGISTRATION = env.bool("DJANGO_ACCOUNT_ALLOW_REGISTRATION", True)
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -335,9 +334,9 @@ SIMPLE_JWT = {
 REST_AUTH = {
     "USE_JWT": True,
     "TOKEN_MODEL": None,
-    'JWT_AUTH_COOKIE': 'access',
-    'JWT_AUTH_REFRESH_COOKIE': 'refresh',
-    "JWT_AUTH_HTTPONLY": False,
+    # 'JWT_AUTH_COOKIE': 'access',
+    # 'JWT_AUTH_REFRESH_COOKIE': 'refresh',
+    # "JWT_AUTH_HTTPONLY": False,
     'REGISTER_SERIALIZER': 'online_car_market.users.api.serializers.CustomRegisterSerializer',
     'LOGIN_SERIALIZER': 'online_car_market.users.api.serializers.CustomLoginSerializer',
     'SIGNUP_FIELDS': {
