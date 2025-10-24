@@ -1,17 +1,17 @@
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.permissions import IsAuthenticated, BasePermission
 from rest_framework.decorators import action
-from rest_framework import viewsets, status, mixins
+from rest_framework import viewsets, status
 from rest_framework.response import Response
-from rest_framework.exceptions import NotFound, PermissionDenied
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from rolepermissions.checkers import has_role, has_permission, get_user_roles
+from rolepermissions.checkers import has_role, has_permission
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiResponse
 from online_car_market.dealers.models import DealerProfile, DealerRating
 from .serializers import (DealerRatingSerializer, DealerProfileSerializer, VerifyDealerSerializer, DealerStaffSerializer)
 from online_car_market.users.permissions import IsSuperAdmin, IsAdmin
 from ..models import DealerStaff
+from online_car_market.dealers.utils import get_high_sales_rate_cars, get_top_sellers
 import logging
 
 logger = logging.getLogger(__name__)
@@ -213,3 +213,51 @@ class DealerVerificationViewSet(ViewSet):
         except DealerProfile.DoesNotExist:
             logger.error(f"Dealer {pk} not found for verification")
             return Response({"error": "Dealer not found."}, status=404)
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Dealers - Analytics"],
+        description="Retrieve the top sellers based on the number of cars sold in the specified month.",
+        parameters=[
+            OpenApiParameter(name="month", type=int, location="query", description="Month (1-12), defaults to current month"),
+            OpenApiParameter(name="year", type=int, location="query", description="Year, defaults to current year"),
+        ],
+        responses={200: {"type": "array", "items": {"type": "object", "properties": {"user_email": {"type": "string"}, "total_sales": {"type": "integer"}, "month": {"type": "integer"}, "year": {"type": "integer"}}}}}
+    )
+)
+class TopSellersViewSet(viewsets.ViewSet):
+    def list(self, request):
+        month = request.query_params.get('month')
+        year = request.query_params.get('year')
+        if month:
+            from datetime import datetime
+            try:
+                month = datetime(int(year or timezone.now().year), int(month), 1)
+            except ValueError:
+                return Response({"detail": "Invalid month or year."}, status=400)
+        sellers = get_top_sellers(month)
+        return Response(sellers, status=200)
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Dealers - Analytics"],
+        description="Retrieve cars with the highest sales rate in the specified month.",
+        parameters=[
+            OpenApiParameter(name="month", type=int, location="query", description="Month (1-12), defaults to current month"),
+            OpenApiParameter(name="year", type=int, location="query", description="Year, defaults to current year"),
+        ],
+        responses={200: {"type": "array", "items": {"type": "object", "properties": {"car_details": {"type": "string"}, "sale_count": {"type": "integer"}, "month": {"type": "integer"}, "year": {"type": "integer"}}}}}
+    )
+)
+class HighSalesRateCarsViewSet(viewsets.ViewSet):
+    def list(self, request):
+        month = request.query_params.get('month')
+        year = request.query_params.get('year')
+        if month:
+            from datetime import datetime
+            try:
+                month = datetime(int(year or timezone.now().year), int(month), 1)
+            except ValueError:
+                return Response({"detail": "Invalid month or year."}, status=400)
+        cars = get_high_sales_rate_cars(month)
+        return Response(cars, status=200)
