@@ -78,7 +78,6 @@ class CanViewSalesData(BasePermission):
             )
         )
 
-
 class SuperAdmin(AbstractUserRole):
     available_permissions = {
         'manage_users': True,
