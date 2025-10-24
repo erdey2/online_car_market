@@ -54,7 +54,7 @@ class ProfileViewSet(viewsets.ViewSet):
             if not staff_profile:
                 return Response({"detail": "Staff profile not found."}, status=status.HTTP_404_NOT_FOUND)
 
-            serializer = StaffProfileSerializer(staff_profile)
+            serializer = DealerStaffSerializer(staff_profile)
             return Response(serializer.data)
 
         return Response(
@@ -87,7 +87,7 @@ class ProfileViewSet(viewsets.ViewSet):
             if not staff_profile:
                 return Response({"detail": "Staff profile not found."}, status=status.HTTP_404_NOT_FOUND)
 
-            serializer = StaffProfileSerializer(staff_profile, data=request.data, partial=True)
+            serializer = DealerStaffSerializer(staff_profile, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(serializer.data)
