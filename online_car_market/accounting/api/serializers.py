@@ -1,8 +1,171 @@
 from rest_framework import serializers
 from rolepermissions.checkers import has_role
-from ..models import Expense, FinancialReport
+from ..models import Expense, FinancialReport, CarExpense, Revenue, ExchangeRate
 import bleach
 
+class ExchangeRateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExchangeRate
+        fields = '__all__'
+
+    def validate_rate(self, value):
+        """Ensure the exchange rate is positive and reasonable."""
+        if value <= 0:
+            raise serializers.ValidationError("Exchange rate must be greater than zero.")
+        if value > 1000:  # Arbitrary upper limit to catch errors (e.g., 1 USD = 1000 ETB is plausible)
+            raise serializers.ValidationError("Exchange rate seems unreasonably high. Please verify.")
+        return value
+
+    def validate(self, data):
+        """Check uniqueness of currency pair and date combination."""
+        from_currency = data.get('from_currency')
+        to_currency = data.get('to_currency')
+        date = data.get('date')
+
+        if from_currency == to_currency:
+            raise serializers.ValidationError("From and to currencies cannot be the same.")
+
+        if ExchangeRate.objects.filter(
+            from_currency=from_currency,
+            to_currency=to_currency,
+            date=date
+        ).exclude(pk=self.instance.pk if self.instance else None).exists():
+            raise serializers.ValidationError("An exchange rate for this currency pair and date already exists.")
+
+        return data
+
+    def create(self, validated_data):
+        """Ensure only accountants or admins can create rates."""
+        request = self.context.get('request')
+        if request and not has_role(request.user, ['accountant', 'admin', 'super_admin']):
+            raise serializers.ValidationError("Only accountants or admins can set exchange rates.")
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        """Ensure only accountants or admins can update rates."""
+        request = self.context.get('request')
+        if request and not has_role(request.user, ['accountant', 'admin', 'super_admin']):
+            raise serializers.ValidationError("Only accountants or admins can update exchange rates.")
+        return super().update(instance, validated_data)
+
+class CarExpenseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CarExpense
+        fields = '__all__'
+
+    def validate_amount(self, value):
+        """Ensure the expense amount is positive."""
+        if value <= 0:
+            raise serializers.ValidationError("Expense amount must be greater than zero.")
+        return value
+
+    def validate_car(self, value):
+        """Ensure the car exists and is not sold."""
+        if not value or value.status == 'sold':
+            raise serializers.ValidationError("Expense must be linked to an available or unsold car.")
+        return value
+
+    def validate_currency(self, value):
+        """Ensure currency is supported."""
+        if value not in dict(CarExpense._meta.get_field('currency').choices):
+            raise serializers.ValidationError("Invalid currency. Use USD or ETB.")
+        return value
+
+    def validate(self, data):
+        """Convert USD to ETB if necessary and ensure conversion is valid."""
+        amount = data.get('amount')
+        currency = data.get('currency')
+        if currency == 'USD':
+            latest_rate = ExchangeRate.objects.filter(
+                from_currency='USD',
+                to_currency='ETB'
+            ).order_by('-date').first()
+            if not latest_rate:
+                raise serializers.ValidationError("No exchange rate available for USD to ETB.")
+            data['converted_amount'] = amount * latest_rate.rate
+        elif currency == 'ETB':
+            data['converted_amount'] = amount
+        else:
+            raise serializers.ValidationError("Unsupported currency for conversion.")
+        return data
+
+    def create(self, validated_data):
+        """Ensure only accountants or dealers can create expenses."""
+        request = self.context.get('request')
+        if request and not has_role(request.user, ['accountant', 'dealer', 'admin', 'super_admin']):
+            raise serializers.ValidationError("Only accountants or dealers can create expenses.")
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        """Ensure only accountants or dealers can update expenses."""
+        request = self.context.get('request')
+        if request and not has_role(request.user, ['accountant', 'dealer', 'admin', 'super_admin']):
+            raise serializers.ValidationError("Only accountants or dealers can update expenses.")
+        return super().update(instance, validated_data)
+
+class RevenueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Revenue
+        fields = '__all__'
+
+    def validate_amount(self, value):
+        """Ensure the revenue amount is positive."""
+        if value <= 0:
+            raise serializers.ValidationError("Revenue amount must be greater than zero.")
+        return value
+
+    def validate_source_type(self, value):
+        """Ensure source type is valid (e.g., 'sale' or 'broker_payment')."""
+        if value not in ['sale', 'broker_payment']:
+            raise serializers.ValidationError("Source type must be 'sale' or 'broker_payment'.")
+        return value
+
+    def validate(self, data):
+        """Validate the source reference and convert currency if needed."""
+        source_type = data.get('source_type')
+        source_id = data.get('source_id')
+        amount = data.get('amount')
+        currency = data.get('currency')
+
+        if source_type == 'sale':
+            sale = Sale.objects.filter(id=source_id, status='sold').first()
+            if not sale:
+                raise serializers.ValidationError("Invalid or unsold sale reference.")
+            data['source'] = sale
+        elif source_type == 'broker_payment':
+            payment = Payment.objects.filter(id=source_id, status='completed').first()
+            if not payment:
+                raise serializers.ValidationError("Invalid or uncompleted payment reference.")
+            data['source'] = payment
+
+        if currency == 'USD':
+            latest_rate = ExchangeRate.objects.filter(
+                from_currency='USD',
+                to_currency='ETB'
+            ).order_by('-date').first()
+            if not latest_rate:
+                raise serializers.ValidationError("No exchange rate available for USD to ETB.")
+            data['converted_amount'] = amount * latest_rate.rate
+        elif currency == 'ETB':
+            data['converted_amount'] = amount
+        else:
+            raise serializers.ValidationError("Unsupported currency for conversion.")
+
+        return data
+
+    def create(self, validated_data):
+        """Ensure only accountants or admins can create revenue entries."""
+        request = self.context.get('request')
+        if request and not has_role(request.user, ['accountant', 'admin', 'super_admin']):
+            raise serializers.ValidationError("Only accountants or admins can create revenue entries.")
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        """Ensure only accountants or admins can update revenue entries."""
+        request = self.context.get('request')
+        if request and not has_role(request.user, ['accountant', 'admin', 'super_admin']):
+            raise serializers.ValidationError("Only accountants or admins can update revenue entries.")
+        return super().update(instance, validated_data)
 
 class ExpenseSerializer(serializers.ModelSerializer):
     # Explicitly define `type` so schema shows choices
