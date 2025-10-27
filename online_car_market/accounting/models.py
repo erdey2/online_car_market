@@ -71,7 +71,7 @@ class Revenue(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=3, choices=Currency.choices, default=Currency.ETB)
     converted_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    created_at = models.DateField(default=timezone.now)
+    created_at = models.DateTimeField(default=timezone.now)
     description = models.TextField(blank=True)
 
     def save(self, *args, **kwargs):
