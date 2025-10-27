@@ -39,10 +39,10 @@ def generate_financial_report(dealer, report_type="profit_loss", month=None, yea
     # --- Handle Revenues ---
     # If you have a Sale model (each car sold), aggregate revenue:
     total_revenue_usd = \
-    Sale.objects.filter(dealer=dealer, created_at__month=month, created_at__year=year, currency='USD').aggregate(
+    Sale.objects.filter(dealer=dealer, date__month=month, date__year=year).aggregate(
         total=Sum('price'))['total'] or Decimal(0)
     total_revenue_birr = \
-    Sale.objects.filter(dealer=dealer, created_at__month=month, created_at__year=year, currency='ETB').aggregate(
+    Sale.objects.filter(dealer=dealer, date__month=month, date__year=year).aggregate(
         total=Sum('price'))['total'] or Decimal(0)
 
     total_revenue = total_revenue_birr + (total_revenue_usd * conversion_rate)

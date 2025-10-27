@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from rolepermissions.checkers import has_role
 from ..models import Expense, FinancialReport, CarExpense, Revenue, ExchangeRate
+from online_car_market.sales.models import Sale
 import bleach
 
 class ExchangeRateSerializer(serializers.ModelSerializer):
@@ -18,20 +19,11 @@ class ExchangeRateSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """Check uniqueness of currency pair and date combination."""
-        from_currency = data.get('from_currency')
-        to_currency = data.get('to_currency')
         date = data.get('date')
-
-        if from_currency == to_currency:
-            raise serializers.ValidationError("From and to currencies cannot be the same.")
-
-        if ExchangeRate.objects.filter(
-            from_currency=from_currency,
-            to_currency=to_currency,
-            date=date
-        ).exclude(pk=self.instance.pk if self.instance else None).exists():
-            raise serializers.ValidationError("An exchange rate for this currency pair and date already exists.")
-
+        if ExchangeRate.objects.filter(date=date).exclude(
+            pk=self.instance.pk if self.instance else None
+        ).exists():
+            raise serializers.ValidationError("An exchange rate for this date already exists.")
         return data
 
     def create(self, validated_data):
@@ -76,10 +68,7 @@ class CarExpenseSerializer(serializers.ModelSerializer):
         amount = data.get('amount')
         currency = data.get('currency')
         if currency == 'USD':
-            latest_rate = ExchangeRate.objects.filter(
-                from_currency='USD',
-                to_currency='ETB'
-            ).order_by('-date').first()
+            latest_rate = ExchangeRate.objects.order_by('-date').first()
             if not latest_rate:
                 raise serializers.ValidationError("No exchange rate available for USD to ETB.")
             data['converted_amount'] = amount * latest_rate.rate

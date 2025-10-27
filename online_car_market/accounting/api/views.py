@@ -1,3 +1,4 @@
+from django.db.models import Sum
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated, BasePermission
 from rest_framework import status
@@ -92,6 +93,70 @@ class CarExpenseViewSet(ModelViewSet):
     serializer_class = CarExpenseSerializer
     permission_classes = [IsAuthenticated, CanManageAccounting]
 
+    @extend_schema(
+        tags=["Dealers - Accounting"],
+        summary="Get total expenses per car per dealer",
+        description=(
+            "Returns aggregated car expenses grouped by dealer and car. "
+            "Includes total converted amount (ETB) and detailed expense breakdown per car."
+        ),
+        responses={
+            200: OpenApiResponse(
+                description="List of dealers with their cars and total expenses in ETB."
+            )
+        },
+    )
+    @action(detail=False, methods=["get"], url_path="per-dealer-car")
+    def expenses_per_dealer_car(self, request):
+        """Aggregate total expenses per car per dealer."""
+        dealers = (
+            CarExpense.objects.values("dealer_id", "dealer__company_name").distinct()
+        )
+
+        results = []
+        for dealer in dealers:
+            dealer_id = dealer["dealer_id"]
+            dealer_name = dealer["dealer__company_name"]
+
+            # Cars under this dealer
+            cars = (
+                CarExpense.objects.filter(dealer_id=dealer_id)
+                .values("car_id", "car__model")
+                .annotate(total_expenses_etb=Sum("converted_amount"))
+                .order_by("-total_expenses_etb")
+            )
+
+            car_data = []
+            for car in cars:
+                car_expenses = CarExpense.objects.filter(
+                    dealer_id=dealer_id, car_id=car["car_id"]
+                )
+                expense_list = [
+                    {
+                        "description": e.description,
+                        "amount": float(e.amount),
+                        "currency": e.currency,
+                        "converted_amount": float(e.converted_amount or 0),
+                        "date": e.date,
+                    }
+                    for e in car_expenses
+                ]
+
+                car_data.append({
+                    "car_id": car["car_id"],
+                    "car_model": car["car__model"],
+                    "total_expenses_etb": float(car["total_expenses_etb"] or 0),
+                    "expenses": expense_list,
+                })
+
+            results.append({
+                "dealer_id": dealer_id,
+                "dealer": dealer_name,
+                "cars": car_data,
+            })
+
+        return Response(results)
+
 # ------------------------------------
 @extend_schema_view(
     list=extend_schema(
@@ -125,6 +190,7 @@ class CarExpenseViewSet(ModelViewSet):
         description="Remove a revenue entry (admin or accountant only)."
     ),
 )
+
 class RevenueViewSet(ModelViewSet):
     """Manage all sources of income including sales and broker fees."""
     queryset = Revenue.objects.all()
@@ -133,14 +199,46 @@ class RevenueViewSet(ModelViewSet):
 
 # Expense ViewSet
 @extend_schema_view(
-    list=extend_schema(tags=["Dealers - Accounting"]),
-    retrieve=extend_schema(tags=["Dealers - Accounting"]),
-    create=extend_schema(tags=["Dealers - Accounting"]),
-    update=extend_schema(tags=["Dealers - Accounting"]),
-    partial_update=extend_schema(tags=["Dealers - Accounting"]),
-    destroy=extend_schema(tags=["Dealers - Accounting"]),
+    list=extend_schema(
+        tags=["Dealers - Accounting"],
+        summary="List all general expenses",
+        description="Retrieve all recorded expenses (e.g., operational, administrative, or miscellaneous dealer expenses). "
+                    "Admins, accountants, and dealers can view their respective expenses."
+    ),
+    retrieve=extend_schema(
+        tags=["Dealers - Accounting"],
+        summary="Retrieve a specific expense record",
+        description="Fetch detailed information about a single expense, including amount, currency, dealer, and description."
+    ),
+    create=extend_schema(
+        tags=["Dealers - Accounting"],
+        summary="Record a new expense",
+        description="Create a new expense entry for a dealer. "
+                    "Supports both ETB and USD currencies, and only accountants or dealers can create records."
+    ),
+    update=extend_schema(
+        tags=["Dealers - Accounting"],
+        summary="Update an expense record",
+        description="Modify an existing expense entry — allowed for accountants, dealers, and admins."
+    ),
+    partial_update=extend_schema(
+        tags=["Dealers - Accounting"],
+        summary="Partially update an expense record",
+        description="Update specific fields of an expense record (e.g., amount or currency). "
+                    "Only accessible to users with accounting permissions."
+    ),
+    destroy=extend_schema(
+        tags=["Dealers - Accounting"],
+        summary="Delete an expense record",
+        description="Remove an existing expense entry. "
+                    "Only admins or accountants can perform deletions."
+    ),
 )
 class ExpenseViewSet(ModelViewSet):
+    """
+    Manage general dealer expenses such as operations, logistics, or miscellaneous costs.
+    Dealers can view their own expenses, while admins and accountants can view all.
+    """
     queryset = Expense.objects.all()
     serializer_class = ExpenseSerializer
     permission_classes = [IsAuthenticated]
@@ -159,13 +257,42 @@ class ExpenseViewSet(ModelViewSet):
             return Expense.objects.all()
         return Expense.objects.none()
 
+
 # FinancialReport ViewSet
 @extend_schema_view(
-    list=extend_schema(tags=["Dealers - Accounting"]),
-    retrieve=extend_schema(tags=["Dealers - Accounting"]),
-    generate_report=extend_schema(tags=["Dealers - Accounting"]),
+    list=extend_schema(
+        tags=["Dealers - Accounting"],
+        summary="List all generated financial reports",
+        description=(
+            "Retrieve a list of all generated financial reports, including profit/loss statements "
+            "and balance sheets. Dealers can view their own reports, while admins and accountants "
+            "can access all dealer reports."
+        ),
+    ),
+    retrieve=extend_schema(
+        tags=["Dealers - Accounting"],
+        summary="Retrieve a specific financial report",
+        description=(
+            "Get detailed information about a single financial report, including report type, "
+            "period (month/year), total revenue, total expenses, and calculated profit or loss."
+        ),
+    ),
+    generate_report=extend_schema(
+        tags=["Dealers - Accounting"],
+        summary="Generate a new financial report",
+        description=(
+            "Automatically generate a financial report for a specific dealer. Supports two types: "
+            "`profit_loss` and `balance_sheet`. This endpoint calculates the totals based on recorded "
+            "revenues, car expenses, and general expenses for the selected month and year."
+        ),
+    ),
 )
 class FinancialReportViewSet(ModelViewSet):
+    """
+    ViewSet for managing and generating financial reports for dealers.
+    Allows accountants, admins, and dealers to view or generate reports that
+    summarize revenues, expenses, and profit/loss statements.
+    """
     queryset = FinancialReport.objects.all()
     serializer_class = FinancialReportSerializer
     http_method_names = ['get', 'post']  # Disable create/update/delete except generate_report
@@ -177,15 +304,32 @@ class FinancialReportViewSet(ModelViewSet):
         return FinancialReport.objects.all()
 
     @extend_schema(
-        description="Automatically generate a financial report (profit_loss or balance_sheet) for a dealer.",
+        summary="Generate a dealer financial report",
+        description=(
+            "Creates a financial report for the authenticated dealer or specified period. "
+            "Includes automatic calculation of total revenue, total expenses, and net profit/loss. "
+            "Accessible by dealers, accountants, admins, and super admins only."
+        ),
         parameters=[
             OpenApiParameter(
                 name="type",
                 type=str,
                 enum=["profit_loss", "balance_sheet"],
                 required=True,
-                description="Type of report to generate"
-            )
+                description="Type of report to generate (profit_loss or balance_sheet)."
+            ),
+            OpenApiParameter(
+                name="month",
+                type=int,
+                required=False,
+                description="Month (1-12) for which to generate the report. Optional — defaults to current month."
+            ),
+            OpenApiParameter(
+                name="year",
+                type=int,
+                required=False,
+                description="Year (e.g., 2025) for which to generate the report. Optional — defaults to current year."
+            ),
         ],
         responses={
             200: FinancialReportSerializer,
@@ -195,7 +339,7 @@ class FinancialReportViewSet(ModelViewSet):
     )
     @action(detail=False, methods=['post'], url_path='generate')
     def generate_report(self, request):
-        """Generate a new report for the dealer."""
+        """Generate a new financial report for the dealer or administrator."""
         user = request.user
         report_type = request.data.get('type', 'profit_loss')
         month = request.data.get('month')
@@ -217,4 +361,5 @@ class FinancialReportViewSet(ModelViewSet):
             return Response(serializer.data, status=status.HTTP_200_OK)
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 

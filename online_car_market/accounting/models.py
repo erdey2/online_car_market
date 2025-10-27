@@ -10,20 +10,21 @@ class Currency(models.TextChoices):
 
 class ExchangeRate(models.Model):
     """Stores exchange rates for USD -> ETB conversion."""
-    date = models.DateField(default=timezone.now)
     rate = models.DecimalField(max_digits=10, decimal_places=2)  # e.g., 130.50 ETB/USD
+    date = models.DateField(default=timezone.now)
 
     def __str__(self):
         return f"1 USD = {self.rate} ETB ({self.date})"
 
 class Expense(models.Model):
-    dealer = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, related_name='expenses')
+    dealer = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, related_name='expenses', null=True, blank=True)
     type = models.CharField(max_length=100, choices=[
         ('purchase', 'Purchase'),
         ('shipping', 'Shipping'),
         ('tax', 'Tax'),
         ('maintenance', 'Maintenance'),
         ('marketing', 'Marketing'),
+        ('salary', 'Salary'),
         ('operational', 'Operational'),
         ('other', 'Other')
     ])
@@ -70,7 +71,7 @@ class Revenue(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=3, choices=Currency.choices, default=Currency.ETB)
     converted_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    date = models.DateField(default=timezone.now)
+    created_at = models.DateField(default=timezone.now)
     description = models.TextField(blank=True)
 
     def save(self, *args, **kwargs):
@@ -86,11 +87,7 @@ class Revenue(models.Model):
         return f"{self.source} - {self.amount} {self.currency} ({self.dealer})"
 
 class FinancialReport(models.Model):
-    dealer = models.ForeignKey(
-        DealerProfile,
-        on_delete=models.CASCADE,
-        related_name='financial_reports',
-    )
+    dealer = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, related_name='financial_reports', null=True, blank=True)
     type = models.CharField(max_length=50, choices=[
         ('profit_loss', 'Profit/Loss'),
         ('balance_sheet', 'Balance Sheet')
