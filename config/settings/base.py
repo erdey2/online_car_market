@@ -103,6 +103,7 @@ LOCAL_APPS = [
     "online_car_market.bids",
     "online_car_market.sales",
     "online_car_market.accounting",
+    "online_car_market.hr",
     "online_car_market.dealers",
     "online_car_market.brokers",
     "online_car_market.buyers",

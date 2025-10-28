@@ -58,6 +58,10 @@ class IsBroker(BasePermission):
     def has_permission(self, request, view):
         return has_role(request.user, 'broker')
 
+class IsHR(BasePermission):
+    def has_permission(self, request, view):
+        return has_role(request.user, 'hr')
+
 class IsBuyer(BasePermission):
     def has_permission(self, request, view):
         return has_role(request.user, 'buyer')
@@ -135,6 +139,15 @@ class Buyer(AbstractUserRole):
         'view_cars': True,
         'bid_on_car': True,
         'purchase_car': True,
+    }
+
+class HR(AbstractUserRole):
+    available_permissions = {
+        'manage_employees': True,
+        'manage_contracts': True,
+        'manage_attendance': True,
+        'manage_leaves': True,
+        'view_hr_reports': True,
     }
 
 class Seller(AbstractUserRole):
