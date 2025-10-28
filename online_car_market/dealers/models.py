@@ -26,7 +26,14 @@ class DealerProfile(models.Model):
 class DealerStaff(models.Model):
     dealer = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, related_name='staff_members')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='dealer_staff_assignments')
-    role = models.CharField(max_length=20, choices=[('seller', 'Seller'), ('accountant', 'Accountant')])
+    role = models.CharField(
+        max_length=20,
+        choices=[
+            ('seller', 'Seller'),
+            ('accountant', 'Accountant'),
+            ('hr', 'HR'),
+        ]
+    )
     assigned_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -2,8 +2,11 @@ from django.contrib.auth import get_user_model
 from rest_framework.viewsets import ModelViewSet, ViewSet, ReadOnlyModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema, extend_schema_view
-from .serializers import UserRoleSerializer, ProfileSerializer, UserSerializer
+from rest_framework import status
+from rest_framework.views import APIView
+from rolepermissions.roles import assign_role
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
+from .serializers import UserRoleSerializer, ProfileSerializer, UserSerializer, UserRegistrationSerializer
 from online_car_market.users.models import Profile
 from online_car_market.users.permissions import IsSuperAdmin, IsAdmin, IsSuperAdminOrAdmin
 from rolepermissions.checkers import has_role

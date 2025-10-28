@@ -148,6 +148,7 @@ class HR(AbstractUserRole):
         'manage_attendance': True,
         'manage_leaves': True,
         'view_hr_reports': True,
+        'view_payroll': True,
     }
 
 class Seller(AbstractUserRole):
@@ -157,10 +158,14 @@ class Seller(AbstractUserRole):
         'manage_sales': True,
         'view_own_sales': True,
         'post_car': True,
+        'request_leave': True,
+        'view_own_contract': True,
     }
 
 class Accountant(AbstractUserRole):
     available_permissions = {
         'view_accounting': True,
         'manage_accounting': True,
+        'request_leave': True,
+        'view_own_contract': True,
     }
