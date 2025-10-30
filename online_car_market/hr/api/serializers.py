@@ -21,7 +21,6 @@ def _require_hr_or_admin(request) -> None:
             "Only HR staff or dealer may perform this action."
         )
 
-# EmployeeSerializer
 class EmployeeSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(write_only=True, required=True)
     user_email_display = serializers.EmailField(source="user.email", read_only=True)
@@ -98,17 +97,18 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
         return super().update(instance, validated_data)
 
-# ----------------------------------------------------------------------
-# ContractSerializer
-# ----------------------------------------------------------------------
 class ContractSerializer(serializers.ModelSerializer):
-    employee_email = serializers.EmailField(source="employee.user.email", read_only=True)
+    employee_email = serializers.EmailField(write_only=True, required=True)
+    employee_email_display = serializers.EmailField(source="employee.user.email", read_only=True)
+    employee_full_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Contract
         fields = [
             "id",
             "employee_email",
+            "employee_email_display",
+            "employee_full_name",
             "start_date",
             "end_date",
             "terms",
@@ -117,13 +117,23 @@ class ContractSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "employee_email_display", "employee_full_name", "created_at", "updated_at"]
 
-    # ------------------------------------------------------------------
+    def get_employee_full_name(self, obj: Contract) -> str:
+        profile = obj.employee.user.profile
+        return f"{profile.first_name} {profile.last_name}".strip() or "Unknown"
+
     def validate_salary(self, value: float) -> float:
         if value <= 0:
             raise serializers.ValidationError("Contract salary must be greater than zero.")
         return value
+
+    def validate_employee_email(self, email: str) -> Employee:
+        try:
+            employee = Employee.objects.get(user__email=email)
+            return employee
+        except Employee.DoesNotExist:
+            raise serializers.ValidationError("No employee with this email exists.")
 
     def validate(self, data: dict) -> dict:
         start = data.get("start_date")
@@ -154,21 +164,24 @@ class ContractSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data: dict) -> Contract:
         _require_hr_or_admin(self.context["request"])
-        return super().create(validated_data)
+
+        # Pop and resolve employee
+        employee = validated_data.pop("employee_email")  # This is Employee instance
+        return Contract.objects.create(employee=employee, **validated_data)
 
     def update(self, instance: Contract, validated_data: dict) -> Contract:
         _require_hr_or_admin(self.context["request"])
 
-        # Auto-expire if end_date passed
-        if validated_data.get("end_date") and validated_data["end_date"] < date.today():
+        # Never allow changing employee
+        validated_data.pop("employee_email", None)
+
+        # Auto-expire
+        end_date = validated_data.get("end_date") or instance.end_date
+        if end_date and end_date < date.today():
             validated_data.setdefault("status", "expired")
 
         return super().update(instance, validated_data)
 
-
-# ----------------------------------------------------------------------
-# AttendanceSerializer
-# ----------------------------------------------------------------------
 class AttendanceSerializer(serializers.ModelSerializer):
     employee_email = serializers.EmailField(source="employee.user.email", read_only=True)
 
