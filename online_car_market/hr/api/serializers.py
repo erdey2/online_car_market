@@ -183,13 +183,17 @@ class ContractSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 class AttendanceSerializer(serializers.ModelSerializer):
-    employee_email = serializers.EmailField(source="employee.user.email", read_only=True)
+    employee_email = serializers.EmailField(write_only=True, required=True)
+    employee_email_display = serializers.EmailField(source="employee.user.email", read_only=True)
+    employee_full_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Attendance
         fields = [
             "id",
-            "employee_email",
+            "employee_email",  # input
+            "employee_email_display",  # output
+            "employee_full_name",
             "entry_time",
             "exit_time",
             "date",
@@ -198,9 +202,19 @@ class AttendanceSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "employee_email_display", "employee_full_name", "created_at", "updated_at"]
 
-    # ------------------------------------------------------------------
+    def get_employee_full_name(self, obj: Attendance) -> str:
+        profile = obj.employee.user.profile
+        return f"{profile.first_name} {profile.last_name}".strip() or "Unknown"
+
+    def validate_employee_email(self, email: str) -> Employee:
+        try:
+            employee = Employee.objects.get(user__email=email)
+            return employee
+        except Employee.DoesNotExist:
+            raise serializers.ValidationError("No employee with this email exists.")
+
     def validate(self, data: dict) -> dict:
         entry = data.get("entry_time")
         exit_ = data.get("exit_time")
@@ -231,24 +245,37 @@ class AttendanceSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data: dict) -> Attendance:
         _require_hr_or_admin(self.context["request"])
-        return super().create(validated_data)
+
+        # Resolve employee
+        employee = validated_data.pop("employee_email")  # This is Employee instance
+
+        # Default date = today if not provided
+        if "date" not in validated_data:
+            validated_data["date"] = timezone.now().date()
+
+        return Attendance.objects.create(employee=employee, **validated_data)
 
     def update(self, instance: Attendance, validated_data: dict) -> Attendance:
         _require_hr_or_admin(self.context["request"])
+
+        # Never change employee
+        validated_data.pop("employee_email", None)
+
         return super().update(instance, validated_data)
 
-# ----------------------------------------------------------------------
-# LeaveSerializer
-# ----------------------------------------------------------------------
 class LeaveSerializer(serializers.ModelSerializer):
-    employee_email = serializers.EmailField(source="employee.user.email", read_only=True)
+    employee_email = serializers.EmailField(write_only=True, required=True)
+    employee_email_display = serializers.EmailField(source="employee.user.email", read_only=True)
+    employee_full_name = serializers.SerializerMethodField(read_only=True)
     approved_by_email = serializers.EmailField(source="approved_by.email", read_only=True)
 
     class Meta:
         model = Leave
         fields = [
             "id",
-            "employee_email",
+            "employee_email",  # input
+            "employee_email_display",  # output
+            "employee_full_name",  # output
             "start_date",
             "end_date",
             "reason",
@@ -257,9 +284,19 @@ class LeaveSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "approved_by_email", "created_at", "updated_at"]
+        read_only_fields = ["id", "employee_email_display", "employee_full_name", "approved_by_email", "created_at", "updated_at"]
 
-    # ------------------------------------------------------------------
+    def get_employee_full_name(self, obj: Leave) -> str:
+        profile = obj.employee.user.profile
+        return f"{profile.first_name} {profile.last_name}".strip() or "Unknown"
+
+    def validate_employee_email(self, email: str) -> Employee:
+        try:
+            employee = Employee.objects.get(user__email=email)
+            return employee
+        except Employee.DoesNotExist:
+            raise serializers.ValidationError("No employee with this email exists.")
+
     def validate(self, data: dict) -> dict:
         start = data.get("start_date")
         end = data.get("end_date")
@@ -292,17 +329,29 @@ class LeaveSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data: dict) -> Leave:
-        # Employees can request leave; HR approves/denies
         request = self.context["request"]
         if not request.user.is_authenticated:
             raise serializers.ValidationError("Authentication required.")
-        # Any authenticated employee can request; HR can also create directly
-        return super().create(validated_data)
+
+        # Resolve employee
+        employee = validated_data.pop("employee_email")  # This is Employee instance
+
+        # If the requester is the employee themselves → allow
+        # If HR → allow (they can create for anyone)
+        if not has_role(request.user, ["hr", "dealer"]):
+            # Must be requesting for themselves
+            if employee.user != request.user:
+                raise serializers.ValidationError("You can only request leave for yourself.")
+
+        return Leave.objects.create(employee=employee, **validated_data)
 
     def update(self, instance: Leave, validated_data: dict) -> Leave:
         _require_hr_or_admin(self.context["request"])
 
-        # When status changes to approved/denied, record who did it
+        # Never allow changing employee
+        validated_data.pop("employee_email", None)
+
+        # Auto-set approved_by when status changes
         new_status = validated_data.get("status")
         if new_status in ("approved", "denied") and instance.status == "pending":
             validated_data["approved_by"] = self.context["request"].user

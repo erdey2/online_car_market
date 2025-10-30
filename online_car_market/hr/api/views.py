@@ -152,9 +152,17 @@ class AttendanceViewSet(viewsets.ModelViewSet):
     ),
 )
 class LeaveViewSet(viewsets.ModelViewSet):
-    queryset = Leave.objects.all()
+    queryset = Leave.objects.select_related("employee__user", "approved_by").all()
     serializer_class = LeaveSerializer
-    permission_classes = [IsHR]
+
+    def get_permissions(self):
+        """
+        - Employees can CREATE leave requests (for themselves)
+        - Only HR can update/delete/approve
+        """
+        if self.action == 'create':
+            return [permissions.IsAuthenticated()]  # Any logged-in user
+        return [IsHR()]
 
     def perform_update(self, serializer):
         # Automatically log the HR reviewer if leave status changes
