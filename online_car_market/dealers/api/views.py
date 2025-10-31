@@ -1,9 +1,8 @@
 from django.utils import timezone
-from rest_framework import serializers, status
+from rest_framework import serializers, status, viewsets
 from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.permissions import IsAuthenticated, BasePermission
 from rest_framework.decorators import action
-from rest_framework import viewsets
 from rest_framework.response import Response
 from rolepermissions.checkers import has_role, has_permission
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiResponse
@@ -12,7 +11,6 @@ from ..models import DealerStaff
 from online_car_market.users.permissions import IsSuperAdmin, IsAdmin
 from online_car_market.dealers.utils import get_high_sales_rate_cars, get_top_sellers
 from online_car_market.dealers.models import DealerProfile, DealerRating
-
 
 import logging
 
@@ -99,49 +97,59 @@ class ProfileViewSet(viewsets.ViewSet):
             status=status.HTTP_403_FORBIDDEN
         )
 
-
 @extend_schema_view(
     create=extend_schema(
         tags=["Dealers - Staff Management"],
-        description="Allow dealers to add sellers or accountants.",
+        summary="Add a new staff member",
+        description="Allow dealers to add staff members such as sellers or accountants to their dealership.",
         request=DealerStaffSerializer,
         responses={
             201: DealerStaffSerializer,
-            403: OpenApiResponse(description="Permission denied")
+            403: OpenApiResponse(description="Permission denied"),
         },
     ),
     list=extend_schema(
         tags=["Dealers - Staff Management"],
-        description="List all staff members under the dealer.",
+        summary="List all dealer staff",
+        description="Retrieve a list of all staff members assigned to the currently authenticated dealer, including their roles and contact details.",
         responses={200: DealerStaffSerializer(many=True)},
     ),
     retrieve=extend_schema(
         tags=["Dealers - Staff Management"],
-        description="Retrieve staff by ID.",
+        summary="Retrieve staff details",
+        description="Fetch detailed information about a specific staff member using their unique ID.",
         responses={
             200: DealerStaffSerializer,
-            404: OpenApiResponse(description="Not found")
+            404: OpenApiResponse(description="Not found"),
         },
     ),
     update=extend_schema(
         tags=["Dealers - Staff Management"],
-        description="Update staff information (PUT).",
+        summary="Update staff information",
+        description="Update an existing staff member’s details such as role or association using a full update (PUT).",
         request=DealerStaffSerializer,
-        responses={200: DealerStaffSerializer, 403: "Permission denied"}
+        responses={200: DealerStaffSerializer, 403: "Permission denied"},
     ),
     partial_update=extend_schema(
         tags=["Dealers - Staff Management"],
-        description="Partially update staff information (PATCH).",
+        summary="Partially update staff information",
+        description="Partially update selected fields of a staff member (PATCH), such as changing their role or status.",
         request=DealerStaffSerializer,
-        responses={200: DealerStaffSerializer, 403: "Permission denied"}
+        responses={200: DealerStaffSerializer, 403: "Permission denied"},
     ),
     destroy=extend_schema(
         tags=["Dealers - Staff Management"],
-        description="Delete a staff member (DELETE).",
-        responses={204: None, 403: "Permission denied"}
+        summary="Delete a staff member",
+        description="Remove a staff member from the dealer’s staff list (DELETE). Only dealers with appropriate permissions can perform this action.",
+        responses={204: None, 403: "Permission denied"},
     ),
 )
 class DealerStaffViewSet(viewsets.ModelViewSet):
+    """
+    Manage dealer staff members — allowing dealers to create, view, update, or remove
+    their staff such as sellers and accountants. Only authenticated dealers with the
+    `manage_staff` permission can access these endpoints.
+    """
     queryset = DealerStaff.objects.all()
     serializer_class = DealerStaffSerializer
     permission_classes = [IsDealerWithManageStaff]

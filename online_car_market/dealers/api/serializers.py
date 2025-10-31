@@ -2,9 +2,10 @@ from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
 from online_car_market.common.serializers import ProfileLiteSerializer
-from online_car_market.users.models import User
+from online_car_market.users.models import User, Profile
 from ..models import DealerProfile, DealerStaff, DealerRating
 from rolepermissions.checkers import get_user_roles
+from rolepermissions.roles import assign_role
 import bleach
 import logging
 
@@ -90,13 +91,14 @@ class DealerStaffSerializer(serializers.ModelSerializer):
         }
     })
     def get_user(self, obj):
-        """Return basic user info."""
+        """Return user info with profile data."""
         if obj.user:
+            profile = getattr(obj.user, "profile", None)
             return {
                 "id": obj.user.id,
                 "email": obj.user.email,
-                "first_name": getattr(obj.user, "first_name", ""),
-                "last_name": getattr(obj.user, "last_name", "")
+                "first_name": getattr(profile, "first_name", ""),
+                "last_name": getattr(profile, "last_name", ""),
             }
         return None
 
@@ -115,18 +117,27 @@ class DealerStaffSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         user_email = validated_data.pop('user_email')
         role = validated_data.pop('role')
-        try:
-            user = User.objects.get(email=user_email)
-        except User.DoesNotExist:
-            user = User.objects.create_user(email=user_email,
-                                            password='default_password')  # Set a default or require password
+
+        # Get or create the user
+        user, created = User.objects.get_or_create(
+            email=user_email,
+            defaults={'password': 'default_password'}
+        )
+
+        # Ensure profile exists (signal handles this, but safe to double-check)
+        Profile.objects.get_or_create(user=user)
+
+        # Get dealer from the logged-in user
         dealer = getattr(self.context['request'].user.profile, 'dealer_profile', None)
         if not dealer:
             raise serializers.ValidationError("You must be a dealer to assign staff.")
 
+        # Create the DealerStaff record
         staff_member = DealerStaff.objects.create(dealer=dealer, user=user, role=role)
-        from rolepermissions.roles import assign_role
+
+        # Assign role permission
         assign_role(user, role)
+
         return staff_member
 
 class DealerRatingSerializer(serializers.ModelSerializer):

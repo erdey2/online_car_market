@@ -25,10 +25,12 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     confirm_password = serializers.CharField(write_only=True)
     description = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    first_name = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=50, required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ['email', 'password', 'confirm_password', 'description']
+        fields = ['email', 'password', 'confirm_password', 'first_name', 'last_name', 'description']
         extra_kwargs = {
             'email': {'required': True},
         }
@@ -61,17 +63,29 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
+        # Extract names before creating the user
+        first_name = validated_data.pop('first_name', '')
+        last_name = validated_data.pop('last_name', '')
         validated_data.pop('confirm_password')
+
         user = User.objects.create_user(**validated_data)
-        Profile.objects.get_or_create(user=user)
+
+        # Create or update profile with names
+        profile, _ = Profile.objects.get_or_create(user=user)
+        profile.first_name = first_name
+        profile.last_name = last_name
+        profile.save()
+
+        # Assign default buyer role
         try:
             if not has_role(user, ['dealer', 'broker', 'admin', 'super_admin']):
                 assign_role(user, 'buyer')
-                BuyerProfile.objects.get_or_create(profile=Profile.objects.get(user=user))
+                BuyerProfile.objects.get_or_create(profile=profile)
             logger.info(f"User created: {user.email}")
         except RoleDoesNotExist:
             logger.error(f"Role buyer does not exist for {user.email}")
             raise serializers.ValidationError("Role buyer does not exist.")
+
         return user
 
 class UserRoleSerializer(serializers.Serializer):
@@ -141,6 +155,8 @@ class CustomLoginSerializer(LoginSerializer):
 class CustomRegisterSerializer(RegisterSerializer):
     username = None
     description = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    first_name = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=50, required=False, allow_blank=True)
 
     @property
     def _has_phone_field(self):
@@ -173,15 +189,24 @@ class CustomRegisterSerializer(RegisterSerializer):
 
     def save(self, request):
         user = super().save(request)
+
+        # Get or create profile
+        profile, _ = Profile.objects.get_or_create(user=user)
+
+        # Save names and description
+        profile.first_name = self.validated_data.get('first_name', '')
+        profile.last_name = self.validated_data.get('last_name', '')
+        profile.save()
+
+        # Assign default buyer role
         try:
             assign_role(user, 'buyer')
-            Profile.objects.get_or_create(user=user)
-            BuyerProfile.objects.get_or_create(profile=Profile.objects.get(user=user))
-            logger.info(f"User registered via dj_rest_auth: {user.email}")
+            BuyerProfile.objects.get_or_create(profile=profile)
         except RoleDoesNotExist:
-            logger.error(f"Role buyer does not exist for {user.email}")
             raise serializers.ValidationError("Role buyer does not exist.")
+
         return user
+
 
 class ProfileSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)

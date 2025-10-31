@@ -3,6 +3,9 @@ from django.contrib.auth.models import PermissionsMixin
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from cloudinary.models import CloudinaryField
+from django.conf import settings
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -54,3 +57,10 @@ class Profile(models.Model):
         indexes = [
             models.Index(fields=['user'], name='idx_profile_user'),
         ]
+
+@receiver(post_save, sender=settings.AUTH_USER_MODEL)
+def create_user_profile(sender, instance, created, **kwargs):
+    """Automatically create a profile when a new user is created."""
+    from .models import Profile
+    if created:
+        Profile.objects.get_or_create(user=instance)
