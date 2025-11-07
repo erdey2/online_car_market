@@ -190,7 +190,7 @@ class CarViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy", "bid", "pay", "broker_payment"]:
-            return [IsSuperAdminOrAdminOrDealerOrBroker()]
+            return [CanPostCar()]
         return super().get_permissions()
 
     def create(self, request, *args, **kwargs):

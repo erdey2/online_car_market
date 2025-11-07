@@ -68,10 +68,19 @@ class IsBuyer(BasePermission):
 
 class CanPostCar(BasePermission):
     def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated and
-            has_permission(request.user, 'post_car')
-        )
+        if not request.user.is_authenticated:
+            return False
+
+        # Sellers can post cars for their assigned dealer
+        if has_role(request.user, 'seller'):
+            from online_car_market.dealers.models import DealerStaff
+            return DealerStaff.objects.filter(
+                user=request.user,
+                role='seller'
+            ).exists()
+
+        # Brokers, Admins, and SuperAdmins can post as usual
+        return has_permission(request.user, 'post_car')
 
 class CanViewSalesData(BasePermission):
     def has_permission(self, request, view):
@@ -118,7 +127,6 @@ class Dealer(AbstractUserRole):
         'edit_own_dealer_profile': True,
         'manage_own_inventory': True,
         'view_cars': True,
-        'post_car': True,
         'manage_staff': True,
     }
 
