@@ -442,14 +442,6 @@ class CarSerializer(serializers.ModelSerializer):
                 "Exactly one of 'dealer' or 'broker' must be provided."
             )
 
-        """ if dealer and not has_role(user, ["super_admin", "admin", "dealer"]):
-            raise serializers.ValidationError("Only dealers, admins, or super admins can assign a dealer.")
-        if broker and not has_role(user, ["super_admin", "admin", "broker"]):
-            raise serializers.ValidationError("Only brokers, admins, or super admins can assign a broker.")
-
-        if dealer and dealer.profile.user != user and not has_role(user, ["super_admin", "admin"]):
-            raise serializers.ValidationError("Only the dealer owner or admins can assign this dealer.") """
-
         if dealer:
             # Allow sellers who belong to the dealer
             from online_car_market.dealers.models import DealerStaff

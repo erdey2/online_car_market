@@ -105,7 +105,7 @@ class CarModelViewSet(ModelViewSet):
 @extend_schema_view(
 list=extend_schema(
         tags=["Dealers - Inventory"],
-        description="List all verified cars for any user. Authenticated users with roles (broker, dealer, admin) see additional cars based on their role.",
+        description="List all verified cars for any user. Authenticated users with roles (broker, seller, dealer, admin) see additional cars based on their role.",
         parameters=[
             OpenApiParameter(
                 name='broker_email',
@@ -167,7 +167,7 @@ class CarViewSet(viewsets.ModelViewSet):
         # Apply role-based filtering
         if has_role(user, ['super_admin', 'admin']):
             queryset = queryset.order_by('-priority', '-created_at')
-        elif has_role(user, 'dealer'):
+        elif has_role(user, ['dealer', 'seller']):
             queryset = queryset.filter(
                 Q(dealer__profile__user=user) | Q(verification_status='verified')
             ).order_by('-priority', '-created_at')
