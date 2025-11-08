@@ -165,36 +165,44 @@ class CarViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = self.queryset
 
-        # Role-based filtering
+        # Super admin / admin: see everything
         if has_role(user, ['super_admin', 'admin']):
-            # Admins see everything
             queryset = queryset.order_by('-priority', '-created_at')
 
-        elif has_role(user, ['dealer', 'seller']):
-            # Dealers see their own cars + verified cars
-            # Sellers see cars they posted + verified cars under their dealer
+        # --- Dealer: see ONLY their own cars ---
+        elif has_role(user, 'dealer'):
             queryset = queryset.filter(
-                Q(dealer__profile__user=user) |          # Dealer owns the car
-                Q(posted_by=user) |                      # Seller posted it
-                Q(verification_status='verified')         # Public verified cars
+                dealer__profile__user=user
             ).order_by('-priority', '-created_at')
 
+        # Seller: see ONLY cars posted by them under their dealer
+        elif has_role(user, 'seller'):
+            from online_car_market.dealers.models import DealerStaff
+            staff = DealerStaff.objects.filter(user=user, role='seller').first()
+            if staff:
+                queryset = queryset.filter(
+                    dealer=staff.dealer,
+                    posted_by=user
+                ).order_by('-priority', '-created_at')
+            else:
+                queryset = queryset.none()  # seller not assigned to any dealer
+
+        # Broker: see ONLY their own cars
         elif has_role(user, 'broker'):
-            # Brokers see their own cars + verified ones
             queryset = queryset.filter(
-                Q(broker__profile__user=user) |
-                Q(verification_status='verified')
+                broker__profile__user=user
             ).order_by('-priority', '-created_at')
 
+        # --- Buyer or unauthenticated users: see ONLY verified cars ---
         else:
-            # Buyers or unauthenticated users see only verified cars
             queryset = queryset.filter(
                 verification_status='verified'
             ).order_by('-priority', '-created_at')
 
-        # 🔎 Optional: filter by broker email query param
+        # Optional filter: by broker_email query parameter
         broker_email = self.request.query_params.get('broker_email')
         if broker_email:
+            from online_car_market.brokers.models import BrokerProfile
             try:
                 broker_profile = BrokerProfile.objects.get(profile__user__email=broker_email)
                 queryset = queryset.filter(broker=broker_profile)
@@ -209,7 +217,7 @@ class CarViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
     def create(self, request, *args, **kwargs):
-        # --- 1. Broker role check ---
+        # 1. Broker role check
         if has_role(request.user, 'broker'):
             try:
                 broker_profile = BrokerProfile.objects.get(profile__user=request.user)
@@ -224,12 +232,12 @@ class CarViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-        # --- 2. Save main car data ---
+        # 2. Save main car data
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         car = serializer.save()
 
-        # --- 3. Process uploaded images ---
+        # 3. Process uploaded images
         uploaded_images = []
         for key, file in request.FILES.items():
             if key.startswith("uploaded_images"):
@@ -243,7 +251,7 @@ class CarViewSet(viewsets.ModelViewSet):
                     "is_featured": is_featured
                 })
 
-        # --- 4. Save CarImage instances ---
+        # 4. Save CarImage instances
         first_image_id = None
         for i, img_data in enumerate(uploaded_images):
             car_image = CarImage.objects.create(
@@ -255,13 +263,13 @@ class CarViewSet(viewsets.ModelViewSet):
             if i == 0:
                 first_image_id = car_image.id
 
-        # --- 5. Ensure at least one featured image ---
+        # 5. Ensure at least one featured image
         if not CarImage.objects.filter(car=car, is_featured=True).exists() and first_image_id:
             first_image = CarImage.objects.get(id=first_image_id)
             first_image.is_featured = True
             first_image.save()
 
-        # --- 6. Return full car data ---
+        # 6. Return full car data
         return Response(self.get_serializer(car).data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
