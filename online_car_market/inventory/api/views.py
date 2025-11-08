@@ -164,21 +164,35 @@ class CarViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = self.queryset
-        # Apply role-based filtering
-        if has_role(user, ['super_admin', 'admin']):
-            queryset = queryset.order_by('-priority', '-created_at')
-        elif has_role(user, ['dealer', 'seller']):
-            queryset = queryset.filter(
-                Q(dealer__profile__user=user) | Q(verification_status='verified')
-            ).order_by('-priority', '-created_at')
-        elif has_role(user, 'broker'):
-            queryset = queryset.filter(
-                Q(broker__profile__user=user) | Q(verification_status='verified')
-            ).order_by('-priority', '-created_at')
-        else:  # buyer or unauthenticated
-            queryset = queryset.filter(verification_status='verified').order_by('-priority', '-created_at')
 
-        # Filter by broker_email query parameter
+        # Role-based filtering
+        if has_role(user, ['super_admin', 'admin']):
+            # Admins see everything
+            queryset = queryset.order_by('-priority', '-created_at')
+
+        elif has_role(user, ['dealer', 'seller']):
+            # Dealers see their own cars + verified cars
+            # Sellers see cars they posted + verified cars under their dealer
+            queryset = queryset.filter(
+                Q(dealer__profile__user=user) |          # Dealer owns the car
+                Q(posted_by=user) |                      # Seller posted it
+                Q(verification_status='verified')         # Public verified cars
+            ).order_by('-priority', '-created_at')
+
+        elif has_role(user, 'broker'):
+            # Brokers see their own cars + verified ones
+            queryset = queryset.filter(
+                Q(broker__profile__user=user) |
+                Q(verification_status='verified')
+            ).order_by('-priority', '-created_at')
+
+        else:
+            # Buyers or unauthenticated users see only verified cars
+            queryset = queryset.filter(
+                verification_status='verified'
+            ).order_by('-priority', '-created_at')
+
+        # 🔎 Optional: filter by broker email query param
         broker_email = self.request.query_params.get('broker_email')
         if broker_email:
             try:
@@ -186,6 +200,7 @@ class CarViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(broker=broker_profile)
             except BrokerProfile.DoesNotExist:
                 queryset = queryset.none()
+
         return queryset
 
     def get_permissions(self):
