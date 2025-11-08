@@ -427,7 +427,7 @@ class CarSerializer(serializers.ModelSerializer):
         price = data.get("price") or getattr(self.instance, "price", None)
         auction_end = data.get("auction_end") or getattr(self.instance, "auction_end", None)
 
-        # ---------------- Validate make/model ----------------
+        # Validate make/model
         if not (make and model) and not (make_ref and model_ref):
             raise serializers.ValidationError(
                 "Either 'make' and 'model' or 'make_ref' and 'model_ref' must be provided."
@@ -438,7 +438,7 @@ class CarSerializer(serializers.ModelSerializer):
         if model_ref:
             data["model"] = model_ref.name
 
-        # ---------------- Dealer/Broker consistency ----------------
+        # Dealer/Broker consistency
         if (dealer and broker) or (not dealer and not broker):
             raise serializers.ValidationError("Exactly one of 'dealer' or 'broker' must be provided.")
 
@@ -455,18 +455,18 @@ class CarSerializer(serializers.ModelSerializer):
             elif not has_role(user, ["super_admin", "admin"]):
                 raise serializers.ValidationError("Permission denied.")
 
-        # ---------------- Broker validation ----------------
+        # Broker validation
         if broker:
             if broker.profile.user != user and not has_role(user, ["super_admin", "admin"]):
                 raise serializers.ValidationError("Only the broker owner or admins can assign this broker.")
 
-        # ---------------- Auction rules ----------------
+        # Auction rules
         if sale_type == "auction" and price is not None:
             raise serializers.ValidationError("Auction cars cannot have a fixed price.")
         if sale_type == "auction" and not auction_end:
             raise serializers.ValidationError("Auction end time is required for auction cars.")
 
-        # ---------------- Role permission ----------------
+        # Role permission
         if self.instance is None:
             if has_role(user, "seller"):
                 from online_car_market.dealers.models import DealerStaff
@@ -476,18 +476,18 @@ class CarSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     "Only dealers, brokers, sellers, admins, or super admins can create cars.")
 
-        # ---------------- Ownership rule for update ----------------
+        # Ownership rule for update
         if self.instance and data.get("posted_by") and data["posted_by"] != user and not has_role(user, ["super_admin",
                                                                                                          "admin"]):
             raise serializers.ValidationError("Only the car owner or admins can update this car.")
 
-        # ---------------- Make/model existence check ----------------
+        # Make/model existence check
         if make_ref and not CarMake.objects.filter(id=make_ref.id).exists():
             raise serializers.ValidationError("Selected make does not exist.")
         if model_ref and not CarModel.objects.filter(id=model_ref.id, make=make_ref).exists():
             raise serializers.ValidationError("Selected model does not match the selected make.")
 
-        # ---------------- Verification status rules ----------------
+        # Verification status rules
         if self.instance is None:  # creation case only
             if has_role(user, ["super_admin", "admin"]):
                 data["verification_status"] = "verified"
