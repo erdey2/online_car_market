@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils import timezone
+from cloudinary.models import CloudinaryField
 from online_car_market.users.models import User, Profile  # Import from users app
 from django.utils.translation import gettext_lazy as _
 
@@ -24,10 +25,35 @@ class Contract(models.Model):
     start_date = models.DateField(default=timezone.now)
     end_date = models.DateField(null=True, blank=True)
     terms = models.TextField(blank=True)
-    salary = models.DecimalField(max_digits=10, decimal_places=2)
+    contract_salary = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=20, choices=[('active', 'Active'), ('expired', 'Expired'), ('terminated', 'Terminated')], default='active')
+
+    document = CloudinaryField(
+        'contract_document',
+        null=True,
+        blank=True,
+        folder='contracts/signed/',  # organized folder
+        allowed_formats=['pdf', 'jpg', 'jpeg', 'png'],
+        help_text="Upload scanned signed contract (PDF or photo)"
+    )
+
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='uploaded_contracts')
+    uploaded_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        today = timezone.now().date()
+        if self.end_date and self.end_date < today:
+            self.status = 'expired'
+        if self.document and not self.uploaded_at:
+            self.uploaded_at = timezone.now()
+        super().save(*args, **kwargs)
+
+    @property
+    def is_active_contract(self):
+        return self.status == 'active'
 
     def __str__(self):
         return f"Contract for {self.employee.user.email} ({self.start_date} - {self.end_date or 'Ongoing'})"

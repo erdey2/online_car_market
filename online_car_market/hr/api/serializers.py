@@ -98,9 +98,14 @@ class EmployeeSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 class ContractSerializer(serializers.ModelSerializer):
+    # input
     employee_email = serializers.EmailField(write_only=True, required=True)
+    document = serializers.FileField(write_only=True, required=False)
+
+    # output
     employee_email_display = serializers.EmailField(source="employee.user.email", read_only=True)
     employee_full_name = serializers.SerializerMethodField(read_only=True)
+    document_url = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Contract
@@ -109,21 +114,24 @@ class ContractSerializer(serializers.ModelSerializer):
             "employee_email",
             "employee_email_display",
             "employee_full_name",
-            "start_date",
-            "end_date",
-            "terms",
-            "salary",
-            "status",
+            "start_date", "end_date", "terms", "contract_salary", "status",
+            "document", "document_url", "uploaded_by", "uploaded_at",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "employee_email_display", "employee_full_name", "created_at", "updated_at"]
+        read_only_fields = ["id", "employee_email_display", "employee_full_name", "document_url", "uploaded_by",
+            "uploaded_at", "created_at", "updated_at"]
 
     def get_employee_full_name(self, obj: Contract) -> str:
         profile = obj.employee.user.profile
         return f"{profile.first_name} {profile.last_name}".strip() or "Unknown"
 
-    def validate_salary(self, value: float) -> float:
+    def get_document_url(self, obj: Contract) -> str | None:
+        if obj.document:
+            return obj.document.build_url()
+        return None
+
+    def validate_contract_salary(self, value: float) -> float:
         if value <= 0:
             raise serializers.ValidationError("Contract salary must be greater than zero.")
         return value
@@ -165,22 +173,49 @@ class ContractSerializer(serializers.ModelSerializer):
     def create(self, validated_data: dict) -> Contract:
         _require_hr_or_admin(self.context["request"])
 
-        # Pop and resolve employee
+        # Extract write-only fields
+        document_file = validated_data.pop("document", None)
         employee = validated_data.pop("employee_email")  # This is Employee instance
-        return Contract.objects.create(employee=employee, **validated_data)
+
+        # Create contract
+        contract = Contract.objects.create(
+            employee=employee,
+            uploaded_by=self.context["request"].user,
+            uploaded_at=timezone.now(),
+            **validated_data
+        )
+
+        # Attach document if uploaded
+        if document_file:
+            contract.document = document_file
+            contract.save(update_fields=["document"])
+
+        return contract
 
     def update(self, instance: Contract, validated_data: dict) -> Contract:
         _require_hr_or_admin(self.context["request"])
 
-        # Never allow changing employee
+        # Prevent changing employee
         validated_data.pop("employee_email", None)
 
-        # Auto-expire
+        # Handle new document upload
+        document_file = validated_data.pop("document", None)
+        if document_file:
+            instance.document = document_file
+            instance.uploaded_by = self.context["request"].user
+            instance.uploaded_at = timezone.now()
+
+        # Auto-expire if end_date passed
         end_date = validated_data.get("end_date") or instance.end_date
         if end_date and end_date < date.today():
             validated_data.setdefault("status", "expired")
 
-        return super().update(instance, validated_data)
+        # Save changes
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        return instance
 
 class AttendanceSerializer(serializers.ModelSerializer):
     employee_email = serializers.EmailField(write_only=True, required=True)
