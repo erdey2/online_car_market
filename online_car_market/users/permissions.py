@@ -54,6 +54,16 @@ class IsSuperAdminOrAdmin(BasePermission):
             (has_role(request.user, 'super_admin') or has_role(request.user, 'admin'))
         )
 
+class IsBrokerOrSeller(BasePermission):
+    message = "Only brokers or sellers can create or edit inspections."
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+
+        # Allow brokers, dealers, or sellers
+        return has_role(request.user, ["broker", "dealer", "seller"])
+
 class IsBroker(BasePermission):
     def has_permission(self, request, view):
         return has_role(request.user, 'broker')

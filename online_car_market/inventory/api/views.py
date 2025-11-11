@@ -4,32 +4,38 @@ from django.db import connection
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.viewsets import ModelViewSet, ViewSet
-from rest_framework.permissions import IsAuthenticatedOrReadOnly, AllowAny
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.viewsets import ReadOnlyModelViewSet
 from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework import viewsets, mixins
+from rest_framework import viewsets, permissions, mixins
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rolepermissions.checkers import has_role
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiExample, OpenApiResponse
-from django.db.models import Count, Avg, Q, F
-from ..models import Car, CarMake, CarModel, FavoriteCar, CarView, CarImage
+from drf_spectacular.utils import (extend_schema, extend_schema_view, OpenApiParameter,
+                                   OpenApiTypes, OpenApiExample, OpenApiResponse)
+from ..models import Car, CarMake, CarModel, FavoriteCar, CarView, CarImage, Inspection
 from .serializers import (CarSerializer, VerifyCarSerializer, BidSerializer, CarMakeSerializer, ContactSerializer,
-                          CarModelSerializer, FavoriteCarSerializer, CarViewSerializer, CarViewAnalyticsSerializer
+                          CarModelSerializer, FavoriteCarSerializer, CarViewSerializer, CarViewAnalyticsSerializer,
+                          InspectionSerializer
                           )
-from online_car_market.users.permissions import IsSuperAdminOrAdminOrDealerOrBroker, IsSuperAdminOrAdmin, IsSuperAdminOrAdminOrBuyer
+from online_car_market.users.permissions import (IsSuperAdminOrAdminOrDealerOrBroker, IsSuperAdminOrAdmin,
+                                                 IsSuperAdminOrAdminOrBuyer, CanPostCar, IsBrokerOrSeller)
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.payment.models import Payment
 from online_car_market.users.models import Profile
-from online_car_market.users.permissions import CanPostCar
 
 logger = logging.getLogger(__name__)
 
+class IsAdminOrReadOnly(permissions.BasePermission):
+    """Admins can verify/edit; others can only read their own."""
+    def has_object_permission(self, request, view, obj):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        return has_role(request.user, ["admin", "superadmin"]) or obj.uploaded_by == request.user
 
 @extend_schema_view(
     list=extend_schema(
@@ -1491,3 +1497,65 @@ class CarImageViewSet(ModelViewSet):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [IsSuperAdminOrAdminOrDealer()]
         return super().get_permissions() '''
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Car Inspections"],
+        summary="List all inspections",
+        description="Retrieve a list of all inspections. Admins see all, while brokers/sellers see their own.",
+        responses={200: InspectionSerializer(many=True)},
+    ),
+    retrieve=extend_schema(
+        tags=["Car Inspections"],
+        summary="Retrieve a specific inspection",
+        description="Get detailed information about a specific inspection record.",
+        responses={200: InspectionSerializer},
+    ),
+    create=extend_schema(
+        tags=["Car Inspections"],
+        summary="Create a new inspection",
+        description="Allows a broker or seller to create a new inspection for a car.",
+        responses={
+            201: OpenApiResponse(response=InspectionSerializer, description="Inspection created successfully"),
+            403: OpenApiResponse(description="Permission denied"),
+        },
+    ),
+    update=extend_schema(
+        tags=["Car Inspections"],
+        summary="Update an inspection",
+        description="Allows brokers or sellers to update an existing inspection they created.",
+        responses={
+            200: InspectionSerializer,
+            403: OpenApiResponse(description="Permission denied"),
+        },
+    ),
+    partial_update=extend_schema(
+        tags=["Car Inspections"],
+        summary="Partially update an inspection",
+        description="Allows brokers or sellers to partially update fields of an existing inspection.",
+    ),
+    destroy=extend_schema(
+        tags=["Car Inspections"],
+        summary="Delete an inspection",
+        description="Allows only admins to delete an inspection.",
+        responses={204: OpenApiResponse(description="Deleted successfully")},
+    ),
+)
+class InspectionViewSet(viewsets.ModelViewSet):
+    queryset = Inspection.objects.select_related("car", "uploaded_by", "verified_by")
+    serializer_class = InspectionSerializer
+
+    def get_permissions(self):
+        if self.action in ["create", "update", "partial_update"]:
+            return [IsBrokerOrSeller()]
+        elif self.action in ["verify", "destroy"]:
+            return [permissions.IsAdminUser()]
+        else:
+            return [IsAdminOrReadOnly()]
+
+    def get_queryset(self):
+        user = self.request.user
+
+        if has_role(user, ["admin", "superadmin"]):
+            return Inspection.objects.all()
+        return Inspection.objects.filter(uploaded_by=user)
