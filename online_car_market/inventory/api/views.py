@@ -2,6 +2,7 @@ import logging
 from django.db.models import Avg, Count, Q, Sum, Min, F, Subquery, OuterRef
 from django.db import connection
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
@@ -1515,6 +1516,19 @@ class CarImageViewSet(ModelViewSet):
         tags=["Car Inspections"],
         summary="Create a new inspection",
         description="Allows a broker or seller to create a new inspection for a car.",
+        request=InspectionSerializer,
+        examples=[
+            OpenApiExample(
+                "Example Request",
+                value={
+                    "car_id": 12,
+                    "inspected_by": "Top Garage Motors",
+                    "inspection_date": "2025-11-10",
+                    "remarks": "Engine and brakes are in excellent condition.",
+                    "condition_status": "excellent"
+                },
+            ),
+        ],
         responses={
             201: OpenApiResponse(response=InspectionSerializer, description="Inspection created successfully"),
             403: OpenApiResponse(description="Permission denied"),
@@ -1559,3 +1573,53 @@ class InspectionViewSet(viewsets.ModelViewSet):
         if has_role(user, ["admin", "superadmin"]):
             return Inspection.objects.all()
         return Inspection.objects.filter(uploaded_by=user)
+
+    @extend_schema(
+        description="Verify or reject an inspection."
+                    "This endpoint allows an **admin or superadmin** to update the inspection status "
+                    "to either `'verified'` or `'rejected'`. Optionally, an admin can include remarks.",
+        parameters=[
+            OpenApiParameter(
+                name="status",
+                type=str,
+                required=True,
+                description="The new status. Must be either 'verified' or 'rejected'."
+            ),
+            OpenApiParameter(
+                name="admin_remarks",
+                type=str,
+                required=False,
+                description="Optional remarks from the admin."
+            ),
+        ],
+        responses={
+            200: OpenApiResponse(description="Inspection verified or rejected successfully."),
+            400: OpenApiResponse(description="Invalid status or bad request."),
+            403: OpenApiResponse(description="Forbidden – user not authorized."),
+            404: OpenApiResponse(description="Inspection not found."),
+        },
+    )
+    @action(detail=True, methods=["patch"], permission_classes=[IsSuperAdminOrAdmin])
+    def verify(self, request, pk=None):
+        """Custom endpoint for admins to verify/reject inspections."""
+        inspection = self.get_object()
+        status_value = request.data.get("status")
+        admin_remarks = request.data.get("admin_remarks", "")
+
+        if status_value not in ["verified", "rejected"]:
+            return Response(
+                {"error": "Invalid status. Must be 'verified' or 'rejected'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        inspection.status = status_value
+        inspection.verified_by = request.user
+        inspection.verified_at = timezone.now()
+        inspection.admin_remarks = admin_remarks
+        inspection.save()
+
+        return Response(
+            {"detail": f"Inspection {status_value} successfully."},
+            status=status.HTTP_200_OK,
+        )
+
