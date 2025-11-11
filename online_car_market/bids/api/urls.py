@@ -5,7 +5,7 @@ from online_car_market.bids.api.views import BidViewSet
 
 router = DefaultRouter()
 
-router.register(r'bids', BidViewSet, basename='bids')
+router.register(r'', BidViewSet, basename='bids')
 
 urlpatterns = [
 path('', include(router.urls)),

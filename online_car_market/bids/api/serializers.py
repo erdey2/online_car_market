@@ -19,7 +19,7 @@ class BidSerializer(serializers.ModelSerializer):
 
     def validate_car(self, value):
         # Ensure the car exists and is available for bidding
-        if not value.is_available:
+        if not value.status:
             raise serializers.ValidationError("This car is not available for bidding.")
         return value
 
