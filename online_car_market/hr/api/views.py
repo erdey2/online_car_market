@@ -1,7 +1,7 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from online_car_market.users.permissions import IsHR
+from online_car_market.users.permissions import IsHR, IsERPUser
 from ..models import Employee, Contract, Attendance, Leave
 from .serializers import EmployeeSerializer, ContractSerializer, AttendanceSerializer, LeaveSerializer
 
@@ -45,41 +45,21 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
 
 @extend_schema_view(
-    list=extend_schema(
-        tags=["Dealers - Human Resource Management"],
-        summary="List all contracts",
-        description="Retrieve all employee contracts, including type, duration, and salary information.",
-    ),
-    create=extend_schema(
-        tags=["Dealers - Human Resource Management"],
-        summary="Create a new contract",
-        description="Add a new employment contract for an existing employee with details such as type, start date, and salary.",
-    ),
-    retrieve=extend_schema(
-        tags=["Dealers - Human Resource Management"],
-        summary="Get contract details",
-        description="Fetch a specific contract’s details by contract ID.",
-    ),
-    update=extend_schema(
-        tags=["Dealers - Human Resource Management"],
-        summary="Update contract",
-        description="Modify contract details such as salary, duration, or active status.",
-    ),
-    partial_update=extend_schema(
-        tags=["Dealers - Human Resource Management"],
-        summary="Partially update contract details",
-        description="Modify specific contract details such as salary or duration without replacing the whole contract record.",
-    ),
-    destroy=extend_schema(
-        tags=["Dealers - Human Resource Management"],
-        summary="Delete a contract",
-        description="Remove an employee’s contract permanently from the system.",
-    ),
+    list=extend_schema(tags=["Contracts"], summary="List all contracts"),
+    create=extend_schema(tags=["Contracts"], summary="Create a new contract"),
+    retrieve=extend_schema(tags=["Contracts"], summary="Get contract details"),
+    update=extend_schema(tags=["Contracts"], summary="Update a contract"),
+    partial_update=extend_schema(tags=["Contracts"], summary="Partially update a contract"),
+    destroy=extend_schema(tags=["Contracts"], summary="Delete a contract"),
 )
 class ContractViewSet(viewsets.ModelViewSet):
-    queryset = Contract.objects.all()
+    queryset = Contract.objects.all().select_related("employee__user")
     serializer_class = ContractSerializer
-    permission_classes = [IsHR]
+    permission_classes = [IsERPUser]
+
+    def perform_create(self, serializer):
+        serializer.save(uploaded_by=self.request.user)
+
 
 @extend_schema_view(
     list=extend_schema(

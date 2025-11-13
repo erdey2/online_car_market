@@ -26,19 +26,19 @@ class Contract(models.Model):
     end_date = models.DateField(null=True, blank=True)
     terms = models.TextField(blank=True)
     contract_salary = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(max_length=20, choices=[('active', 'Active'), ('expired', 'Expired'), ('terminated', 'Terminated')], default='active')
-
-    document = CloudinaryField(
-        'contract_document',
-        null=True,
-        blank=True,
-        folder='contracts/signed/',  # organized folder
-        allowed_formats=['pdf', 'jpg', 'jpeg', 'png'],
-        help_text="Upload scanned signed contract (PDF or photo)"
+    status = models.CharField(
+        max_length=20,
+        choices=[('draft', 'Draft'), ('active', 'Active'), ('expired', 'Expired'), ('terminated', 'Terminated')],
+        default='draft'
     )
 
-    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='uploaded_contracts')
+    signed_pdf = CloudinaryField('signed_contract', null=True, blank=True, folder='contracts/signed/')
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='uploaded_contracts')
     uploaded_at = models.DateTimeField(null=True, blank=True)
+    employee_signature = models.ImageField(upload_to='contracts/signatures/', null=True, blank=True)
+    hr_signature = models.ImageField(upload_to='contracts/hr_signatures/', null=True, blank=True)
+    company_stamp = models.ImageField(upload_to='contracts/stamps/', null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -47,7 +47,7 @@ class Contract(models.Model):
         today = timezone.now().date()
         if self.end_date and self.end_date < today:
             self.status = 'expired'
-        if self.document and not self.uploaded_at:
+        if self.signed_pdf and not self.uploaded_at:
             self.uploaded_at = timezone.now()
         super().save(*args, **kwargs)
 

@@ -97,15 +97,23 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
         return super().update(instance, validated_data)
 
-class ContractSerializer(serializers.ModelSerializer):
-    # input
-    employee_email = serializers.EmailField(write_only=True, required=True)
-    document = serializers.FileField(write_only=True, required=False)
 
-    # output
+class ContractSerializer(serializers.ModelSerializer):
+    employee_email = serializers.EmailField(write_only=True, required=True)
+
+    # File inputs (write-only)
+    signed_pdf = serializers.FileField(write_only=True, required=False)
+    employee_signature = serializers.ImageField(write_only=True, required=False)
+    hr_signature = serializers.ImageField(write_only=True, required=False)
+    company_stamp = serializers.ImageField(write_only=True, required=False)
+
+    # Read-only outputs
     employee_email_display = serializers.EmailField(source="employee.user.email", read_only=True)
     employee_full_name = serializers.SerializerMethodField(read_only=True)
-    document_url = serializers.SerializerMethodField(read_only=True)
+    signed_pdf_url = serializers.SerializerMethodField(read_only=True)
+    employee_signature_url = serializers.SerializerMethodField(read_only=True)
+    hr_signature_url = serializers.SerializerMethodField(read_only=True)
+    company_stamp_url = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Contract
@@ -115,107 +123,98 @@ class ContractSerializer(serializers.ModelSerializer):
             "employee_email_display",
             "employee_full_name",
             "start_date", "end_date", "terms", "contract_salary", "status",
-            "document", "document_url", "uploaded_by", "uploaded_at",
-            "created_at",
-            "updated_at",
+            "signed_pdf", "signed_pdf_url",
+            "employee_signature", "employee_signature_url",
+            "hr_signature", "hr_signature_url",
+            "company_stamp", "company_stamp_url",
+            "uploaded_by", "uploaded_at",
+            "created_at", "updated_at",
         ]
-        read_only_fields = ["id", "employee_email_display", "employee_full_name", "document_url", "uploaded_by",
-            "uploaded_at", "created_at", "updated_at"]
+        read_only_fields = [
+            "id", "employee_email_display", "employee_full_name",
+            "signed_pdf_url", "employee_signature_url", "hr_signature_url", "company_stamp_url",
+            "uploaded_by", "uploaded_at", "created_at", "updated_at",
+        ]
 
-    def get_employee_full_name(self, obj: Contract) -> str:
-        profile = obj.employee.user.profile
-        return f"{profile.first_name} {profile.last_name}".strip() or "Unknown"
+    # Display helpers
+    def get_employee_full_name(self, obj):
+        profile = getattr(obj.employee.user, 'profile', None)
+        if profile:
+            full_name = f"{profile.first_name} {profile.last_name}".strip()
+            return full_name if full_name else obj.employee.user.email
+        return obj.employee.user.email
 
-    def get_document_url(self, obj: Contract) -> str | None:
-        if obj.document:
-            return obj.document.build_url()
-        return None
+    def get_signed_pdf_url(self, obj):
+        try:
+            return obj.signed_pdf.url if obj.signed_pdf else None
+        except ValueError:
+            return None
 
-    def validate_contract_salary(self, value: float) -> float:
+    def get_employee_signature_url(self, obj):
+        try:
+            return obj.employee_signature.url if obj.employee_signature else None
+        except ValueError:
+            return None
+
+    def get_hr_signature_url(self, obj):
+        try:
+            return obj.hr_signature.url if obj.hr_signature else None
+        except ValueError:
+            return None
+
+    def get_company_stamp_url(self, obj):
+        try:
+            return obj.company_stamp.url if obj.company_stamp else None
+        except ValueError:
+            return None
+
+    # Validation
+    def validate_contract_salary(self, value):
         if value <= 0:
             raise serializers.ValidationError("Contract salary must be greater than zero.")
         return value
 
-    def validate_employee_email(self, email: str) -> Employee:
+    def validate_employee_email(self, email):
+        email = email.strip()
         try:
-            employee = Employee.objects.get(user__email=email)
-            return employee
+            return Employee.objects.get(user__email__iexact=email)
         except Employee.DoesNotExist:
             raise serializers.ValidationError("No employee with this email exists.")
 
-    def validate(self, data: dict) -> dict:
-        start = data.get("start_date")
-        end = data.get("end_date")
-
+    def validate(self, data):
+        start, end = data.get("start_date"), data.get("end_date")
         if start and end and start > end:
-            raise serializers.ValidationError(
-                "Contract start date must be before or equal to end date."
-            )
+            raise serializers.ValidationError("Contract start date must be before end date.")
 
-        # Clean HTML / unsafe input
         if "terms" in data:
             data["terms"] = bleach.clean(data["terms"], tags=[], attributes={})
 
-        # Only ONE ACTIVE contract per employee
-        employee = data.get("employee") or (self.instance.employee if self.instance else None)
-        if employee:
-            qs = Contract.objects.filter(employee=employee, status="active")
-            if self.instance:
-                qs = qs.exclude(pk=self.instance.pk)
-
-            if qs.exists():
-                raise serializers.ValidationError(
-                    "The employee already has an active contract."
-                )
-
         return data
 
-    def create(self, validated_data: dict) -> Contract:
-        _require_hr_or_admin(self.context["request"])
+    # Role-based creation
+    def create(self, validated_data):
+        employee = validated_data.pop("employee_email")
+        validated_data["employee"] = employee
 
-        # Extract write-only fields
-        document_file = validated_data.pop("document", None)
-        employee = validated_data.pop("employee_email")  # This is Employee instance
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
 
-        # Create contract
-        contract = Contract.objects.create(
-            employee=employee,
-            uploaded_by=self.context["request"].user,
-            uploaded_at=timezone.now(),
-            **validated_data
-        )
+        if user and user.is_authenticated:
+            if has_role(user, 'hr'):
+                validated_data["status"] = validated_data.get("status", "active")
+            elif has_role(user, 'accountant') or has_role(user, 'seller'):
+                validated_data["status"] = "draft"
+                validated_data.pop("hr_signature", None)
+                validated_data.pop("company_stamp", None)
+            else:
+                raise serializers.ValidationError("You are not authorized to create contracts.")
 
-        # Attach document if uploaded
-        if document_file:
-            contract.document = document_file
-            contract.save(update_fields=["document"])
+            validated_data["uploaded_by"] = user
+        else:
+            raise serializers.ValidationError("Authentication required.")
 
-        return contract
+        return Contract.objects.create(**validated_data)
 
-    def update(self, instance: Contract, validated_data: dict) -> Contract:
-        _require_hr_or_admin(self.context["request"])
-
-        # Prevent changing employee
-        validated_data.pop("employee_email", None)
-
-        # Handle new document upload
-        document_file = validated_data.pop("document", None)
-        if document_file:
-            instance.document = document_file
-            instance.uploaded_by = self.context["request"].user
-            instance.uploaded_at = timezone.now()
-
-        # Auto-expire if end_date passed
-        end_date = validated_data.get("end_date") or instance.end_date
-        if end_date and end_date < date.today():
-            validated_data.setdefault("status", "expired")
-
-        # Save changes
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-
-        return instance
 
 class AttendanceSerializer(serializers.ModelSerializer):
     employee_email = serializers.EmailField(write_only=True, required=True)

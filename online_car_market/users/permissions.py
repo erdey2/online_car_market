@@ -111,6 +111,31 @@ class CanPostCar(BasePermission):
         # Otherwise, no permission
         return False
 
+class IsERPUser(BasePermission):
+    """
+    Allow HR, Accountant, and Seller to manage contracts.
+    HR has full access, others limited to draft creation.
+    """
+    def has_permission(self, request, view):
+        from rolepermissions.checkers import has_role
+
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        # Allow HR, Accountant, or Seller roles
+        if (
+            has_role(request.user, 'hr') or
+            has_role(request.user, 'accountant') or
+            has_role(request.user, 'seller')
+        ):
+            return True
+
+        # Allow read-only access for admin/staff
+        if request.method in SAFE_METHODS and request.user.is_staff:
+            return True
+
+        return False
+
 class CanViewSalesData(BasePermission):
     def has_permission(self, request, view):
         return (
