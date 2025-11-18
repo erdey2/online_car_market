@@ -1,7 +1,8 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from online_car_market.users.permissions import IsHR, IsERPUser
+from online_car_market.users.permissions.drf_permissions import IsHR
+from online_car_market.users.permissions.business_permissions import IsERPUser
 from ..models import Employee, Contract, Attendance, Leave
 from .serializers import EmployeeSerializer, ContractSerializer, AttendanceSerializer, LeaveSerializer
 

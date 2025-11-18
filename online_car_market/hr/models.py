@@ -20,47 +20,46 @@ class Employee(models.Model):
         verbose_name = 'Employee'
         verbose_name_plural = 'Employees'
 
-class Contract(models.Model):
-    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='contracts')
-    start_date = models.DateField(default=timezone.now)
-    end_date = models.DateField(null=True, blank=True)
-    terms = models.TextField(blank=True)
-    contract_salary = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(
-        max_length=20,
-        choices=[('draft', 'Draft'), ('active', 'Active'), ('expired', 'Expired'), ('terminated', 'Terminated')],
-        default='draft'
-    )
+CONTRACT_STATUS = [
+    ("draft", "Draft"),
+    ("submitted", "Submitted by Employee"),
+    ("approved", "Approved by HR"),
+    ("rejected", "Rejected by HR"),
+    ("active", "Active"),
+    ("terminated", "Terminated"),
+]
 
-    signed_pdf = CloudinaryField('signed_contract', null=True, blank=True, folder='contracts/signed/')
-    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
-                                    related_name='uploaded_contracts')
+class Contract(models.Model):
+    employee = models.ForeignKey("hr.Employee", on_delete=models.CASCADE, related_name="contracts")
+    job_title = models.CharField(max_length=255, blank=True)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    probation_days = models.PositiveIntegerField(default=60)
+
+    gross_salary = models.DecimalField(max_digits=12, decimal_places=2)
+    transport_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    terms = models.TextField(blank=True)
+    hours_of_work = models.CharField(max_length=255, blank=True, default="Mon-Sat 9:00-17:00")
+    annual_leave = models.CharField(max_length=255, blank=True, default="16 days first year")
+
+    signed_pdf = models.FileField(upload_to="contracts/signed_pdfs/", null=True, blank=True)
+    employee_signature = models.ImageField(upload_to="contracts/signatures/employees/", null=True, blank=True)
+    hr_signature = models.ImageField(upload_to="contracts/signatures/hr/", null=True, blank=True)
+    company_stamp = models.ImageField(upload_to="contracts/stamps/", null=True, blank=True)
+
+    status = models.CharField(max_length=20, choices=CONTRACT_STATUS, default="draft")
+    uploaded_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="uploaded_contracts")
     uploaded_at = models.DateTimeField(null=True, blank=True)
-    employee_signature = models.ImageField(upload_to='contracts/signatures/', null=True, blank=True)
-    hr_signature = models.ImageField(upload_to='contracts/hr_signatures/', null=True, blank=True)
-    company_stamp = models.ImageField(upload_to='contracts/stamps/', null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def save(self, *args, **kwargs):
-        today = timezone.now().date()
-        if self.end_date and self.end_date < today:
-            self.status = 'expired'
-        if self.signed_pdf and not self.uploaded_at:
-            self.uploaded_at = timezone.now()
-        super().save(*args, **kwargs)
-
-    @property
-    def is_active_contract(self):
-        return self.status == 'active'
-
     def __str__(self):
-        return f"Contract for {self.employee.user.email} ({self.start_date} - {self.end_date or 'Ongoing'})"
+        return f"Contract #{self.id} for {self.employee} [{self.status}]"
 
     class Meta:
-        verbose_name = 'Contract'
-        verbose_name_plural = 'Contracts'
+        ordering = ["-created_at"]
 
 class Attendance(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='attendances')

@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Any
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.conf import settings
 from rest_framework import serializers
 from rolepermissions.checkers import has_role
 import bleach
@@ -136,35 +137,48 @@ class ContractSerializer(serializers.ModelSerializer):
             "uploaded_by", "uploaded_at", "created_at", "updated_at",
         ]
 
-    # Display helpers
+    def build_absolute_uri(self, path):
+        request = self.context.get("request")
+        if not path:
+            return None
+        if request:
+            return request.build_absolute_uri(path)
+        return f"{settings.MEDIA_URL}{path}"
+
     def get_employee_full_name(self, obj):
-        profile = getattr(obj.employee.user, 'profile', None)
-        if profile:
-            full_name = f"{profile.first_name} {profile.last_name}".strip()
-            return full_name if full_name else obj.employee.user.email
-        return obj.employee.user.email
+        user = obj.employee.user
+        profile = getattr(user, "profile", None)
+        if profile and (profile.first_name or profile.last_name):
+            return f"{profile.first_name} {profile.last_name}".strip()
+        elif user.first_name or user.last_name:
+            return f"{user.first_name} {user.last_name}".strip()
+        return user.email  # fallback
 
     def get_signed_pdf_url(self, obj):
         try:
-            return obj.signed_pdf.url if obj.signed_pdf else None
+            if obj.signed_pdf:
+                return self.build_absolute_uri(obj.signed_pdf.url)
         except ValueError:
             return None
 
     def get_employee_signature_url(self, obj):
         try:
-            return obj.employee_signature.url if obj.employee_signature else None
+            if obj.employee_signature:
+                return self.build_absolute_uri(obj.employee_signature.url)
         except ValueError:
             return None
 
     def get_hr_signature_url(self, obj):
         try:
-            return obj.hr_signature.url if obj.hr_signature else None
+            if obj.hr_signature:
+                return self.build_absolute_uri(obj.hr_signature.url)
         except ValueError:
             return None
 
     def get_company_stamp_url(self, obj):
         try:
-            return obj.company_stamp.url if obj.company_stamp else None
+            if obj.company_stamp:
+                return self.build_absolute_uri(obj.company_stamp.url)
         except ValueError:
             return None
 

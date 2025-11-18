@@ -8,7 +8,7 @@ from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.decorators import action
-from online_car_market.users.permissions import IsBuyer, IsSuperAdminOrAdmin
+from online_car_market.users.permissions.drf_permissions import IsBuyer, IsSuperAdminOrAdmin
 
 
 @extend_schema_view(

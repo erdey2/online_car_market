@@ -8,7 +8,7 @@ from rolepermissions.roles import assign_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
 from .serializers import UserRoleSerializer, ProfileSerializer, UserSerializer, UserRegistrationSerializer
 from online_car_market.users.models import Profile
-from online_car_market.users.permissions import IsSuperAdmin, IsAdmin, IsSuperAdminOrAdmin
+from online_car_market.users.permissions.drf_permissions import IsSuperAdmin, IsAdmin, IsSuperAdminOrAdmin
 from rolepermissions.checkers import has_role
 from rest_framework.decorators import action
 import logging

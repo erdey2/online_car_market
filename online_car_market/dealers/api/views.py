@@ -8,7 +8,7 @@ from rolepermissions.checkers import has_role, has_permission
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiResponse
 from .serializers import (DealerRatingSerializer, DealerProfileSerializer, VerifyDealerSerializer, DealerStaffSerializer)
 from ..models import DealerStaff
-from online_car_market.users.permissions import IsSuperAdmin, IsAdmin
+from online_car_market.users.permissions.drf_permissions import IsSuperAdmin, IsAdmin
 from online_car_market.dealers.utils import get_high_sales_rate_cars, get_top_sellers
 from online_car_market.dealers.models import DealerProfile, DealerRating
 

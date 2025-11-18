@@ -9,7 +9,7 @@ from online_car_market.brokers.models import BrokerProfile
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.buyers.models import BuyerProfile
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, OpenApiExample
-from online_car_market.users.permissions import CanViewSalesData
+from online_car_market.users.permissions.business_permissions import CanViewSalesData
 
 class CanManageSales(BasePermission):
     """Only super_admin, admin, broker, or dealer can manage sales."""

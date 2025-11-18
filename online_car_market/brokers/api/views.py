@@ -9,7 +9,7 @@ from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiResponse
 from online_car_market.brokers.models import BrokerProfile, BrokerRating
 from .serializers import VerifyBrokerSerializer, BrokerProfileSerializer, BrokerRatingSerializer
-from online_car_market.users.permissions import IsSuperAdmin, IsAdmin
+from online_car_market.users.permissions.drf_permissions import IsSuperAdmin, IsAdmin
 
 import logging
 

@@ -22,8 +22,10 @@ from .serializers import (CarSerializer, VerifyCarSerializer, BidSerializer, Car
                           CarModelSerializer, FavoriteCarSerializer, CarViewSerializer, CarViewAnalyticsSerializer,
                           InspectionSerializer
                           )
-from online_car_market.users.permissions import (IsSuperAdminOrAdminOrDealerOrBroker, IsSuperAdminOrAdmin,
-                                                 IsSuperAdminOrAdminOrBuyer, CanPostCar, IsBrokerOrSeller)
+from online_car_market.users.permissions.drf_permissions import (IsSuperAdminOrAdminOrDealerOrBroker,
+                                                                 IsSuperAdminOrAdmin, IsSuperAdminOrAdminOrBuyer,
+                                                                 IsBrokerOrSeller)
+from online_car_market.users.permissions.business_permissions import CanPostCar
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.payment.models import Payment
