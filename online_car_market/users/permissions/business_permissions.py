@@ -1,6 +1,13 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 from rolepermissions.checkers import has_role, has_permission
 
+class IsAdminOrReadOnly(BasePermission):
+    """Admins can verify/edit; others can only read their own."""
+    def has_object_permission(self, request, view, obj):
+        if request.method in SAFE_METHODS:
+            return True
+        return has_role(request.user, ["admin", "superadmin"]) or obj.uploaded_by == request.user
+
 class CanPostCar(BasePermission):
     """
     Custom permission controlling who can post or manage cars.
@@ -9,7 +16,6 @@ class CanPostCar(BasePermission):
     - Brokers, Admins, and SuperAdmins have full access.
     - Buyers or unauthenticated users can only read.
     """
-
     def has_permission(self, request, view):
         user = request.user
 
@@ -35,6 +41,24 @@ class CanPostCar(BasePermission):
 
         # Otherwise, no permission
         return False
+
+class CanManageAccounting(BasePermission):
+    """Only super_admin, admin, broker, dealer, or accountant can manage accounting data."""
+    def has_permission(self, request, view):
+        return has_role(request.user, ['super_admin', 'admin', 'broker', 'dealer', 'accountant'])
+
+class CanManageSales(BasePermission):
+    """Only super_admin, admin, broker, or dealer can manage sales."""
+    def has_permission(self, request, view):
+        return has_role(request.user, ['super_admin', 'admin', 'broker', 'dealer', 'seller'])
+
+class IsRatingOwnerOrAdmin(BasePermission):
+    def has_object_permission(self, request, view, obj):
+        return request.user == obj.user or has_role(request.user, ['super_admin', 'admin'])
+
+class IsDealerWithManageStaff(BasePermission):
+    def has_permission(self, request, view):
+        return has_role(request.user, 'dealer') and has_permission(request.user, 'manage_staff') and hasattr(request.user.profile, 'dealer_profile')
 
 class CanViewSalesData(BasePermission):
     def has_permission(self, request, view):

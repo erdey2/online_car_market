@@ -9,12 +9,7 @@ from ..models import Expense, FinancialReport, DealerProfile, CarExpense, Revenu
 from .serializers import ExpenseSerializer, FinancialReportSerializer, CarExpenseSerializer, RevenueSerializer, ExchangeRateSerializer
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse
 from online_car_market.accounting.utils import generate_financial_report
-
-
-class CanManageAccounting(BasePermission):
-    """Only super_admin, admin, broker, dealer, or accountant can manage accounting data."""
-    def has_permission(self, request, view):
-        return has_role(request.user, ['super_admin', 'admin', 'broker', 'dealer', 'accountant'])
+from online_car_market.users.permissions.business_permissions import CanManageAccounting
 
 @extend_schema_view(
     list=extend_schema(

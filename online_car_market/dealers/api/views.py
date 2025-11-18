@@ -11,18 +11,11 @@ from ..models import DealerStaff
 from online_car_market.users.permissions.drf_permissions import IsSuperAdmin, IsAdmin
 from online_car_market.dealers.utils import get_high_sales_rate_cars, get_top_sellers
 from online_car_market.dealers.models import DealerProfile, DealerRating
+from online_car_market.users.permissions.business_permissions import IsRatingOwnerOrAdmin, IsDealerWithManageStaff
 
 import logging
 
 logger = logging.getLogger(__name__)
-
-class IsRatingOwnerOrAdmin(BasePermission):
-    def has_object_permission(self, request, view, obj):
-        return request.user == obj.user or has_role(request.user, ['super_admin', 'admin'])
-
-class IsDealerWithManageStaff(BasePermission):
-    def has_permission(self, request, view):
-        return has_role(request.user, 'dealer') and has_permission(request.user, 'manage_staff') and hasattr(request.user.profile, 'dealer_profile')
 
 class ProfileViewSet(viewsets.ViewSet):
     """

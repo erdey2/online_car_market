@@ -10,14 +10,10 @@ from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiPara
 from online_car_market.brokers.models import BrokerProfile, BrokerRating
 from .serializers import VerifyBrokerSerializer, BrokerProfileSerializer, BrokerRatingSerializer
 from online_car_market.users.permissions.drf_permissions import IsSuperAdmin, IsAdmin
-
+from online_car_market.users.permissions.business_permissions import IsRatingOwnerOrAdmin
 import logging
 
 logger = logging.getLogger(__name__)
-
-class IsRatingOwnerOrAdmin(BasePermission):
-    def has_object_permission(self, request, view, obj):
-        return request.user == obj.user or has_role(request.user, ['super_admin', 'admin'])
 
 class BrokerProfileViewSet(mixins.RetrieveModelMixin,
                            mixins.UpdateModelMixin,

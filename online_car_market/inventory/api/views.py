@@ -30,15 +30,9 @@ from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.payment.models import Payment
 from online_car_market.users.models import Profile
+from online_car_market.users.permissions.business_permissions import IsAdminOrReadOnly
 
 logger = logging.getLogger(__name__)
-
-class IsAdminOrReadOnly(permissions.BasePermission):
-    """Admins can verify/edit; others can only read their own."""
-    def has_object_permission(self, request, view, obj):
-        if request.method in permissions.SAFE_METHODS:
-            return True
-        return has_role(request.user, ["admin", "superadmin"]) or obj.uploaded_by == request.user
 
 @extend_schema_view(
     list=extend_schema(
