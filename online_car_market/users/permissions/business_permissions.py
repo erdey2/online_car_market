@@ -8,6 +8,22 @@ class IsAdminOrReadOnly(BasePermission):
             return True
         return has_role(request.user, ["admin", "superadmin"]) or obj.uploaded_by == request.user
 
+class IsHROrAdmin(BasePermission):
+    """
+    Allow HR role or Django staff/superuser to perform HR actions.
+    """
+    def has_permission(self, request, view):
+        u = request.user
+        if not u or not u.is_authenticated:
+            return False
+        if u.is_staff or u.is_superuser:
+            return True
+        return has_role(u, "hr")
+
+class IsHRorDealer(BasePermission):
+    def has_permission(self, request, view):
+        return bool(request.user.is_authenticated and has_role(request.user, ["hr", "dealer"]))
+
 class CanPostCar(BasePermission):
     """
     Custom permission controlling who can post or manage cars.

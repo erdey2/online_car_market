@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Employment Contract</title>
+    <style>
+        body { font-family: "DejaVu Sans", sans-serif; font-size: 12pt; line-height: 1.6; margin: 50px; }
+        .center { text-align: center; }
+        .bold { font-weight: bold; }
+        .underline { text-decoration: underline; }
+        .section { margin: 30px 0; }
+        .signature { margin-top: 100px; display: flex; justify-content: space-between; }
+        .sig-box { width: 45%; text-align: center; }
+        .sig-line { border-top: 1px solid #000; width: 300px; margin: 20px auto 5px; }
+    </style>
+</head>
+<body>
+
+<h1 class="center bold">CONTRACT OF EMPLOYMENT</h1>
+
+<div class="section">
+    <p class="center bold">Contracting Parties</p>
+    <p>This contract of employment is made and entered in by:</p>
+    <p><strong>Eversea Transit And Logistics One Member PLC</strong> (hereafter referred to as the “Employer”)<br>
+    Address: Kirkos Sub City, Addis Ababa, Ethiopia</p>
+
+    <p>And</p>
+    <p><strong>Mr/Ms/Mrs:</strong> {{ contract.employee.user.profile.get_full_name }}<br>
+    Email: {{ contract.employee.user.email }}<br>
+    Phone: {{ contract.employee.user.profile.contact }}<br>
+    Address: {{ contract.employee.user.profile.address }}</p>
+</div>
+
+<div class="section">
+    <p class="bold underline">Article 1: Type of Employment</p>
+    <p class="indent">
+        1.1. This contract between the two parties is made
+        <strong>
+            {% if contract.employee_type == 'permanent' %}
+                permanent employment.
+            {% elif contract.employee_type == 'probation' %}
+                probationary employment for a period of 60 days.
+            {% elif contract.employee_type == 'temporary' %}
+                temporary/contract employment until {{ contract.end_date|date:"d F Y" }}.
+            {% elif contract.employee_type == 'intern' %}
+                internship employment.
+            {% endif %}
+        </strong>
+    </p>
+</div>
+
+<div class="section">
+    <p class="bold underline">Article 2: Job Title</p>
+    <p>2.1. The Employer undertakes to engage the Employee in the position of <strong>{{ contract.job_title }}</strong>.</p>
+    <p>2.2. The Employee is directly accountable to General Manager/CEO.</p>
+</div>
+
+<div class="section">
+    <p class="bold underline">Article 3: Place of Work</p>
+    <p>3.1. The place of work of the Employee shall be at <strong>Addis Ababa</strong>.</p>
+</div>
+
+<div class="section">
+    <p class="bold underline">Article 4: Duration of Contract</p>
+    <p class="indent">
+        {% if contract.employee_type == 'probation' %}
+            4.1. This is a probationary contract for 60 days commencing from
+            <strong>{{ contract.start_date|date:"d F Y" }}</strong> and ending on
+            <strong>{{ contract.probation_end_date|date:"d F Y" }}</strong>.
+        {% elif contract.employee_type == 'temporary' %}
+            4.1. This contract commences on <strong>{{ contract.start_date|date:"d F Y" }}</strong>
+            and ends on <strong>{{ contract.end_date|date:"d F Y" }}</strong>.
+        {% else %}
+            4.1. This is a permanent employment contract commencing on
+            <strong>{{ contract.start_date|date:"d F Y" }}</strong>.
+        {% endif %}
+    </p>
+</div>
+
+<div class="section">
+    <p class="bold underline">Article 6: Remuneration</p>
+    <p>6.1. The Employee shall be entitled to a monthly gross salary of
+    <strong>{{ contract.salary }} Birr</strong> and Transport allowance of
+    <strong>{{ contract.transport_allowance }} Birr</strong>.</p>
+</div>
+
+<div class="section">
+    <p class="bold underline">Article 7: Hours of Work</p>
+    <p>7.1. The employee will report to work from Monday to Saturday 9:00 am up to 5:00 pm (Saturday half day 9:00 am-12:30 pm) with 1 hour lunch break from 12:30 pm-1:30 pm.</p>
+</div>
+
+<div class="section">
+    <p class="bold underline">Article 8: Annual Leave</p>
+    <p>8.1.ConcurrentLeave shall be entitled to 16 working days of leave in the first calendar year of service prorated to her/his date of hire and one additional leave day for every additional year of service provided but not exceeding 26 working days in any year.</p>
+</div>
+
+<div class="section">
+    <p class="bold underline">Article 9: Pension Scheme</p>
+    <p>9.1. As per Ethiopian Law, monthly, Eversea Transit and Logistics will contribute to the Government of Ethiopia Pension Fund Scheme for employees. The rate is 11% from Eversea Transit and Logistics and 7% from the employee — this is based on the New (Proclamation 1395/2025).</p>
+</div>
+
+<div class="section">
+    <p class="bold underline">Article 10: Termination</p>
+    <p>This contract of employment shall come to an end:</p>
+    <p>10.1. Due to one or more of the grounds for termination as provided under the Labor Proclamation no. 377/2003.</p>
+    <p>10.2. Due to one or more of the grounds for termination as per the rules and regulations of the Employer HR Manual.</p>
+</div>
+
+<div class="section">
+    <p class="bold underline">Article 11: Miscellaneous</p>
+    <p>11.1. The Employee’s job description and Human Resource Policy and Procedures Manual shall constitute an integral part of this Contract.</p>
+    <p>11.2. The Labor Proclamation 377/2003, Civil Code of 1960, and the Private Organization Employees’ Pension Proclamation No. 715/2011 shall be applicable as appropriate.</p>
+    <p>11.3. The Employer has the right to take disciplinary action against the Employee in accordance to the employer’s rules, regulations, policies or manuals.</p>
+</div>
+
+<br><br><br><br>
+
+<div class="center bold">
+    The Employer and the Employee hereby declare that they understand thoroughly the above provisions and agree to sign to abide by such provisions.
+</div>
+
+<br><br>
+
+<div class="signature">
+    <div class="sig-box">
+        <p><strong>For the Employee</strong></p>
+        <div class="sig-line"></div>
+        <p>Name: {{ contract.employee.user.profile.get_full_name }}</p>
+        <p>Date: _________________</p>
+        <p>Signature: _________________</p>
+    </div>
+
+    <div class="sig-box">
+        <p><strong>For the Employer</strong></p>
+        <div class="sig-line"></div>
+        <p>Name: _________________</p>
+        <p>Date: _________________</p>
+        <p>Signature: _________________</p>
+    </div>
+</div>
+
+</body>
+</html>

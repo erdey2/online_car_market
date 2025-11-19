@@ -14,51 +14,6 @@ class IsDealer(BasePermission):
     def has_permission(self, request, view):
         return has_role(request.user, 'dealer')
 
-class IsSuperAdminOrAdminOrDealerOrBroker(BasePermission):
-    def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated and
-            (has_role(request.user, 'super_admin') or
-             has_role(request.user, 'admin') or
-             has_role(request.user, 'dealer') or
-             has_role(request.user, 'broker'))
-        )
-
-class IsSuperAdminOrAdminOrDealer(BasePermission):
-    def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated and
-            (has_role(request.user, 'super_admin') or
-             has_role(request.user, 'admin') or
-             has_role(request.user, 'dealer'))
-        )
-
-class IsSuperAdminOrAdminOrBuyer(BasePermission):
-    def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated and
-            (has_role(request.user, 'super_admin') or
-             has_role(request.user, 'admin') or
-             has_role(request.user, 'buyer'))
-        )
-
-class IsSuperAdminOrAdmin(BasePermission):
-    def has_permission(self, request, view):
-        return request.user.is_authenticated and (
-            request.user.is_superuser or request.user.is_staff
-        )
-
-
-class IsBrokerOrSeller(BasePermission):
-    message = "Only brokers or sellers can create or edit inspections."
-
-    def has_permission(self, request, view):
-        if not request.user.is_authenticated:
-            return False
-
-        # Allow brokers, dealers, or sellers
-        return any(has_role(request.user, ["broker", "dealer", "seller"]))
-
 class IsBroker(BasePermission):
     def has_permission(self, request, view):
         return has_role(request.user, 'broker')
@@ -70,3 +25,47 @@ class IsHR(BasePermission):
 class IsBuyer(BasePermission):
     def has_permission(self, request, view):
         return has_role(request.user, 'buyer')
+
+class IsSuperAdminOrAdmin(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and (
+            request.user.is_superuser or request.user.is_staff
+        )
+
+class IsSuperAdminOrAdminOrDealer(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated and
+            (has_role(request.user, 'super_admin') or
+             has_role(request.user, 'admin') or
+             has_role(request.user, 'dealer'))
+        )
+
+class IsSuperAdminOrAdminOrDealerOrBroker(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated and
+            (has_role(request.user, 'super_admin') or
+             has_role(request.user, 'admin') or
+             has_role(request.user, 'dealer') or
+             has_role(request.user, 'broker'))
+        )
+
+class IsSuperAdminOrAdminOrBuyer(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated and
+            (has_role(request.user, 'super_admin') or
+             has_role(request.user, 'admin') or
+             has_role(request.user, 'buyer'))
+        )
+
+class IsBrokerOrSeller(BasePermission):
+    message = "Only brokers or sellers can create or edit inspections."
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+
+        # Allow brokers, dealers, or sellers
+        return any(has_role(request.user, ["broker", "dealer", "seller"]))

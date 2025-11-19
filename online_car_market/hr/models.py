@@ -1,14 +1,16 @@
 from django.db import models
 from django.utils import timezone
 from cloudinary.models import CloudinaryField
-from online_car_market.users.models import User, Profile  # Import from users app
-from django.utils.translation import gettext_lazy as _
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 class Employee(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='employee_profile')
     hire_date = models.DateField(default=timezone.now)
     position = models.CharField(max_length=100, blank=True)
     salary = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='employees_created')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -20,46 +22,63 @@ class Employee(models.Model):
         verbose_name = 'Employee'
         verbose_name_plural = 'Employees'
 
-CONTRACT_STATUS = [
-    ("draft", "Draft"),
-    ("submitted", "Submitted by Employee"),
-    ("approved", "Approved by HR"),
-    ("rejected", "Rejected by HR"),
-    ("active", "Active"),
-    ("terminated", "Terminated"),
-]
-
 class Contract(models.Model):
-    employee = models.ForeignKey("hr.Employee", on_delete=models.CASCADE, related_name="contracts")
-    job_title = models.CharField(max_length=255, blank=True)
-    start_date = models.DateField(null=True, blank=True)
-    end_date = models.DateField(null=True, blank=True)
-    probation_days = models.PositiveIntegerField(default=60)
-
-    gross_salary = models.DecimalField(max_digits=12, decimal_places=2)
-    transport_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-
+    EMPLOYEE_TYPE_CHOICES = [
+        ('permanent', 'Permanent'),
+        ('probation', 'Probation (60 days)'),
+        ('temporary', 'Temporary / Contract'),
+        ('intern', 'Intern'),
+    ]
+    STATUS_CHOICES = [
+        ('draft', 'Draft'),
+        ('sent_to_employee', 'Sent to Employee'),
+        ('signed_by_employee', 'Signed by Employee'),
+        ('active', 'Active'),
+        ('rejected', 'Rejected'),
+        ('expired', 'Expired'),
+    ]
+    employee = models.ForeignKey('hr.Employee', on_delete=models.CASCADE, related_name='contracts')
+    employee_type = models.CharField(max_length=20, choices=EMPLOYEE_TYPE_CHOICES, default='probation',
+                                     help_text="Type of employment contract"
+    )
+    job_title = models.CharField(max_length=150)
+    contract_salary = models.DecimalField(max_digits=12, decimal_places=2)
+    transport_allowance = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    start_date = models.DateField()
+    probation_end_date = models.DateField(null=True, blank=True)  # Only for probation
+    end_date = models.DateField(null=True, blank=True, help_text="For temporary contracts") # Optional for temporary contracts
     terms = models.TextField(blank=True)
-    hours_of_work = models.CharField(max_length=255, blank=True, default="Mon-Sat 9:00-17:00")
-    annual_leave = models.CharField(max_length=255, blank=True, default="16 days first year")
+    status = models.CharField(max_length=25, choices=STATUS_CHOICES, default='draft')
 
-    signed_pdf = models.FileField(upload_to="contracts/signed_pdfs/", null=True, blank=True)
-    employee_signature = models.ImageField(upload_to="contracts/signatures/employees/", null=True, blank=True)
-    hr_signature = models.ImageField(upload_to="contracts/signatures/hr/", null=True, blank=True)
-    company_stamp = models.ImageField(upload_to="contracts/stamps/", null=True, blank=True)
+    # Documents
+    draft_document_url = models.URLField(max_length=500, blank=True, null=True)
+    employee_signed_document_url = models.URLField(max_length=500, blank=True, null=True)
+    final_document_url = models.URLField(max_length=500, blank=True, null=True)
 
-    status = models.CharField(max_length=20, choices=CONTRACT_STATUS, default="draft")
-    uploaded_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="uploaded_contracts")
-    uploaded_at = models.DateTimeField(null=True, blank=True)
+    employee_signed_at = models.DateTimeField(null=True, blank=True)
+    finalized_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='finalized_contracts')
+    finalized_at = models.DateTimeField(null=True, blank=True)
 
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='created_contracts')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def __str__(self):
-        return f"Contract #{self.id} for {self.employee} [{self.status}]"
-
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ['-created_at']
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(employee_type='probation') | models.Q(probation_end_date__isnull=True) | models.Q(
+                    probation_end_date__gte=models.F('start_date')),
+                name='probation_end_date_required_if_probation'
+            ),
+            models.CheckConstraint(
+                check=models.Q(employee_type='temporary') | models.Q(end_date__isnull=True) | models.Q(
+                    end_date__gte=models.F('start_date')),
+                name='end_date_required_if_temporary'
+            )
+        ]
+    def __str__(self):
+        return f"{self.get_employee_type_display()} - {self.employee.user.email} ({self.job_title})"
 
 class Attendance(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='attendances')

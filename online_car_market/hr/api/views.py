@@ -1,66 +1,207 @@
+from ..models import Employee, Contract, Attendance, Leave
+from .serializers import (EmployeeSerializer, ContractSerializer, AttendanceSerializer,
+                          LeaveSerializer, SignedUploadSerializer, FinalUploadSerializer)
+from ..utils.pdf import generate_and_upload_pdf
+from cloudinary.uploader import upload
+from rest_framework.utils import timezone
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework.decorators import action
+from rolepermissions.checkers import has_role
 from online_car_market.users.permissions.drf_permissions import IsHR
-from online_car_market.users.permissions.business_permissions import IsERPUser
-from ..models import Employee, Contract, Attendance, Leave
-from .serializers import EmployeeSerializer, ContractSerializer, AttendanceSerializer, LeaveSerializer
+from online_car_market.users.permissions.business_permissions import IsHRorDealer
+from drf_spectacular.utils import extend_schema_view, extend_schema, OpenApiResponse
+from templated_mail.mail import BaseEmailMessage
 
 
 @extend_schema_view(
     list=extend_schema(
         tags=["Dealers - Human Resource Management"],
         summary="List all employees",
-        description="Retrieve a list of all registered employees, including position, department, and hiring date.",
+        description="Retrieve all registered employees, including position, department, and hiring date.",
     ),
     retrieve=extend_schema(
         tags=["Dealers - Human Resource Management"],
         summary="Retrieve employee details",
-        description="Fetch detailed information about a specific employee by their ID.",
+        description="Fetch detailed information about a specific employee by ID.",
     ),
     create=extend_schema(
         tags=["Dealers - Human Resource Management"],
         summary="Add a new employee",
-        description="Create a new employee record with details such as position, department, and date hired.",
+        description="Dealers or HR can create new employees. `created_by` is automatically tracked.",
     ),
     update=extend_schema(
         tags=["Dealers - Human Resource Management"],
         summary="Update employee information",
-        description="Modify existing employee details including department, position, and active status.",
+        description="Modify existing employee details.",
     ),
     partial_update=extend_schema(
         tags=["Dealers - Human Resource Management"],
         summary="Partially update employee information",
-        description="Update specific fields of an employee record without overwriting the entire object.",
     ),
     destroy=extend_schema(
         tags=["Dealers - Human Resource Management"],
         summary="Delete employee record",
-        description="Remove an employee record permanently from the system.",
     ),
 )
 class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.all()
     serializer_class = EmployeeSerializer
-    permission_classes = [IsHR]
+    permission_classes = [IsHRorDealer]
 
+    def get_queryset(self):
+        """
+        Optional: Dealers see only employees they created, HR see all.
+        """
+        user = self.request.user
+        if has_role(user, ["dealer"]):
+            return Employee.objects.filter(created_by=user)
+        return Employee.objects.all()
 
 @extend_schema_view(
-    list=extend_schema(tags=["Contracts"], summary="List all contracts"),
-    create=extend_schema(tags=["Contracts"], summary="Create a new contract"),
-    retrieve=extend_schema(tags=["Contracts"], summary="Get contract details"),
-    update=extend_schema(tags=["Contracts"], summary="Update a contract"),
-    partial_update=extend_schema(tags=["Contracts"], summary="Partially update a contract"),
-    destroy=extend_schema(tags=["Contracts"], summary="Delete a contract"),
+    list=extend_schema(
+        summary="List all contracts",
+        description="Returns a list of all contracts accessible to the HR user.",
+    ),
+    retrieve=extend_schema(
+        summary="Retrieve a specific contract",
+        description="Fetch a single contract by its ID, including employee details and current status.",
+    ),
+    create=extend_schema(
+        summary="Create a new contract",
+        description="Allows HR to create a new contract in draft status.",
+    ),
+    update=extend_schema(
+        summary="Update contract",
+        description="Allows HR to update an existing contract as long as it is still in draft stage.",
+    ),
+    partial_update=extend_schema(
+        summary="Partially update contract",
+        description="Allows HR to modify specific fields of a draft contract.",
+    ),
+    destroy=extend_schema(
+        summary="Delete contract",
+        description="Allows HR to delete a draft contract.",
+    ),
+
+    send_to_employee=extend_schema(
+        summary="Send draft contract to employee",
+        description=(
+            "Generates a PDF, updates status to `sent_to_employee`, "
+            "and emails the employee a download link."
+        ),
+        request=None,
+        responses={200: OpenApiResponse(description="Contract sent to employee.")}
+    ),
+
+    upload_signed=extend_schema(
+        summary="Upload signed contract from employee",
+        description=(
+            "Employee uploads the signed contract. "
+            "Requires file field: `signed_document`."
+        ),
+        request=SignedUploadSerializer,
+        responses={200: OpenApiResponse(description="Signed document received.")}
+    ),
+
+    finalize=extend_schema(
+        summary="Finalize contract and make it active",
+        description=(
+            "HR uploads the final stamped PDF. "
+            "Requires file field: `final_document`."
+        ),
+        request=FinalUploadSerializer,
+        responses={200: OpenApiResponse(description="Contract is now active.")}
+    ),
 )
 class ContractViewSet(viewsets.ModelViewSet):
-    queryset = Contract.objects.all().select_related("employee__user")
+    queryset = Contract.objects.select_related('employee__user__profile').all()
     serializer_class = ContractSerializer
-    permission_classes = [IsERPUser]
+    permission_classes = [IsHRorDealer]
 
-    def perform_create(self, serializer):
-        serializer.save(uploaded_by=self.request.user)
+    @action(detail=True, methods=['post'])
+    def send_to_employee(self, request, pk=None):
+        contract = self.get_object()
+        if contract.status != 'draft':
+            return Response({"detail": "Already sent"}, status=400)
 
+        contract.status = 'sent_to_employee'
+        contract.save()
+
+        BaseEmailMessage(
+            template_name='email/contract_sent.html',
+            context={
+                'name': contract.employee.user.profile.get_full_name(),
+                'pdf_url': contract.draft_document_url
+            }
+        ).send(to=[contract.employee.user.email])
+
+        return Response({"detail": "Sent!", "pdf_url": contract.draft_document_url})
+
+    @action(detail=True, methods=['post'])
+    def upload_signed(self, request, pk=None):
+        contract = self.get_object()
+        if contract.status != 'sent_to_employee':
+            return Response({"detail": "Not sent yet"}, status=400)
+
+        file = request.FILES.get('signed_document')
+        if not file:
+            return Response({"detail": "File required"}, status=400)
+
+        result = upload(
+            file.read(),
+            folder="contracts/drafts/",
+            resource_type="raw",
+            format="pdf",
+            type="upload",
+            access_mode="public",
+            use_filename=True,
+            unique_filename=False,
+            overwrite=True
+        )
+        contract.employee_signed_document_url = result['secure_url']
+        contract.employee_signed_at = timezone.now()
+        contract.status = 'signed_by_employee'
+        contract.save()
+
+        return Response({"detail": "Signed document uploaded"})
+
+    @action(detail=True, methods=['post'])
+    def finalize(self, request, pk=None):
+        contract = self.get_object()
+        if contract.status != 'signed_by_employee':
+            return Response({"detail": "Employee must sign first"}, status=400)
+
+        file = request.FILES.get('final_document')
+        if not file:
+            return Response({"detail": "Final document required"}, status=400)
+
+        result = upload(
+            file.read(),
+            folder="contracts/drafts/",
+            resource_type="raw",
+            format="pdf",
+            type="upload",
+            access_mode="public",
+            use_filename=True,
+            unique_filename=False,
+            overwrite=True
+        )
+        contract.final_document_url = result['secure_url']
+        contract.finalized_by = request.user
+        contract.finalized_at = timezone.now()
+        contract.status = 'active'
+        contract.save()
+
+        BaseEmailMessage(
+            template_name='email/contract_active.html',
+            context={
+                'name': contract.employee.user.profile.get_full_name(),
+                'pdf_url': contract.final_document_url
+            }
+        ).send(to=[contract.employee.user.email])
+
+        return Response({"detail": "Contract is now ACTIVE!", "final_pdf": contract.final_document_url})
 
 @extend_schema_view(
     list=extend_schema(

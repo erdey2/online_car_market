@@ -94,6 +94,7 @@ THIRD_PARTY_APPS = [
     'rolepermissions',
     'cloudinary',
     'cloudinary_storage',
+    'templated_mail',
 ]
 
 LOCAL_APPS = [
@@ -127,7 +128,7 @@ AUTHENTICATION_BACKENDS = [
 ]
 # https://docs.djangoproject.com/en/dev/ref/settings/#auth-user-model
 AUTH_USER_MODEL = "users.User"
-ROLEPERMISSIONS_MODULE = 'users.permissions'
+ROLEPERMISSIONS_MODULE = 'users.roles.base_roles'
 ROLEPERMISSIONS_REGISTER_ADMIN = True
 # https://docs.djangoproject.com/en/dev/ref/settings/#login-redirect-url
 LOGIN_REDIRECT_URL = "users:redirect"
