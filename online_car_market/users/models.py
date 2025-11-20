@@ -53,6 +53,14 @@ class Profile(models.Model):
     def __str__(self):
         return f"Profile for {self.user.email}"
 
+    def get_full_name(self):
+        """Return first_name + last_name, with fallback to email"""
+        name = f"{self.first_name or ''} {self.last_name or ''}".strip()
+        return name if name else self.user.email
+
+    def get_short_name(self):
+        return self.first_name or self.user.email.split('@')[0]
+
     class Meta:
         indexes = [
             models.Index(fields=['user'], name='idx_profile_user'),
