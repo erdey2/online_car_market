@@ -1,9 +1,8 @@
+from django.utils import timezone
 from ..models import Employee, Contract, Attendance, Leave
 from .serializers import (EmployeeSerializer, ContractSerializer, AttendanceSerializer,
                           LeaveSerializer, SignedUploadSerializer, FinalUploadSerializer)
-from ..utils.pdf import generate_and_upload_pdf
 from cloudinary.uploader import upload
-from rest_framework.utils import timezone
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -60,31 +59,37 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
 @extend_schema_view(
     list=extend_schema(
+        tags=["Dealers - Human Resource Management"],
         summary="List all contracts",
         description="Returns a list of all contracts accessible to the HR user.",
     ),
     retrieve=extend_schema(
+        tags=["Dealers - Human Resource Management"],
         summary="Retrieve a specific contract",
         description="Fetch a single contract by its ID, including employee details and current status.",
     ),
     create=extend_schema(
+        tags=["Dealers - Human Resource Management"],
         summary="Create a new contract",
         description="Allows HR to create a new contract in draft status.",
     ),
     update=extend_schema(
+        tags=["Dealers - Human Resource Management"],
         summary="Update contract",
         description="Allows HR to update an existing contract as long as it is still in draft stage.",
     ),
     partial_update=extend_schema(
+        tags=["Dealers - Human Resource Management"],
         summary="Partially update contract",
         description="Allows HR to modify specific fields of a draft contract.",
     ),
     destroy=extend_schema(
+        tags=["Dealers - Human Resource Management"],
         summary="Delete contract",
         description="Allows HR to delete a draft contract.",
     ),
-
     send_to_employee=extend_schema(
+        tags=["Dealers - Human Resource Management"],
         summary="Send draft contract to employee",
         description=(
             "Generates a PDF, updates status to `sent_to_employee`, "
@@ -93,8 +98,8 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         request=None,
         responses={200: OpenApiResponse(description="Contract sent to employee.")}
     ),
-
     upload_signed=extend_schema(
+        tags=["Dealers - Human Resource Management"],
         summary="Upload signed contract from employee",
         description=(
             "Employee uploads the signed contract. "
@@ -105,6 +110,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     ),
 
     finalize=extend_schema(
+        tags=["Dealers - Human Resource Management"],
         summary="Finalize contract and make it active",
         description=(
             "HR uploads the final stamped PDF. "
