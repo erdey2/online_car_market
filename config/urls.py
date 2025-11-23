@@ -51,9 +51,9 @@ urlpatterns = [
 
     path('', RedirectView.as_view(url='/api/docs/', permanent=False)),
     # User management
-    path("api/accounts/", include("allauth.urls")),
+    path('api/accounts/', include("allauth.urls")),
     # Your stuff: custom urls includes go here
-    path("api/users/", include("online_car_market.users.api.urls")),
+    path('api/users/', include("online_car_market.users.api.urls")),
     path('api/inventory/', include("online_car_market.inventory.api.urls")),
     path('api/bids/', include("online_car_market.bids.api.urls")),
     path('api/hr/', include("online_car_market.hr.api.urls")),
@@ -62,7 +62,7 @@ urlpatterns = [
     path('api/dealers/', include("online_car_market.dealers.api.urls")),
     path('api/brokers/', include("online_car_market.brokers.api.urls")),
     path('api/buyers/', include("online_car_market.buyers.api.urls")),
-
+    path('api/notifications/', include("online_car_market.notifications.api.urls")),
     path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 

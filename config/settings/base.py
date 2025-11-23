@@ -108,6 +108,7 @@ LOCAL_APPS = [
     "online_car_market.dealers",
     "online_car_market.brokers",
     "online_car_market.buyers",
+    "online_car_market.notifications",
     "online_car_market.otp_reset",
     "online_car_market.payment",
 ]
