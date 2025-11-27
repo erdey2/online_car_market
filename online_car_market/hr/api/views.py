@@ -285,16 +285,26 @@ class LeaveViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         """
-        - Employees can CREATE leave requests (for themselves)
-        - Only HR can update/delete/approve
+        PERMISSION RULES:
+        - Any authenticated employee can CREATE a leave request (for themselves)
+        - Only HR can update, approve/deny, or delete leaves
+        - Listing leaves HR only
         """
-        if self.action == 'create':
-            return [permissions.IsAuthenticated()]  # Any logged-in user
+        if self.action == "create":
+            return [permissions.IsAuthenticated()]  # employee or HR
+        elif self.action in ["update", "partial_update", "destroy"]:
+            return [IsHR()]  # only HR
+        elif self.action in ["list", "retrieve"]:
+            return [IsHR()]
+
         return [IsHR()]
 
     def perform_update(self, serializer):
-        # Automatically log the HR reviewer if leave status changes
-        if serializer.validated_data.get("status") in ["approved", "denied"]:
-            serializer.save(reviewed_by=self.request.user)
+        """
+        Auto-set reviewer when status changes
+        """
+        new_status = serializer.validated_data.get("status")
+        if new_status in ["approved", "denied"]:
+            serializer.save(approved_by=self.request.user)
         else:
             serializer.save()

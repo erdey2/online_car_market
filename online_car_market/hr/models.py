@@ -109,7 +109,8 @@ class Leave(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Leave for {self.employee.user.email} from {self.start_date} to {self.end_date} - {self.status}"
+        email = getattr(getattr(self.employee, 'user', None), 'email', 'unknown')
+        return f"Leave for {email} from {self.start_date} to {self.end_date} - {self.status}"
 
     class Meta:
         verbose_name = 'Leave'

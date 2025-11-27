@@ -152,8 +152,8 @@ class AttendanceSerializer(serializers.ModelSerializer):
         model = Attendance
         fields = [
             "id",
-            "employee_email",  # input
-            "employee_email_display",  # output
+            "employee_email",          # input only
+            "employee_email_display",  # output only
             "employee_full_name",
             "entry_time",
             "exit_time",
@@ -163,32 +163,37 @@ class AttendanceSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "employee_email_display", "employee_full_name", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "employee_email_display",
+            "employee_full_name",
+            "created_at",
+            "updated_at",
+        ]
 
     def get_employee_full_name(self, obj: Attendance) -> str:
         profile = obj.employee.user.profile
-        return f"{profile.first_name} {profile.last_name}".strip() or "Unknown"
+        full = f"{profile.first_name} {profile.last_name}".strip()
+        return full or "Unknown"
 
     def validate_employee_email(self, email: str) -> Employee:
         try:
-            employee = Employee.objects.get(user__email=email)
-            return employee
+            return Employee.objects.get(user__email=email)
         except Employee.DoesNotExist:
             raise serializers.ValidationError("No employee with this email exists.")
 
     def validate(self, data: dict) -> dict:
         entry = data.get("entry_time")
         exit_ = data.get("exit_time")
-        att_date = data.get("date", getattr(self.instance, "date", None))
 
-        # Entry before exit
+        # Ensure entry is before exit
         if entry and exit_ and entry > exit_:
-            raise serializers.ValidationError(
-                "Entry time must be before or equal to exit time."
-            )
+            raise serializers.ValidationError("Entry time must be before or equal to exit time.")
 
-        # No duplicate attendance for the same employee on the same day
+        # Check duplicate attendance for the same employee/day
         employee = data.get("employee") or (self.instance.employee if self.instance else None)
+        att_date = data.get("date") or (self.instance.date if self.instance else None)
+
         if employee and att_date:
             qs = Attendance.objects.filter(employee=employee, date=att_date)
             if self.instance:
@@ -198,30 +203,25 @@ class AttendanceSerializer(serializers.ModelSerializer):
                     f"Attendance for {employee.user.email} on {att_date} already exists."
                 )
 
-        # Sanitize notes
+        # Sanitize notes input
         if "notes" in data:
             data["notes"] = bleach.clean(data["notes"], tags=[], attributes={})
 
         return data
 
     def create(self, validated_data: dict) -> Attendance:
-        _require_hr_or_admin(self.context["request"])
+        # Resolve employee object
+        employee = validated_data.pop("employee_email")
 
-        # Resolve employee
-        employee = validated_data.pop("employee_email")  # This is Employee instance
-
-        # Default date = today if not provided
+        # If date not provided → use today's date
         if "date" not in validated_data:
             validated_data["date"] = timezone.now().date()
 
         return Attendance.objects.create(employee=employee, **validated_data)
 
     def update(self, instance: Attendance, validated_data: dict) -> Attendance:
-        _require_hr_or_admin(self.context["request"])
-
-        # Never change employee
+        # Employee cannot be changed
         validated_data.pop("employee_email", None)
-
         return super().update(instance, validated_data)
 
 class LeaveSerializer(serializers.ModelSerializer):
@@ -234,9 +234,9 @@ class LeaveSerializer(serializers.ModelSerializer):
         model = Leave
         fields = [
             "id",
-            "employee_email",  # input
-            "employee_email_display",  # output
-            "employee_full_name",  # output
+            "employee_email",
+            "employee_email_display",
+            "employee_full_name",
             "start_date",
             "end_date",
             "reason",
@@ -245,76 +245,57 @@ class LeaveSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "employee_email_display", "employee_full_name", "approved_by_email", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "employee_email_display",
+            "employee_full_name",
+            "approved_by_email",
+            "created_at",
+            "updated_at",
+        ]
 
-    def get_employee_full_name(self, obj: Leave) -> str:
+    def get_employee_full_name(self, obj):
         profile = obj.employee.user.profile
-        return f"{profile.first_name} {profile.last_name}".strip() or "Unknown"
+        return f"{profile.first_name} {profile.last_name}".strip()
 
-    def validate_employee_email(self, email: str) -> Employee:
+    def validate_employee_email(self, email):
         try:
-            employee = Employee.objects.get(user__email=email)
-            return employee
+            return Employee.objects.get(user__email=email)
         except Employee.DoesNotExist:
             raise serializers.ValidationError("No employee with this email exists.")
 
-    def validate(self, data: dict) -> dict:
+    def validate(self, data):
         start = data.get("start_date")
         end = data.get("end_date")
         employee = data.get("employee") or (self.instance.employee if self.instance else None)
 
         if start and end and start > end:
-            raise serializers.ValidationError(
-                "Leave start date must be before or equal to end date."
-            )
+            raise serializers.ValidationError("Start date must be before end date.")
 
-        # No overlapping approved leaves
+        # Prevent overlapping approved leave
         if employee and start and end:
             overlap = Leave.objects.filter(
                 employee=employee,
                 status="approved",
                 start_date__lte=end,
-                end_date__gte=start,
+                end_date__gte=start
             )
             if self.instance:
                 overlap = overlap.exclude(pk=self.instance.pk)
             if overlap.exists():
-                raise serializers.ValidationError(
-                    "The employee already has an approved leave that overlaps with these dates."
-                )
+                raise serializers.ValidationError("This employee already has approved leave during this time range.")
 
-        # Clean reason
+        # Sanitize reason
         if "reason" in data:
             data["reason"] = bleach.clean(data["reason"], tags=[], attributes={})
 
         return data
 
-    def create(self, validated_data: dict) -> Leave:
-        request = self.context["request"]
-        if not request.user.is_authenticated:
-            raise serializers.ValidationError("Authentication required.")
-
-        # Resolve employee
-        employee = validated_data.pop("employee_email")  # This is Employee instance
-
-        # If the requester is the employee themselves → allow
-        # If HR → allow (they can create for anyone)
-        if not has_role(request.user, ["hr", "dealer"]):
-            # Must be requesting for themselves
-            if employee.user != request.user:
-                raise serializers.ValidationError("You can only request leave for yourself.")
-
+    def create(self, validated_data):
+        employee = validated_data.pop("employee_email")
         return Leave.objects.create(employee=employee, **validated_data)
 
-    def update(self, instance: Leave, validated_data: dict) -> Leave:
-        _require_hr_or_admin(self.context["request"])
-
-        # Never allow changing employee
+    def update(self, instance, validated_data):
+        # Do not allow changing employee
         validated_data.pop("employee_email", None)
-
-        # Auto-set approved_by when status changes
-        new_status = validated_data.get("status")
-        if new_status in ("approved", "denied") and instance.status == "pending":
-            validated_data["approved_by"] = self.context["request"].user
-
         return super().update(instance, validated_data)
