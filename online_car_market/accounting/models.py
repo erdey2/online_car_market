@@ -18,16 +18,7 @@ class ExchangeRate(models.Model):
 
 class Expense(models.Model):
     dealer = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, related_name='expenses', null=True, blank=True)
-    type = models.CharField(max_length=100, choices=[
-        ('purchase', 'Purchase'),
-        ('shipping', 'Shipping'),
-        ('tax', 'Tax'),
-        ('maintenance', 'Maintenance'),
-        ('marketing', 'Marketing'),
-        ('salary', 'Salary'),
-        ('operational', 'Operational'),
-        ('other', 'Other')
-    ])
+    type = models.CharField(max_length=100)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=10, choices=[('USD', 'USD'), ('ETB', 'ETB')], default='ETB')
     exchange_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # store rate used for conversion

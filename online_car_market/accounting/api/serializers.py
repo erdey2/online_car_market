@@ -157,23 +157,27 @@ class RevenueSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 class ExpenseSerializer(serializers.ModelSerializer):
-    # Explicitly define `type` so schema shows choices
-    type = serializers.ChoiceField(
-        choices=Expense._meta.get_field('type').choices,
-        help_text="Expense type. Options: maintenance, marketing, operational, other"
-    )
-
     class Meta:
         model = Expense
-        fields = ['id', 'type', 'amount', 'dealer', 'date', 'description']
+        fields = [
+            'id',
+            'dealer',
+            'type',
+            'amount',
+            'currency',
+            'exchange_rate',
+            'date',
+            'description'
+        ]
         read_only_fields = ['id', 'date']
 
     def validate_type(self, value):
-        """Validate and sanitize type."""
-        valid_types = ['maintenance', 'marketing', 'operational', 'other']
+        """Sanitize type field."""
         cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
-        if cleaned_value not in valid_types:
-            raise serializers.ValidationError(f"Type must be one of: {', '.join(valid_types)}.")
+        if len(cleaned_value) == 0:
+            raise serializers.ValidationError("Type cannot be empty.")
+        if len(cleaned_value) > 100:
+            raise serializers.ValidationError("Type cannot exceed 100 characters.")
         return cleaned_value
 
     def validate_amount(self, value):
@@ -193,8 +197,14 @@ class ExpenseSerializer(serializers.ModelSerializer):
             return cleaned_value
         return value
 
+    def validate_exchange_rate(self, value):
+        """Ensure exchange rate is valid."""
+        if value < 0:
+            raise serializers.ValidationError("Exchange rate cannot be negative.")
+        return value
+
     def validate(self, data):
-        """Ensure only accounting, admins, or super admins can create/update expenses."""
+        """Ensure correct permissions."""
         user = self.context['request'].user
         if not has_role(user, ['super_admin', 'admin', 'dealer', 'accountant']):
             raise serializers.ValidationError(

@@ -1,4 +1,6 @@
 from django.db.models import Sum
+import django_filters
+from django_filters.rest_framework.backends import DjangoFilterBackend
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated, BasePermission
 from rest_framework import status
@@ -192,6 +194,17 @@ class RevenueViewSet(ModelViewSet):
     serializer_class = RevenueSerializer
     permission_classes = [IsAuthenticated, CanManageAccounting]
 
+
+class ExpenseFilter(django_filters.FilterSet):
+    start_date = django_filters.DateFilter(field_name="date", lookup_expr="gte")
+    end_date = django_filters.DateFilter(field_name="date", lookup_expr="lte")
+    dealer = django_filters.NumberFilter(field_name="dealer__id")
+    currency = django_filters.CharFilter(field_name="currency")
+
+    class Meta:
+        model = Expense
+        fields = ['dealer', 'currency', 'start_date', 'end_date']
+
 # Expense ViewSet
 @extend_schema_view(
     list=extend_schema(
@@ -230,27 +243,42 @@ class RevenueViewSet(ModelViewSet):
     ),
 )
 class ExpenseViewSet(ModelViewSet):
-    """
-    Manage general dealer expenses such as operations, logistics, or miscellaneous costs.
-    Dealers can view their own expenses, while admins and accountants can view all.
-    """
     queryset = Expense.objects.all()
     serializer_class = ExpenseSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_class = ExpenseFilter
 
     def get_permissions(self):
+        # Special write permissions
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [IsAuthenticated(), CanManageAccounting()]
-        return [IsAuthenticated()]
+        # Default read permissions
+        return [permission() for permission in self.permission_classes]
 
     def get_queryset(self):
         user = self.request.user
+
+        # Dealers can only see their own expenses
         if has_role(user, 'dealer'):
             dealer_profile = DealerProfile.objects.filter(profile__user=user).first()
             return Expense.objects.filter(dealer=dealer_profile) if dealer_profile else Expense.objects.none()
-        if has_role(user, ['super_admin', 'admin', 'accountant', 'dealer']):
+
+        # Admin-level roles can see everything
+        if has_role(user, ['super_admin', 'admin', 'accountant']):
             return Expense.objects.all()
+
+        # Others see nothing
         return Expense.objects.none()
+
+    def perform_create(self, serializer):
+        """Restrict dealer so they can only create THEIR OWN expense"""
+        user = self.request.user
+        if has_role(user, 'dealer'):
+            dealer_profile = DealerProfile.objects.filter(profile__user=user).first()
+            serializer.save(dealer=dealer_profile)
+        else:
+            serializer.save()
 
 
 # FinancialReport ViewSet

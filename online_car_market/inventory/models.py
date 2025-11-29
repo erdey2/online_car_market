@@ -99,6 +99,8 @@ class Car(models.Model):
     ]
 
     # core fields
+    vin = models.CharField(max_length=17, unique=True, null=True, blank=True, db_index=True)
+    origin = models.CharField(max_length=100, null=True, blank=True)
     make = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     model = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     make_ref = models.ForeignKey(CarMake, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars', db_index=True)
