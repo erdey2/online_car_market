@@ -183,12 +183,12 @@ class CarViewSet(viewsets.ModelViewSet):
             from online_car_market.dealers.models import DealerStaff
             staff = DealerStaff.objects.filter(user=user, role='seller').first()
             if staff:
+                # Seller sees ALL cars of their dealer (not only posted_by them)
                 queryset = queryset.filter(
-                    dealer=staff.dealer,
-                    posted_by=user
+                    dealer=staff.dealer
                 ).order_by('-priority', '-created_at')
             else:
-                queryset = queryset.none()  # seller not assigned to any dealer
+                queryset = queryset.none() # seller not assigned to any dealer
 
         # Broker: see ONLY their own cars
         elif has_role(user, 'broker'):
