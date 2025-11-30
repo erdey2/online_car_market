@@ -20,44 +20,49 @@ logger = logging.getLogger(__name__)
 class ProfileViewSet(viewsets.ViewSet):
     """
     Endpoint to get or update the authenticated user's profile
-    (dealer, seller, or accountant).
+    (dealer, seller, accountant, hr).
     """
     permission_classes = [IsAuthenticated]
 
+    STAFF_ROLES = ['seller', 'accountant', 'hr']  # add more staff roles here
+
     @extend_schema(
         tags=["Profiles"],
-        description="Retrieve the authenticated user's profile (dealer, seller, accountant)."
+        description="Retrieve the authenticated user's profile."
     )
     def retrieve(self, request):
         user = request.user
 
-        # Dealer
+        # Dealer profile
         if has_role(user, 'dealer'):
             try:
                 dealer_profile = DealerProfile.objects.get(profile__user=user)
             except DealerProfile.DoesNotExist:
                 return Response({"detail": "Dealer profile not found."}, status=status.HTTP_404_NOT_FOUND)
 
-            serializer = DealerProfileSerializer(dealer_profile)
-            return Response(serializer.data)
+            return Response(DealerProfileSerializer(dealer_profile).data)
 
-        # Seller / Accountant
-        elif has_role(user, 'seller') or has_role(user, 'accountant'):
-            staff_profile = DealerStaff.objects.filter(user=user).select_related('dealer', 'user').first()
+        # Staff profile: seller / accountant / hr
+        if has_role(user, self.STAFF_ROLES):
+            staff_profile = (
+                DealerStaff.objects.filter(user=user)
+                .select_related('dealer', 'user')
+                .first()
+            )
+
             if not staff_profile:
                 return Response({"detail": "Staff profile not found."}, status=status.HTTP_404_NOT_FOUND)
 
-            serializer = DealerStaffSerializer(staff_profile)
-            return Response(serializer.data)
+            return Response(DealerStaffSerializer(staff_profile).data)
 
         return Response(
-            {"detail": "User does not have a dealer, seller, or accountant role."},
-            status=status.HTTP_403_FORBIDDEN
+            {"detail": "User does not have an allowed role."},
+            status=status.HTTP_403_FORBIDDEN,
         )
 
     @extend_schema(
         tags=["Profiles"],
-        description="Partially update the authenticated user's profile (dealer, seller, accountant)."
+        description="Partially update the authenticated user's profile."
     )
     def partial_update(self, request):
         user = request.user
@@ -74,8 +79,8 @@ class ProfileViewSet(viewsets.ViewSet):
             serializer.save()
             return Response(serializer.data)
 
-        # Seller / Accountant update
-        elif has_role(user, 'seller') or has_role(user, 'accountant'):
+        # Staff update (seller, accountant, hr)
+        if has_role(user, self.STAFF_ROLES):
             staff_profile = DealerStaff.objects.filter(user=user).first()
             if not staff_profile:
                 return Response({"detail": "Staff profile not found."}, status=status.HTTP_404_NOT_FOUND)
@@ -86,8 +91,8 @@ class ProfileViewSet(viewsets.ViewSet):
             return Response(serializer.data)
 
         return Response(
-            {"detail": "User does not have a dealer, seller, or accountant role."},
-            status=status.HTTP_403_FORBIDDEN
+            {"detail": "User does not have an allowed role."},
+            status=status.HTTP_403_FORBIDDEN,
         )
 
 @extend_schema_view(
