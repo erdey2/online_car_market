@@ -24,38 +24,70 @@ class IsHRorDealer(BasePermission):
     def has_permission(self, request, view):
         return bool(request.user.is_authenticated and has_role(request.user, ["hr", "dealer"]))
 
+from rest_framework.permissions import BasePermission, SAFE_METHODS
+from online_car_market.utils import has_role
+
+
 class CanPostCar(BasePermission):
     """
-    Custom permission controlling who can post or manage cars.
-    - Dealers can post/manage their own cars.
-    - Sellers can post/manage cars only for their assigned dealer.
-    - Brokers, Admins, and SuperAdmins have full access.
-    - Buyers or unauthenticated users can only read.
+    Controls car posting and management permissions.
+    - Dealers manage only their own cars.
+    - Sellers manage cars only for their assigned dealer.
+    - Brokers/Admins/SuperAdmins manage everything.
+    - Buyers & anonymous users read only.
     """
+
     def has_permission(self, request, view):
         user = request.user
 
-        # Allow read-only access for everyone
+        # Read-only access for all
         if request.method in SAFE_METHODS:
             return True
 
-        # Must be authenticated for write actions
+        # Must be authenticated
         if not user.is_authenticated:
             return False
 
-        # Sellers can post only if they belong to a dealer
+        # Sellers can write only if linked to a dealer
         if has_role(user, 'seller'):
             from online_car_market.dealers.models import DealerStaff
-            return DealerStaff.objects.filter(
-                user=user,
-                role='seller'
-            ).exists()
+            return DealerStaff.objects.filter(user=user, role='seller').exists()
 
-        # Dealers, brokers, admins, and super_admins can post/manage cars freely
+        # Dealers + high roles write freely
         if has_role(user, ['dealer', 'broker', 'admin', 'super_admin']):
             return True
 
-        # Otherwise, no permission
+        return False
+
+    def has_object_permission(self, request, view, obj):
+        """
+        Object-level validation:
+        Sellers & dealers can only modify cars belonging to their dealer.
+        High roles modify everything.
+        """
+
+        user = request.user
+
+        # Read-only always allowed
+        if request.method in SAFE_METHODS:
+            return True
+
+        # High privilege roles can do anything
+        if has_role(user, ['broker', 'admin', 'super_admin']):
+            return True
+
+        # Dealer can modify only their own cars
+        if has_role(user, 'dealer'):
+            return obj.dealer == user.dealer
+
+        # Seller can modify only cars for their assigned dealer
+        if has_role(user, 'seller'):
+            from online_car_market.dealers.models import DealerStaff
+            staff = DealerStaff.objects.filter(user=user, role='seller').first()
+            if not staff:
+                return False
+            return obj.dealer == staff.dealer
+
         return False
 
 class CanManageAccounting(BasePermission):
