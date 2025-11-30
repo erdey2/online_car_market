@@ -24,10 +24,6 @@ class IsHRorDealer(BasePermission):
     def has_permission(self, request, view):
         return bool(request.user.is_authenticated and has_role(request.user, ["hr", "dealer"]))
 
-from rest_framework.permissions import BasePermission, SAFE_METHODS
-from online_car_market.utils import has_role
-
-
 class CanPostCar(BasePermission):
     """
     Controls car posting and management permissions.
