@@ -8,11 +8,9 @@ from rest_framework.viewsets import ModelViewSet, ViewSet
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework import status, permissions
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework import status, viewsets, permissions, mixins
 from rest_framework.viewsets import ReadOnlyModelViewSet
 from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
-from rest_framework import viewsets, permissions, mixins
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import (extend_schema, extend_schema_view, OpenApiParameter,
@@ -172,23 +170,17 @@ class CarViewSet(viewsets.ModelViewSet):
         if has_role(user, ['super_admin', 'admin']):
             queryset = queryset.order_by('-priority', '-created_at')
 
-        # --- Dealer: see ONLY their own cars ---
+        # Dealer: see ONLY their own cars
         elif has_role(user, 'dealer'):
             queryset = queryset.filter(
                 dealer__profile__user=user
             ).order_by('-priority', '-created_at')
 
-        # Seller: see ONLY cars posted by them under their dealer
+        # Seller: see ONLY cars posted by him/her
         elif has_role(user, 'seller'):
-            from online_car_market.dealers.models import DealerStaff
-            staff = DealerStaff.objects.filter(user=user, role='seller').first()
-            if staff:
-                # Seller sees ALL cars of their dealer (not only posted_by them)
-                queryset = queryset.filter(
-                    dealer=staff.dealer
-                ).order_by('-priority', '-created_at')
-            else:
-                queryset = queryset.none() # seller not assigned to any dealer
+            queryset = queryset.filter(
+                posted_by=user
+            ).order_by('-priority', '-created_at')
 
         # Broker: see ONLY their own cars
         elif has_role(user, 'broker'):
@@ -196,13 +188,13 @@ class CarViewSet(viewsets.ModelViewSet):
                 broker__profile__user=user
             ).order_by('-priority', '-created_at')
 
-        # --- Buyer or unauthenticated users: see ONLY verified cars ---
+        # Buyer/unauthenticated: only verified cars
         else:
             queryset = queryset.filter(
                 verification_status='verified'
             ).order_by('-priority', '-created_at')
 
-        # Optional filter: by broker_email query parameter
+        # Optional filter: broker_email
         broker_email = self.request.query_params.get('broker_email')
         if broker_email:
             from online_car_market.brokers.models import BrokerProfile
