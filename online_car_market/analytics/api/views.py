@@ -9,14 +9,16 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from rolepermissions.checkers import has_role
-from drf_spectacular.utils import extend_schema, OpenApiResponse
+from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter
 
 from online_car_market.inventory.models import Car, CarMake, CarView, CarImage
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.payment.models import Payment
+from online_car_market.accounting.models import Expense, CarExpense, Revenue
 from online_car_market.users.permissions.drf_permissions import (IsSuperAdminOrAdminOrDealer, IsSuperAdminOrAdminOrBroker,
-                                                                 IsSuperAdminOrAdmin, IsDealer, IsBuyer, IsBroker)
+                                                                 IsSuperAdminOrAdmin, IsDealerOrAccountant, IsDealer, IsBuyer,
+                                                                 IsBroker)
 from .serializers import CarViewAnalyticsSerializer
 
 logger = logging.getLogger(__name__)
@@ -507,3 +509,134 @@ class AnalyticsViewSet(ViewSet):
                 {"error": "Internal server error"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @extend_schema(
+        tags=["Analytics"],
+        description="Get financial analytics for a dealer (expenses, revenue, and profit) by day/week/month/year.",
+        parameters=[
+            OpenApiParameter(
+                name="range",
+                description= "Time range for analytics: day, week, month, or year",
+                required = False,
+                type=str,
+                enum =  ["day", "week", "month", "year"],
+            ),
+        ],
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "range": {"type": "string"},
+                    "total_expenses": {"type": "number"},
+                    "total_revenue": {"type": "number"},
+                    "net_profit": {"type": "number"},
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "period": {"type": "string"},
+                                "expense": {"type": "number"},
+                                "revenue": {"type": "number"},
+                                "net_profit": {"type": "number"},
+                            }
+                        }
+                    }
+                }
+            },
+            403: OpenApiResponse(description="Forbidden — Only dealers may access this endpoint"),
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='financial-analytics', permission_classes=[IsDealerOrAccountant])
+    def financial_analytics(self, request):
+        """Financial analytics for DEALERS only."""
+        user = request.user
+
+        if not has_role(user, ['dealer', 'accountant']):
+            return Response({"error": "Only dealers or accountant have access to financial analytics."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Get dealer profile
+        try:
+            dealer = DealerProfile.objects.get(profile=user.profile)
+        except DealerProfile.DoesNotExist:
+            return Response({"error": "Dealer profile not found."}, status=404)
+
+        # Time range
+        period = request.GET.get("range", "month")
+
+        trunc_map = {
+            "day": TruncDay,
+            "week": TruncWeek,
+            "month": TruncMonth,
+            "year": TruncYear,
+        }
+
+        if period not in trunc_map:
+            return Response({"error": "Invalid range. Use day, week, month, or year."}, status=400)
+
+        Trunc = trunc_map[period]
+
+        # EXPENSES = Expense + CarExpense
+        general_expenses = (
+            Expense.objects.filter(dealer=dealer)
+            .annotate(period=Trunc("date"))
+            .annotate(final_amount=F("amount") * F("exchange_rate"))
+            .values("period")
+            .annotate(total=Sum("final_amount"))
+        )
+
+        car_expenses = (
+            CarExpense.objects.filter(dealer=dealer)
+            .annotate(period=Trunc("date"))
+            .values("period")
+            .annotate(total=Sum("converted_amount"))
+        )
+
+        # Convert both to dict for merging by period
+        expense_map = {}
+
+        for row in general_expenses:
+            expense_map[row["period"]] = row["total"]
+
+        for row in car_expenses:
+            expense_map[row["period"]] = expense_map.get(row["period"], 0) + row["total"]
+
+        # REVENUE (converted)
+        revenue_qs = (
+            Revenue.objects.filter(dealer=dealer)
+            .annotate(period=Trunc("created_at"))
+            .values("period")
+            .annotate(total=Sum("converted_amount"))
+        )
+
+        revenue_map = {r["period"]: r["total"] for r in revenue_qs}
+
+        # Combine into analytics rows
+        periods = sorted(set(list(expense_map.keys()) + list(revenue_map.keys())))
+
+        results = []
+        total_expenses = 0
+        total_revenue = 0
+
+        for p in periods:
+            exp = expense_map.get(p, 0)
+            rev = revenue_map.get(p, 0)
+
+            total_expenses += exp
+            total_revenue += rev
+
+            results.append({
+                "period": p.date().strftime("%Y-%m-%d"),
+                "expense": round(exp, 2),
+                "revenue": round(rev, 2),
+                "net_profit": round(rev - exp, 2)
+            })
+
+        return Response({
+            "range": period,
+            "total_expenses": round(total_expenses, 2),
+            "total_revenue": round(total_revenue, 2),
+            "net_profit": round(total_revenue - total_expenses, 2),
+            "results": results
+        })
+

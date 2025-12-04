@@ -22,7 +22,7 @@ class Expense(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=10, choices=[('USD', 'USD'), ('ETB', 'ETB')], default='ETB')
     exchange_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # store rate used for conversion
-    date = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     description = models.TextField(blank=True)
 
     def __str__(self):
@@ -36,7 +36,7 @@ class CarExpense(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=3, choices=Currency.choices, default=Currency.USD)
     converted_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    date = models.DateField(default=timezone.now)
+    created_at = models.DateTimeField(default=timezone.now)
 
     def save(self, *args, **kwargs):
         """Automatically convert to ETB when in USD."""
