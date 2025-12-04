@@ -41,9 +41,12 @@ class ExchangeRateSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 class CarExpenseSerializer(serializers.ModelSerializer):
+    vin_code = serializers.CharField(source="car.vin", read_only=True)
+    origin = serializers.CharField(source="car.origin", read_only=True)
     class Meta:
         model = CarExpense
         fields = '__all__'
+        extra_fields = ['vin_code', 'origin']
 
     def validate_amount(self, value):
         """Ensure the expense amount is positive."""

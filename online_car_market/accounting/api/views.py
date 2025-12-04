@@ -1,11 +1,13 @@
-from django.db.models import Sum
 import django_filters
+from django.db.models import Sum
 from django_filters.rest_framework.backends import DjangoFilterBackend
+
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated, BasePermission
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+
 from rolepermissions.checkers import has_role
 from ..models import Expense, FinancialReport, DealerProfile, CarExpense, Revenue, ExchangeRate
 from .serializers import ExpenseSerializer, FinancialReportSerializer, CarExpenseSerializer, RevenueSerializer, ExchangeRateSerializer
@@ -13,6 +15,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiPara
 from online_car_market.accounting.utils import generate_financial_report
 from online_car_market.users.permissions.business_permissions import CanManageAccounting
 
+# Exchange rate
 @extend_schema_view(
     list=extend_schema(
         tags=["Dealers - Accounting"],
@@ -51,7 +54,7 @@ class ExchangeRateViewSet(ModelViewSet):
     serializer_class = ExchangeRateSerializer
     permission_classes = [IsAuthenticated, CanManageAccounting]
 
-# ------------------------------------
+# car expense
 @extend_schema_view(
     list=extend_schema(
         tags=["Dealers - Accounting"],
@@ -154,7 +157,7 @@ class CarExpenseViewSet(ModelViewSet):
 
         return Response(results)
 
-# ------------------------------------
+# revenue
 @extend_schema_view(
     list=extend_schema(
         tags=["Dealers - Accounting"],
@@ -187,13 +190,11 @@ class CarExpenseViewSet(ModelViewSet):
         description="Remove a revenue entry (admin or accountant only)."
     ),
 )
-
 class RevenueViewSet(ModelViewSet):
     """Manage all sources of income including sales and broker fees."""
     queryset = Revenue.objects.all()
     serializer_class = RevenueSerializer
     permission_classes = [IsAuthenticated, CanManageAccounting]
-
 
 class ExpenseFilter(django_filters.FilterSet):
     start_date = django_filters.DateFilter(field_name="date", lookup_expr="gte")
@@ -279,7 +280,6 @@ class ExpenseViewSet(ModelViewSet):
             serializer.save(dealer=dealer_profile)
         else:
             serializer.save()
-
 
 # FinancialReport ViewSet
 @extend_schema_view(
