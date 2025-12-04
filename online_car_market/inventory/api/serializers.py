@@ -519,7 +519,6 @@ class CarSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
-
 class FavoriteCarSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
     car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all())
@@ -558,12 +557,6 @@ class CarViewSerializer(serializers.ModelSerializer):
         model = CarView
         fields = ['id', 'car_id', 'car', 'user_id', 'ip_address', 'viewed_at']
         read_only_fields = ['viewed_at', 'ip_address']
-
-class CarViewAnalyticsSerializer(serializers.Serializer):
-    car_id = serializers.IntegerField()
-    car_make = serializers.CharField()
-    car_model = serializers.CharField()
-    total_views = serializers.IntegerField()
 
 # ---------------- Verify Car Serializer ----------------
 class VerifyCarSerializer(serializers.ModelSerializer):

@@ -1,0 +1,509 @@
+import logging
+from django.db.models import Avg, Count, Sum, Q, F, Subquery, OuterRef
+from django.db.models.functions import TruncDay, TruncWeek, TruncMonth, TruncYear
+from django.contrib.postgres.aggregates import ArrayAgg
+
+from rest_framework.viewsets import ViewSet
+from rest_framework.decorators import action, permission_classes
+from rest_framework.response import Response
+from rest_framework import status
+
+from rolepermissions.checkers import has_role
+from drf_spectacular.utils import extend_schema, OpenApiResponse
+
+from online_car_market.inventory.models import Car, CarMake, CarView, CarImage
+from online_car_market.dealers.models import DealerProfile
+from online_car_market.brokers.models import BrokerProfile
+from online_car_market.payment.models import Payment
+from online_car_market.users.permissions.drf_permissions import (IsSuperAdminOrAdminOrDealer, IsSuperAdminOrAdminOrBroker,
+                                                                 IsSuperAdminOrAdmin, IsDealer, IsBuyer, IsBroker)
+from .serializers import CarViewAnalyticsSerializer
+
+logger = logging.getLogger(__name__)
+
+
+class AnalyticsViewSet(ViewSet):
+    """ All analytics endpoints in one place. """
+
+    @extend_schema(
+        tags=["Analytics"],
+        description="Get market analytics (super admin or admin only).",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "total_cars": {"type": "integer"},
+                    "average_price": {"type": "number"},
+                    "dealer_stats": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "dealer_id": {"type": "integer"},
+                                "dealer_name": {"type": "string"},
+                                "total_cars": {"type": "integer"},
+                                "sold_cars": {"type": "integer"},
+                                "average_price": {"type": "number"}
+                            }
+                        }
+                    },
+                    "broker_stats": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "broker_id": {"type": "integer"},
+                                "broker_name": {"type": "string"},
+                                "total_cars": {"type": "integer"},
+                                "sold_cars": {"type": "integer"},
+                                "average_price": {"type": "number"}
+                            }
+                        }
+                    },
+                    "make_stats": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "make_name": {"type": "string"},
+                                "total_cars": {"type": "integer"},
+                                "average_price": {"type": "number"}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path="platform-analytics", permission_classes=[IsSuperAdminOrAdmin])
+    def analytics(self, request):
+        # Restrict to super admin or admin
+        if not has_role(request.user, ['super_admin', 'admin']):
+            return Response(
+                {"error": "Only super admin or admin can access this analytics."}, status=status.HTTP_403_FORBIDDEN)
+
+        total_cars = Car.objects.count()
+        average_price = Car.objects.filter(price__isnull=False).aggregate(Avg('price'))['price__avg'] or 0
+
+        dealer_stats = DealerProfile.objects.annotate(
+            total_cars=Count('cars'),
+            sold_cars=Count('cars', filter=Q(cars__status='sold')),
+            avg_price=Avg('cars__price'),
+            dealer_name=F('company_name')
+        ).values('id', 'dealer_name', 'total_cars', 'sold_cars', 'avg_price')
+
+        broker_stats = BrokerProfile.objects.annotate(
+            total_cars=Count('cars'),
+            sold_cars=Count('cars', filter=Q(cars__status='sold')),
+            avg_price=Avg('cars__price'),
+            broker_name=F('profile__user__email')
+        ).values('id', 'broker_name', 'total_cars', 'sold_cars', 'avg_price')
+
+        make_stats = CarMake.objects.annotate(
+            total_cars=Count('cars'),
+            avg_price=Avg('cars__price')
+        ).values('name', 'total_cars', 'avg_price')
+
+        return Response({
+            "total_cars": total_cars,
+            "average_price": round(average_price, 2),
+            "dealer_stats": list(dealer_stats),
+            "broker_stats": list(broker_stats),
+            "make_stats": list(make_stats)
+        })
+
+    @extend_schema(
+        tags=["Analytics"],
+        description="Buyer analytics: average price, total cars, and cheapest verified car per make/model.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "car_summary": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "car_make": {"type": "string"},
+                                "car_model": {"type": "string"},
+                                "average_price": {"type": "number"},
+                                "total_cars": {"type": "integer"},
+                                "cheapest_car": {
+                                    "type": ["object", "null"],
+                                    "properties": {
+                                        "id": {"type": "integer"},
+                                        "price": {"type": "number"},
+                                        "image_url": {"type": ["string", "null"]}
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            500: OpenApiResponse(description="Internal server error"),
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='buyer-analytics', permission_classes=[IsBuyer])
+    def buyer_analytics(self, request):
+        if not has_role(request.user, ['buyer']):
+            return Response(
+                {"error": "Only buyer can access this analytics."}, status=status.HTTP_403_FORBIDDEN )
+        try:
+            # Subquery for cheapest car per make/model
+            cheapest_car_subquery = Car.objects.filter(
+                verification_status='verified',
+                make_ref=OuterRef('make_ref'),
+                model_ref=OuterRef('model_ref')
+            ).exclude(status='sold').order_by('price').values('id', 'price')[:1]
+
+            # Main analytics
+            analytics = (
+                Car.objects.filter(verification_status='verified')
+                .exclude(status='sold')
+                .values('make_ref__name', 'model_ref__name')
+                .annotate(
+                    average_price=Avg('price'),
+                    total_cars=Count('id'),
+                    cheapest_car_id=Subquery(cheapest_car_subquery.values('id')[:1]),
+                    cheapest_car_price=Subquery(cheapest_car_subquery.values('price')[:1]),
+                )
+                .order_by('make_ref__name', 'model_ref__name')
+            )
+
+            # Fetch featured images for all cheapest cars
+            cheapest_car_ids = [item['cheapest_car_id'] for item in analytics if item['cheapest_car_id']]
+            featured_images = CarImage.objects.filter(car_id__in=cheapest_car_ids, is_featured=True).values('car_id', 'image')
+
+            # Convert CloudinaryResource to URL
+            featured_image_map = {img['car_id']: str(img['image'].url) for img in featured_images}
+
+            # Format response
+            formatted = []
+            for item in analytics:
+                cheapest_id = item['cheapest_car_id']
+                formatted.append({
+                    "car_make": item['make_ref__name'],
+                    "car_model": item['model_ref__name'],
+                    "average_price": item['average_price'],
+                    "total_cars": item['total_cars'],
+                    "cheapest_car": {
+                        "id": cheapest_id,
+                        "price": item['cheapest_car_price'],
+                        "image_url": featured_image_map.get(cheapest_id)
+                    } if cheapest_id else None
+                })
+
+            return Response({"car_summary": formatted})
+
+        except Exception as e:
+            logger.exception(f"Error in buyer_analytics for user {request.user.id}: {str(e)}")
+            return Response({"error": "Internal server error"}, status=500)
+
+    @extend_schema(
+        tags=["Analytics"],
+        description="Get analytics for brokers, including total money made and payment stats.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "total_cars": {"type": "integer"},
+                    "sold_cars": {"type": "integer"},
+                    "average_price": {"type": "number"},
+                    "total_money_made": {"type": "number"},
+                    "payment_stats": {
+                        "type": "object",
+                        "properties": {
+                            "total_payments": {"type": "integer"},
+                            "completed_payments": {"type": "integer"},
+                            "total_amount_paid": {"type": "number"}
+                        }
+                    }
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='broker-analytics', permission_classes=[IsBroker])
+    def broker_analytics(self, request):
+        if not has_role(request.user, ['broker']):
+            return Response({"error": "Only brokers can access this analytics."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            broker = BrokerProfile.objects.get(profile__user=request.user)
+        except BrokerProfile.DoesNotExist:
+            return Response({"error": "Broker profile not found."}, status=status.HTTP_404_NOT_FOUND)
+        total_cars = broker.cars.count()
+        sold_cars = broker.cars.filter(status='sold').count()
+        average_price = broker.cars.filter(price__isnull=False).aggregate(Avg('price'))['price__avg'] or 0
+        total_money_made = broker.cars.filter(status='sold', price__isnull=False).aggregate(Sum('price'))[
+                               'price__sum'] or 0
+        payment_stats = Payment.objects.filter(broker=broker).aggregate(
+            total_payments=Count('id'),
+            completed_payments=Count('id', filter=Q(status='completed')),
+            total_amount_paid=Sum('amount', filter=Q(status='completed'))
+        )
+        return Response({
+            "total_cars": total_cars,
+            "sold_cars": sold_cars,
+            "average_price": round(average_price, 2),
+            "total_money_made": round(total_money_made, 2),
+            "payment_stats": {
+                "total_payments": payment_stats['total_payments'],
+                "completed_payments": payment_stats['completed_payments'],
+                "total_amount_paid": round(payment_stats['total_amount_paid'] or 0, 2)
+            }
+        })
+
+    @extend_schema(
+        tags=["Analytics"],
+        description="Get analytics for dealers, including detailed sales by car make/model.",
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "total_cars": {"type": "integer"},
+                    "sold_cars": {"type": "integer"},
+                    "average_price": {"type": "number"},
+                    "model_stats": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "make_name": {"type": "string"},
+                                "model_name": {"type": "string"},
+                                "total_sold": {"type": "integer"},
+                                "total_sales": {"type": "number"},
+                                "avg_price": {"type": "number"}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], url_path='dealer-analytics', permission_classes=[IsDealer])
+    def dealer_analytics(self, request):
+        if not has_role(request.user, ['dealer']):
+            return Response({"error": "Only dealers can access this analytics."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            dealer = DealerProfile.objects.get(profile__user=request.user)
+        except DealerProfile.DoesNotExist:
+            return Response({"error": "Dealer profile not found."}, status=status.HTTP_404_NOT_FOUND)
+        total_cars = dealer.cars.count()
+        sold_cars = dealer.cars.filter(status='sold').count()
+        average_price = dealer.cars.filter(price__isnull=False).aggregate(Avg('price'))['price__avg'] or 0
+        model_stats = dealer.cars.filter(status='sold', price__isnull=False).values(
+            'make_ref__name', 'model_ref__name'
+        ).annotate(total_sold=Count('id'), total_sales=Sum('price'), avg_price=Avg('price')).order_by('-total_sold')
+        return Response({
+            "total_cars": total_cars,
+            "sold_cars": sold_cars,
+            "average_price": round(average_price, 2),
+            "model_stats": [
+                {
+                    "make_name": stat['make_ref__name'],
+                    "model_name": stat['model_ref__name'],
+                    "total_sold": stat['total_sold'],
+                    "total_sales": round(stat['total_sales'], 2),
+                    "avg_price": round(stat['avg_price'], 2)
+                } for stat in model_stats
+            ]
+        })
+
+    @extend_schema(
+        tags=["Analytics"],
+        description="View analytics for all cars grouped by day/week/month.",
+        responses={
+            200: CarViewAnalyticsSerializer(many=True),
+            403: OpenApiResponse(description="Forbidden"),
+            500: OpenApiResponse(description="Internal server error"),
+        }
+    )
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdminOrAdmin])
+    def view_analytics(self, request):
+
+        # Determine grouping type
+        range_type = request.GET.get("range", "month")  # default = month
+
+        if range_type == "day":
+            trunc_func = TruncDay("viewed_at")
+        elif range_type == "week":
+            trunc_func = TruncWeek("viewed_at")
+        elif range_type == "year":
+            trunc_func = TruncYear("viewed_at")
+        else:
+            trunc_func = TruncMonth("viewed_at")
+
+        try:
+            analytics = (
+                CarView.objects
+                .annotate(
+                    period=trunc_func,
+                    c_id=F("car__id"),
+                    car_make=F("car__make_ref__name"),
+                    car_model=F("car__model_ref__name")
+                )
+                .values("car_id", "car_make", "car_model", "period")
+                .annotate(
+                    total_views=Count("id"),
+                    unique_viewers=Count("user", distinct=True)
+                )
+                .order_by("-period", "-total_views")
+            )
+
+            analytics_list = list(analytics)
+
+            formatted = [
+                {
+                    "car_id": item["car_id"],
+                    "car_make": item["car_make"],
+                    "car_model": item["car_model"],
+                    "period": item["period"],  # day/week/month
+                    "total_views": item["total_views"],
+                    "unique_viewers": item["unique_viewers"],
+                }
+                for item in analytics_list
+            ]
+
+            return Response(formatted)
+
+        except Exception as e:
+            logger.exception(f"Error in view_analytics: {str(e)}")
+            return Response({"error": "Internal server error"}, status=500)
+
+    @extend_schema(
+        tags=["Analytics"],
+        description="Get analytics for dealers, including detailed views by car make/model.",
+        responses={
+            200: {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "car_id": {"type": "integer"},
+                        "car_make": {"type": "string"},
+                        "car_model": {"type": "string"},
+                        "total_unique_views": {"type": "integer"},
+                        "viewer_emails": {
+                            "type": "array",
+                            "items": {"type": "string"}
+                        }
+                    }
+                }
+            }
+        }
+    )
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdminOrAdminOrDealer], url_path='dealer-view-analytics')
+    def dealer_analytic_views(self, request):
+        if not has_role(request.user, ['dealer']):
+            return Response(
+                {"error": "Only dealers can access this analytics."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        try:
+            dealer = DealerProfile.objects.get(profile=request.user.profile)
+
+            analytics = (
+                CarView.objects.filter(car__dealer=dealer)
+                .annotate(
+                    c_id=F("car__id"),
+                    car_make=F("car__make_ref__name"),
+                    car_model=F("car__model_ref__name"),
+                )
+                .values(
+                    "c_id",
+                    "car_make",
+                    "car_model",
+                )
+                .annotate(
+                    total_unique_views=Count("user", distinct=True),
+                    viewer_emails=ArrayAgg("user__email", distinct=True),
+                )
+                .order_by("-total_unique_views")
+            )
+
+            return Response(analytics)
+
+        except DealerProfile.DoesNotExist:
+            return Response(
+                {"error": "Dealer profile not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        except Exception as e:
+            logger.exception(f"Error in dealer_analytics: {e}")
+            return Response(
+                {"error": "Internal server error"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @extend_schema(
+        tags=["Analytics"],
+        description="Get view analytics for a broker, showing each car, total unique views, and the list of viewer emails.",
+        responses={
+            200: OpenApiResponse(
+                description="Broker car view analytics",
+                response={
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "car_id": {"type": "integer"},
+                            "car_make": {"type": "string"},
+                            "car_model": {"type": "string"},
+                            "total_unique_views": {"type": "integer"},
+                            "viewer_emails": {
+                                "type": "array",
+                                "items": {"type": "string"}
+                            }
+                        }
+                    }
+                }
+            ),
+            403: OpenApiResponse(
+                description="User is not a broker",
+                response={"type": "object", "properties": {"error": {"type": "string"}}}
+            ),
+            404: OpenApiResponse(
+                description="Broker profile not found",
+                response={"type": "object", "properties": {"error": {"type": "string"}}}
+            )
+        }
+    )
+    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdminOrAdminOrBroker], url_path='broker-view-analytics')
+    def broker_analytic_views(self, request):
+        if not has_role(request.user, ['broker']):
+            return Response(
+                {"error": "Only brokers can access this analytics."}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            broker = BrokerProfile.objects.get(profile=request.user.profile)
+
+            analytics = (
+                CarView.objects.filter(car__broker=broker)
+                .annotate(
+                    c_id=F("car__id"),
+                    car_make=F("car__make_ref__name"),
+                    car_model=F("car__model_ref__name"),
+                )
+                .values(
+                    "c_id",
+                    "car_make",
+                    "car_model"
+                )
+                .annotate(
+                    total_unique_views=Count("user", distinct=True),
+                    viewer_emails=ArrayAgg("user__email", distinct=True),
+                )
+                .order_by("-total_unique_views")
+            )
+
+            return Response(analytics)
+
+        except BrokerProfile.DoesNotExist:
+            return Response(
+                {"error": "Broker profile not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception(f"Error in broker_analytics: {e}")
+            return Response(
+                {"error": "Internal server error"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

@@ -1,10 +1,10 @@
 import logging
-from django.db.models import Avg, Count, Q, Sum, Min, F, Subquery, OuterRef
-from django.db import connection
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.viewsets import ModelViewSet, ViewSet
+
+from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -12,21 +12,18 @@ from rest_framework import status, viewsets, permissions, mixins
 from rest_framework.viewsets import ReadOnlyModelViewSet
 from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 from rest_framework.filters import SearchFilter, OrderingFilter
+
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import (extend_schema, extend_schema_view, OpenApiParameter,
                                    OpenApiTypes, OpenApiExample, OpenApiResponse)
 from ..models import Car, CarMake, CarModel, FavoriteCar, CarView, CarImage, Inspection
 from .serializers import (CarSerializer, VerifyCarSerializer, BidSerializer, CarMakeSerializer, ContactSerializer,
-                          CarModelSerializer, FavoriteCarSerializer, CarViewSerializer, CarViewAnalyticsSerializer,
-                          InspectionSerializer
+                          CarModelSerializer, FavoriteCarSerializer, CarViewSerializer, InspectionSerializer
                           )
-from online_car_market.users.permissions.drf_permissions import (IsSuperAdminOrAdminOrDealerOrBroker,
-                                                                 IsSuperAdminOrAdmin, IsSuperAdminOrAdminOrBuyer,
-                                                                 IsBrokerOrSeller)
+from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, IsSuperAdminOrAdminOrBuyer, IsBrokerOrSeller
 from online_car_market.users.permissions.business_permissions import CanPostCar
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
-from online_car_market.payment.models import Payment
 from online_car_market.users.models import Profile
 from online_car_market.users.permissions.business_permissions import IsAdminOrReadOnly
 
@@ -405,406 +402,94 @@ class CarViewSet(viewsets.ModelViewSet):
         bid = serializer.save(car=car)
         return Response(BidSerializer(bid).data, status=status.HTTP_201_CREATED)
 
-    @extend_schema(
-        tags=["Analytics"],
-        description="Get market analytics (super admin only).",
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "total_cars": {"type": "integer"},
-                    "average_price": {"type": "number"},
-                    "dealer_stats": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "dealer_id": {"type": "integer"},
-                                "dealer_name": {"type": "string"},
-                                "total_cars": {"type": "integer"},
-                                "sold_cars": {"type": "integer"},
-                                "average_price": {"type": "number"}
-                            }
-                        }
-                    },
-                    "broker_stats": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "broker_id": {"type": "integer"},
-                                "broker_name": {"type": "string"},
-                                "total_cars": {"type": "integer"},
-                                "sold_cars": {"type": "integer"},
-                                "average_price": {"type": "number"}
-                            }
-                        }
-                    },
-                    "make_stats": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "make_name": {"type": "string"},
-                                "total_cars": {"type": "integer"},
-                                "average_price": {"type": "number"}
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    )
-    @action(detail=False, methods=['get'])
-    def analytics(self, request):
-        if not has_role(request.user, ['super_admin']):
-            return Response({"error": "Only super admins can access analytics."}, status=status.HTTP_403_FORBIDDEN)
-        total_cars = Car.objects.count()
-        average_price = Car.objects.filter(price__isnull=False).aggregate(Avg('price'))['price__avg'] or 0
-        dealer_stats = DealerProfile.objects.annotate(
-            total_cars=Count('cars'),
-            sold_cars=Count('cars', filter=Q(cars__status='sold')),
-            avg_price=Avg('cars__price'),
-            dealer_name=F('company_name')
-        ).values('id', 'dealer_name', 'total_cars', 'sold_cars', 'avg_price')
-        broker_stats = BrokerProfile.objects.annotate(
-            total_cars=Count('cars'),
-            sold_cars=Count('cars', filter=Q(cars__status='sold')),
-            avg_price=Avg('cars__price'),
-            broker_name = F('profile__user__email')
-        ).values('id', 'broker_name', 'total_cars', 'sold_cars', 'avg_price')
-        make_stats = CarMake.objects.annotate(
-            total_cars=Count('cars'),
-            avg_price=Avg('cars__price')
-        ).values('name', 'total_cars', 'avg_price')
-        return Response({
-            "total_cars": total_cars,
-            "average_price": round(average_price, 2),
-            "dealer_stats": list(dealer_stats),
-            "broker_stats": list(broker_stats),
-            "make_stats": list(make_stats)
-        })
-
-    ''' @extend_schema(
-        tags=["Analytics"],
-        description="Get cheap cars for buyers.",
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "cheap_cars": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "id": {"type": "integer"},
-                                "make_name": {"type": "string"},
-                                "price": {"type": "number"}
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    )
-    @action(detail=False, methods=['get'], url_path='buyer-analytics')
-    def buyer_analytics(self, request):
-        if not has_role(request.user, ['buyer']):
-            return Response({"error": "Only buyers can access this analytics."}, status=status.HTTP_403_FORBIDDEN)
-
-        cheap_cars = (
-            Car.objects.exclude(status='sold')
-            .filter(price__isnull=False, verification_status='verified')
-            .annotate(make_name=F('make_ref__name'))  # alias
-            .order_by('price')[:10]
-            .values('id', 'make_name', 'price')
-        )
-        return Response({"cheap_cars": list(cheap_cars)}) '''
-
-    @extend_schema(
-        tags=["Analytics"],
-        description="Get car analytics for buyers with cheapest car per make/model.",
-    )
-    @action(
-        detail=False,
-        methods=['get'],
-        url_path='buyer-analytics',
-        permission_classes = [AllowAny]
-    )
-    def buyer_analytics(self, request):
-        # if not has_role(request.user, ['buyer']):
-            # return Response({"error": "Only buyers can access this analytics."}, status=403)
-
-        try:
-            # Subquery for cheapest car per make/model
-            cheapest_car_subquery = Car.objects.filter(
-                verification_status='verified',
-                make_ref=OuterRef('make_ref'),
-                model_ref=OuterRef('model_ref')
-            ).exclude(status='sold').order_by('price').values('id', 'price')[:1]
-
-            # Main analytics
-            analytics = (
-                Car.objects.filter(verification_status='verified')
-                .exclude(status='sold')
-                .values('make_ref__name', 'model_ref__name')
-                .annotate(
-                    average_price=Avg('price'),
-                    total_cars=Count('id'),
-                    cheapest_car_id=Subquery(cheapest_car_subquery.values('id')[:1]),
-                    cheapest_car_price=Subquery(cheapest_car_subquery.values('price')[:1]),
-                )
-                .order_by('make_ref__name', 'model_ref__name')
-            )
-
-            # Fetch featured images for all cheapest cars
-            cheapest_car_ids = [item['cheapest_car_id'] for item in analytics if item['cheapest_car_id']]
-            featured_images = CarImage.objects.filter(
-                car_id__in=cheapest_car_ids,
-                is_featured=True
-            ).values('car_id', 'image')
-
-            # Convert CloudinaryResource to URL
-            featured_image_map = {img['car_id']: str(img['image'].url) for img in featured_images}
-
-            # Format response
-            formatted = []
-            for item in analytics:
-                cheapest_id = item['cheapest_car_id']
-                formatted.append({
-                    "car_make": item['make_ref__name'],
-                    "car_model": item['model_ref__name'],
-                    "average_price": item['average_price'],
-                    "total_cars": item['total_cars'],
-                    "cheapest_car": {
-                        "id": cheapest_id,
-                        "price": item['cheapest_car_price'],
-                        "image_url": featured_image_map.get(cheapest_id)
-                    } if cheapest_id else None
-                })
-
-            return Response({"car_summary": formatted})
-
-        except Exception as e:
-            logger.exception(f"Error in buyer_analytics for user {request.user.id}: {str(e)}")
-            return Response({"error": "Internal server error"}, status=500)
-
-    @extend_schema(
-        tags=["Analytics"],
-        description="Get analytics for brokers, including total money made and payment stats.",
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "total_cars": {"type": "integer"},
-                    "sold_cars": {"type": "integer"},
-                    "average_price": {"type": "number"},
-                    "total_money_made": {"type": "number"},
-                    "payment_stats": {
-                        "type": "object",
-                        "properties": {
-                            "total_payments": {"type": "integer"},
-                            "completed_payments": {"type": "integer"},
-                            "total_amount_paid": {"type": "number"}
-                        }
-                    }
-                }
-            }
-        }
-    )
-    @action(detail=False, methods=['get'], url_path='broker-analytics')
-    def broker_analytics(self, request):
-        if not has_role(request.user, ['broker']):
-            return Response({"error": "Only brokers can access this analytics."}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            broker = BrokerProfile.objects.get(profile__user=request.user)
-        except BrokerProfile.DoesNotExist:
-            return Response({"error": "Broker profile not found."}, status=status.HTTP_404_NOT_FOUND)
-        total_cars = broker.cars.count()
-        sold_cars = broker.cars.filter(status='sold').count()
-        average_price = broker.cars.filter(price__isnull=False).aggregate(Avg('price'))['price__avg'] or 0
-        total_money_made = broker.cars.filter(status='sold', price__isnull=False).aggregate(Sum('price'))['price__sum'] or 0
-        payment_stats = Payment.objects.filter(broker=broker).aggregate(
-            total_payments=Count('id'),
-            completed_payments=Count('id', filter=Q(status='completed')),
-            total_amount_paid=Sum('amount', filter=Q(status='completed'))
-        )
-        return Response({
-            "total_cars": total_cars,
-            "sold_cars": sold_cars,
-            "average_price": round(average_price, 2),
-            "total_money_made": round(total_money_made, 2),
-            "payment_stats": {
-                "total_payments": payment_stats['total_payments'],
-                "completed_payments": payment_stats['completed_payments'],
-                "total_amount_paid": round(payment_stats['total_amount_paid'] or 0, 2)
-            }
-        })
-
-    @extend_schema(
-        tags=["Analytics"],
-        description="Get analytics for dealers, including detailed sales by car make/model.",
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "total_cars": {"type": "integer"},
-                    "sold_cars": {"type": "integer"},
-                    "average_price": {"type": "number"},
-                    "model_stats": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "make_name": {"type": "string"},
-                                "model_name": {"type": "string"},
-                                "total_sold": {"type": "integer"},
-                                "total_sales": {"type": "number"},
-                                "avg_price": {"type": "number"}
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    )
-    @action(detail=False, methods=['get'], url_path='dealer-analytics')
-    def dealer_analytics(self, request):
-        if not has_role(request.user, ['dealer']):
-            return Response({"error": "Only dealers can access this analytics."}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            dealer = DealerProfile.objects.get(profile__user=request.user)
-        except DealerProfile.DoesNotExist:
-            return Response({"error": "Dealer profile not found."}, status=status.HTTP_404_NOT_FOUND)
-        total_cars = dealer.cars.count()
-        sold_cars = dealer.cars.filter(status='sold').count()
-        average_price = dealer.cars.filter(price__isnull=False).aggregate(Avg('price'))['price__avg'] or 0
-        model_stats = dealer.cars.filter(status='sold', price__isnull=False).values(
-            'make_ref__name', 'model_ref__name'
-        ).annotate(
-            total_sold=Count('id'),
-            total_sales=Sum('price'),
-            avg_price=Avg('price')
-        ).order_by('-total_sold')
-        return Response({
-            "total_cars": total_cars,
-            "sold_cars": sold_cars,
-            "average_price": round(average_price, 2),
-            "model_stats": [
-                {
-                    "make_name": stat['make_ref__name'],
-                    "model_name": stat['model_ref__name'],
-                    "total_sold": stat['total_sold'],
-                    "total_sales": round(stat['total_sales'], 2),
-                    "avg_price": round(stat['avg_price'], 2)
-                } for stat in model_stats
-            ]
-        })
-
 @extend_schema_view(
     list=extend_schema(
         tags=["User Cars"],
-        description="List all cars belonging to the authenticated dealer or broker. User must have the dealer or broker role.",
+        description="List all cars belonging to the authenticated dealer, broker, or seller.",
         responses={
             200: CarSerializer(many=True),
             403: OpenApiResponse(
                 response={"type": "object", "properties": {"detail": {"type": "string"}}},
-                description="User does not have the dealer or broker role.",
-                examples=[
-                    OpenApiExample("Forbidden", value={"detail": "User does not have dealer or broker role."})
-                ]
+                description="User does not have permission.",
             )
         }
     ),
     retrieve=extend_schema(
         tags=["User Cars"],
-        description="Retrieve a specific car. User must have the dealer or broker role and the car must belong to them.",
+        description="Retrieve a specific car belonging to the authenticated dealer, broker, or seller.",
         responses={
             200: CarSerializer,
             403: OpenApiResponse(
                 response={"type": "object", "properties": {"detail": {"type": "string"}}},
-                description="User does not have the dealer or broker role.",
-                examples=[
-                    OpenApiExample("Forbidden", value={"detail": "User does not have dealer or broker role."})
-                ]
+                description="User does not have permission.",
             ),
             404: OpenApiResponse(
                 response={"type": "object", "properties": {"detail": {"type": "string"}}},
-                description="Car not found or user does not have permission to view it.",
-                examples=[
-                    OpenApiExample("Not Found",
-                                   value={"detail": "Car not found or you do not have permission to view it."})
-                ]
+                description="Car not found or user does not have permission.",
             )
         }
     )
 )
-class UserCarsViewSet(
-    mixins.ListModelMixin,
-    mixins.RetrieveModelMixin,
-    viewsets.GenericViewSet
-):
+class UserCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = CarSerializer
     queryset = Car.objects.all()
 
     def get_queryset(self):
-        """
-        Filter cars to only show those belonging to the authenticated dealer or broker.
-        """
         user = self.request.user
-        if not has_role(user, ['dealer', 'broker']):
-            return Car.objects.none()
+        queryset = Car.objects.all()
 
-        try:
-            if has_role(user, 'dealer'):
-                dealer = DealerProfile.objects.get(profile__user=user)
-                return self.queryset.filter(dealer=dealer)
-            elif has_role(user, 'broker'):
-                broker = BrokerProfile.objects.get(profile__user=user)
-                return self.queryset.filter(broker=broker)
-        except (DealerProfile.DoesNotExist, BrokerProfile.DoesNotExist):
-            return Car.objects.none()
+        # 1. Super admin / admin: full access
+        if has_role(user, ['super_admin', 'admin']):
+            return queryset
 
-        return Car.objects.none()
+        # 2. Dealer: see all cars under the dealership
+        if hasattr(user, 'profile') and hasattr(user.profile, 'dealer_profile'):
+            dealer = user.profile.dealer_profile
+            return queryset.filter(dealer=dealer)
+
+        # 3. Broker: see cars posted by the broker
+        if hasattr(user, 'profile') and hasattr(user.profile, 'broker_profile'):
+            broker = user.profile.broker_profile
+            return queryset.filter(broker=broker)
+
+        # 4. Seller: must be assigned under a dealer and sees only cars they posted
+        seller_record = user.dealer_staff_assignments.filter(role='seller').first()
+        if seller_record:
+            dealer = seller_record.dealer
+            return queryset.filter(dealer=dealer, posted_by=user)
+
+        # 5. Default: public view (only verified + available)
+        return queryset.filter(
+            verification_status='verified',
+            status='available'
+        )
 
     def list(self, request, *args, **kwargs):
-        """
-        List all cars for the authenticated dealer or broker.
-        """
-        if not has_role(request.user, ['dealer', 'broker']):
-            return Response(
-                {"detail": "User does not have dealer or broker role."},
-                status=status.HTTP_403_FORBIDDEN
-            )
+        # Sellers, dealers, brokers, admins are allowed
+        if (
+            not has_role(request.user, ['super_admin', 'admin', 'dealer', 'broker']) and
+            not request.user.dealer_staff_assignments.filter(role='seller').exists()
+        ):
+            return Response({"detail": "You do not have permission to view cars."}, status=status.HTTP_403_FORBIDDEN)
 
         return super().list(request, *args, **kwargs)
 
     def retrieve(self, request, *args, **kwargs):
-        """
-        Retrieve a specific car. Only accessible if the car belongs to the authenticated dealer or broker.
-        """
-        if not has_role(request.user, ['dealer', 'broker']):
+        if (
+            not has_role(request.user, ['super_admin', 'admin', 'dealer', 'broker']) and
+            not request.user.dealer_staff_assignments.filter(role='seller').exists()
+        ):
             return Response(
-                {"detail": "User does not have dealer or broker role."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
+                {"detail": "You do not have permission to view this car."}, status=status.HTTP_403_FORBIDDEN )
         try:
-            # Get the car from the filtered queryset to ensure permission
             car = self.get_queryset().get(pk=kwargs['pk'])
             serializer = self.get_serializer(car)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.data)
         except Car.DoesNotExist:
             return Response(
-                {"detail": "Car not found or you do not have permission to view it."},
-                status=status.HTTP_404_NOT_FOUND)
-        except (DealerProfile.DoesNotExist, BrokerProfile.DoesNotExist):
-            return Response(
-                {"detail": "User profile not found."},
-                status=status.HTTP_404_NOT_FOUND
+                {"detail": "Car not found or you do not have permission to view it."}, status=status.HTTP_404_NOT_FOUND
             )
-
 
 @extend_schema_view(
     list=extend_schema(
@@ -886,13 +571,7 @@ class UserCarsViewSet(
         }
     )
 )
-class FavoriteCarViewSet(
-    mixins.CreateModelMixin,
-    mixins.RetrieveModelMixin,
-    mixins.DestroyModelMixin,
-    mixins.ListModelMixin,
-    viewsets.GenericViewSet
-):
+class FavoriteCarViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.DestroyModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = FavoriteCarSerializer
     queryset = FavoriteCar.objects.all()
@@ -1043,62 +722,6 @@ class FavoriteCarViewSet(
             )
         }
     ),
-    analytics=extend_schema(
-        tags=["Analytics"],
-        description="Retrieve car view analytics for all cars, showing total views per car. Accessible only to super admins.",
-        responses={
-            200: CarViewAnalyticsSerializer(many=True),
-            403: OpenApiResponse(
-                response={"type": "object", "properties": {"error": {"type": "string"}}},
-                description="User is not a super admin.",
-                examples=[
-                    OpenApiExample("Forbidden", value={"error": "Only super admins can access this endpoint."})
-                ]
-            )
-        }
-    ),
-    dealer_analytics=extend_schema(
-        tags=["Analytics"],
-        description="Retrieve car view analytics for cars associated with the requesting dealer, showing total views per car.",
-        responses={
-            200: CarViewAnalyticsSerializer(many=True),
-            403: OpenApiResponse(
-                response={"type": "object", "properties": {"error": {"type": "string"}}},
-                description="User is not a dealer.",
-                examples=[
-                    OpenApiExample("Forbidden", value={"error": "Only dealers can access this analytics."})
-                ]
-            ),
-            404: OpenApiResponse(
-                response={"type": "object", "properties": {"error": {"type": "string"}}},
-                description="Dealer profile not found.",
-                examples=[
-                    OpenApiExample("Not Found", value={"error": "Dealer profile not found."})
-                ]
-            )
-        }
-    ),
-    broker_analytics=extend_schema(
-        tags=["Analytics"],
-        description="Retrieve car view analytics for cars associated with the requesting broker, showing total views per car.",
-        responses={
-            200: CarViewAnalyticsSerializer(many=True),
-            403: OpenApiResponse(
-                response={"type": "object", "properties": {"error": {"type": "string"}}},
-                description="User is not a broker.",
-                examples=[
-                    OpenApiExample("Forbidden", value={"error": "Only brokers can access this analytics."})
-                ]
-            ),
-            404: OpenApiResponse(
-                response={"type": "object", "properties": {"error": {"type": "string"}}},
-                description="Broker profile not found.",
-                examples=[
-                    OpenApiExample("Not Found", value={"error": "Broker profile not found."})
-                ]
-            )
-        }
-    )
 )
 class CarViewViewSet(viewsets.ModelViewSet):
     queryset = CarView.objects.all()
@@ -1126,131 +749,6 @@ class CarViewViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         return Response({"error": "Deleting views is not allowed."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
-
-    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdminOrAdminOrDealerOrBroker])
-    def analytics(self, request):
-        if has_role(request.user, ['super_admin']):
-            try:
-                analytics = (
-                    CarView.objects.values("car__id", "car__make_ref__name", "car__model_ref__name")
-                    .annotate(total_views=Count("id"))
-                    .order_by("-total_views")
-                )
-
-                # Force evaluation safely
-                try:
-                    analytics_list = list(analytics)
-                    logger.debug(f"Raw analytics query result (super_admin): {analytics_list}")
-                except Exception as eval_err:
-                    logger.exception(f"Error while evaluating analytics queryset: {str(eval_err)}")
-                    return Response(
-                        {"error": f"Queryset evaluation failed: {str(eval_err)}"},
-                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                    )
-
-                formatted = [
-                    {
-                        "car_id": item["car__id"],
-                        "car_make": item["car__make_ref__name"],
-                        "car_model": item["car__model_ref__name"],
-                        "total_views": item["total_views"]
-                    }
-                    for item in analytics_list
-                ]
-
-                serializer = CarViewAnalyticsSerializer(formatted, many=True)
-                return Response(serializer.data)
-
-            except Exception as e:
-                logger.exception(f"Unexpected error in analytics endpoint: {str(e)}")
-
-                # Optionally dump last SQL query for debugging
-                logger.debug(f"Last executed SQL: {connection.queries[-1] if connection.queries else 'No queries'}")
-
-                return Response({"error": "Internal server error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        return Response({"error": "Only super admins can access this endpoint."}, status=403)
-
-    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdminOrAdminOrDealerOrBroker],
-            url_path='dealer-analytics')
-    def dealer_analytics(self, request):
-        if not has_role(request.user, ['dealer']):
-            return Response({"error": "Only dealers can access this analytics."}, status=status.HTTP_403_FORBIDDEN)
-
-        try:
-            dealer = DealerProfile.objects.get(profile=request.user.profile)
-            logger.info(f"Dealer profile found: {dealer}")
-
-            analytics = (
-                CarView.objects.filter(car__dealer=dealer)
-                .values("car__id", "car__make_ref__name", "car__model_ref__name")
-                .annotate(total_views=Count("id"))
-                .order_by("-total_views")
-            )
-
-            logger.debug(f"Raw dealer analytics for {dealer}: {list(analytics)}")
-
-            formatted = [
-                {
-                    "car_id": item["car__id"],
-                    "car_make": item["car__make_ref__name"],
-                    "car_model": item["car__model_ref__name"],
-                    "total_views": item["total_views"]
-                }
-                for item in analytics
-            ]
-
-            serializer = CarViewAnalyticsSerializer(formatted, many=True)
-            return Response(serializer.data)
-
-        except DealerProfile.DoesNotExist:
-            logger.error(f"Dealer profile not found for user {request.user.id}")
-            return Response({"error": "Dealer profile not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        except Exception as e:
-            logger.exception(f"Unexpected error in dealer_analytics for user {request.user.id}: {str(e)}")
-            return Response({"error": "Internal server error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdminOrAdminOrDealerOrBroker],
-            url_path='broker-analytics')
-    def broker_analytics(self, request):
-        if not has_role(request.user, ['broker']):
-            return Response({"error": "Only brokers can access this analytics."}, status=status.HTTP_403_FORBIDDEN)
-
-        try:
-            broker = BrokerProfile.objects.get(profile=request.user.profile)
-            logger.info(f"Broker profile found: {broker}")
-
-            analytics = (
-                CarView.objects.filter(car__broker=broker)
-                .values("car__id", "car__make_ref__name", "car__model_ref__name")
-                .annotate(total_views=Count("id"))
-                .order_by("-total_views")
-            )
-
-            logger.debug(f"Raw broker analytics for {broker}: {list(analytics)}")
-
-            formatted = [
-                {
-                    "car_id": item["car__id"],
-                    "car_make": item["car__make_ref__name"],
-                    "car_model": item["car__model_ref__name"],
-                    "total_views": item["total_views"]
-                }
-                for item in analytics
-            ]
-
-            serializer = CarViewAnalyticsSerializer(formatted, many=True)
-            return Response(serializer.data)
-
-        except BrokerProfile.DoesNotExist:
-            logger.error(f"Broker profile not found for user {request.user.id}")
-            return Response({"error": "Broker profile not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        except Exception as e:
-            logger.exception(f"Unexpected error in broker_analytics for user {request.user.id}: {str(e)}")
-            return Response({"error": "Internal server error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 @extend_schema_view(
     list=extend_schema(
@@ -1322,11 +820,7 @@ class CarViewViewSet(viewsets.ModelViewSet):
         }
     )
 )
-class PopularCarsViewSet(
-    mixins.ListModelMixin,
-    mixins.RetrieveModelMixin,
-    viewsets.GenericViewSet
-):
+class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     permission_classes = [AllowAny]  # Public access
     serializer_class = CarSerializer
     queryset = Car.objects.filter(verification_status='verified')  # Only verified cars
@@ -1369,11 +863,7 @@ class PopularCarsViewSet(
             serializer = self.get_serializer(instance)
             return Response(serializer.data)
         except Car.DoesNotExist:
-            return Response(
-                {"detail": "Car not found."},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
+            return Response({"detail": "Car not found."}, status=status.HTTP_404_NOT_FOUND)
 
 @extend_schema_view(
     list=extend_schema(
@@ -1426,10 +916,7 @@ class ContactViewSet(ReadOnlyModelViewSet):
         """Admin-only list of all contacts."""
         user = request.user
         if not (user.is_staff or getattr(user, "is_super_admin", False)):
-            return Response(
-                {"detail": "Only admins can list all contacts"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            return Response({"detail": "Only admins can list all contacts"}, status=status.HTTP_403_FORBIDDEN,)
         return super().list(request, *args, **kwargs)
 
     def retrieve(self, request, *args, **kwargs):
@@ -1440,13 +927,10 @@ class ContactViewSet(ReadOnlyModelViewSet):
         # Validate input
         if not any([car_id, dealer_id, broker_id]):
             return Response(
-                {"detail": "Please provide car_id, dealer_id, or broker_id"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+                {"detail": "Please provide car_id, dealer_id, or broker_id"}, status=status.HTTP_400_BAD_REQUEST,)
         if sum(bool(x) for x in [car_id, dealer_id, broker_id]) > 1:
-            return Response(
-                {"detail": "Please provide only one of car_id, dealer_id, or broker_id"},
-                status=status.HTTP_400_BAD_REQUEST,
+            return Response({"detail": "Please provide only one of car_id, dealer_id, or broker_id"},
+                            status=status.HTTP_400_BAD_REQUEST,
             )
 
         # Retrieve profile
@@ -1460,32 +944,10 @@ class ContactViewSet(ReadOnlyModelViewSet):
             broker = get_object_or_404(BrokerProfile, id=broker_id)
             profile = broker.profile
         else:
-            return Response(
-                {"detail": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"detail": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST)
 
         serializer = self.get_serializer(profile)
         return Response(serializer.data)
-
-# CarImage ViewSet
-'''
-@extend_schema_view(
-    list=extend_schema(tags=["Dealers - Inventory"], description="List all car images."),
-    retrieve=extend_schema(tags=["Dealers - Inventory"], description="Retrieve a specific car image."),
-    create=extend_schema(tags=["Dealers - Inventory"], description="Create a car image (dealers/admins only)."),
-    update=extend_schema(tags=["Dealers - Inventory"], description="Update a car image (dealers/admins only)."),
-    partial_update=extend_schema(tags=["Dealers - Inventory"], description="Partially update a car image (dealers/admins only)."),
-    destroy=extend_schema(tags=["Dealers - Inventory"], description="Delete a car image (dealers/admins only)."),
-)
-class CarImageViewSet(ModelViewSet):
-    queryset = CarImage.objects.all()
-    serializer_class = CarImageSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsSuperAdminOrAdminOrDealer()]
-        return super().get_permissions() '''
 
 @extend_schema_view(
     list=extend_schema(
@@ -1595,19 +1057,11 @@ class InspectionViewSet(viewsets.ModelViewSet):
         admin_remarks = request.data.get("admin_remarks", "")
 
         if status_value not in ["verified", "rejected"]:
-            return Response(
-                {"error": "Invalid status. Must be 'verified' or 'rejected'."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
+            return Response({"error": "Invalid status. Must be 'verified' or 'rejected'."}, status=status.HTTP_400_BAD_REQUEST,)
         inspection.status = status_value
         inspection.verified_by = request.user
         inspection.verified_at = timezone.now()
         inspection.admin_remarks = admin_remarks
         inspection.save()
 
-        return Response(
-            {"detail": f"Inspection {status_value} successfully."},
-            status=status.HTTP_200_OK,
-        )
-
+        return Response({"detail": f"Inspection {status_value} successfully."}, status=status.HTTP_200_OK,)

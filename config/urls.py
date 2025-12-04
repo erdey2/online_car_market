@@ -1,10 +1,9 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import path, include, re_path
+from django.urls import path, include
 from django.views.generic import RedirectView
 from django.views import defaults as default_views
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from drf_spectacular.views import (SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView,)
 from drf_spectacular.utils import extend_schema
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView
@@ -63,6 +62,8 @@ urlpatterns = [
     path('api/brokers/', include("online_car_market.brokers.api.urls")),
     path('api/buyers/', include("online_car_market.buyers.api.urls")),
     path('api/notifications/', include("online_car_market.notifications.api.urls")),
+    path('api/analytics/', include('online_car_market.analytics.api.urls')),
+
     path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
