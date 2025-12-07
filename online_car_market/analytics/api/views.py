@@ -547,13 +547,13 @@ class AnalyticsViewSet(ViewSet):
             403: OpenApiResponse(description="Forbidden — Only dealers may access this endpoint"),
         }
     )
-    @action(detail=False, methods=['get'], url_path='financial-analytics', permission_classes=[IsDealerOrAccountant])
+    @action(detail=False, methods=['get'], url_path='financial-analytics', permission_classes=[IsDealer])
     def financial_analytics(self, request):
         """Financial analytics for DEALERS only."""
         user = request.user
 
-        if not has_role(user, ['dealer', 'accountant']):
-            return Response({"error": "Only dealers or accountant have access to financial analytics."}, status=status.HTTP_403_FORBIDDEN)
+        if not has_role(user, ['dealer']):
+            return Response({"error": "Only dealers have access to financial analytics."}, status=status.HTTP_403_FORBIDDEN)
 
         # Get dealer profile
         try:
@@ -564,12 +564,7 @@ class AnalyticsViewSet(ViewSet):
         # Time range
         period = request.GET.get("range", "month")
 
-        trunc_map = {
-            "day": TruncDay,
-            "week": TruncWeek,
-            "month": TruncMonth,
-            "year": TruncYear,
-        }
+        trunc_map = {"day": TruncDay, "week": TruncWeek, "month": TruncMonth, "year": TruncYear}
 
         if period not in trunc_map:
             return Response({"error": "Invalid range. Use day, week, month, or year."}, status=400)
@@ -579,7 +574,7 @@ class AnalyticsViewSet(ViewSet):
         # EXPENSES = Expense + CarExpense
         general_expenses = (
             Expense.objects.filter(dealer=dealer)
-            .annotate(period=Trunc("date"))
+            .annotate(period=Trunc("created_at"))
             .annotate(final_amount=F("amount") * F("exchange_rate"))
             .values("period")
             .annotate(total=Sum("final_amount"))
@@ -587,7 +582,7 @@ class AnalyticsViewSet(ViewSet):
 
         car_expenses = (
             CarExpense.objects.filter(dealer=dealer)
-            .annotate(period=Trunc("date"))
+            .annotate(period=Trunc("created_at"))
             .values("period")
             .annotate(total=Sum("converted_amount"))
         )

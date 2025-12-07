@@ -2,20 +2,14 @@
 """Base settings to build other settings files upon."""
 from pathlib import Path
 import os
-import sys
 from datetime import timedelta
-
 import environ
 
 BASE_DIR = Path(__file__).resolve(strict=True).parent.parent.parent
-# online_car_market/
+
 APPS_DIR = BASE_DIR / "online_car_market"
 env = environ.Env()
 
-""" READ_DOT_ENV_FILE = env.bool("DJANGO_READ_DOT_ENV_FILE", default=False)
-if READ_DOT_ENV_FILE:
-    # OS environment variables take precedence over variables from .env
-    env.read_env(str(BASE_DIR / ".env")) """
 env.read_env(str(BASE_DIR / ".env"))
 
 SECRET_KEY = env("DJANGO_SECRET_KEY")
@@ -75,7 +69,6 @@ DJANGO_APPS = [
     "django.contrib.sites",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    # "django.contrib.humanize", # Handy template tags
     "django.contrib.admin",
 ]
 THIRD_PARTY_APPS = [
@@ -161,7 +154,6 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # MIDDLEWARE
 # ------------------------------------------------------------------------------
-# https://docs.djangoproject.com/en/dev/ref/settings/#middleware
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     'debug_toolbar.middleware.DebugToolbarMiddleware',

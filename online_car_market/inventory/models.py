@@ -4,13 +4,11 @@ from cloudinary.models import CloudinaryField
 from django.contrib.auth import get_user_model
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
-from django.utils.text import slugify
 
 User = get_user_model()
 
 class CarMake(models.Model):
     name = models.CharField(max_length=100, unique=True)
-    # slug = models.SlugField(max_length=100, unique=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     # updated_at = models.DateTimeField(auto_now=True)
 
@@ -19,11 +17,6 @@ class CarMake(models.Model):
         verbose_name = 'Car Make'
         verbose_name_plural = 'Car Makes'
 
-    ''' def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
-        super().save(*args, **kwargs) '''
-
     def __str__(self):
         return self.name
 
@@ -31,7 +24,6 @@ class CarMake(models.Model):
 class CarModel(models.Model):
     make = models.ForeignKey(CarMake, on_delete=models.CASCADE, related_name='models')
     name = models.CharField(max_length=100)
-    # slug = models.SlugField(max_length=100, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     # updated_at = models.DateTimeField(auto_now=True)
 
@@ -40,11 +32,6 @@ class CarModel(models.Model):
         verbose_name = 'Car Model'
         verbose_name_plural = 'Car Models'
         unique_together = ('make', 'name')
-
-    ''' def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(f"{self.make.name}-{self.name}")
-        super().save(*args, **kwargs) '''
 
     def __str__(self):
         return f"{self.make.name} {self.name}"
@@ -105,9 +92,9 @@ class Car(models.Model):
     model = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     make_ref = models.ForeignKey(CarMake, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars', db_index=True)
     model_ref = models.ForeignKey(CarModel, on_delete=models.SET_NULL, null=True, blank=True, related_name='cars', db_index=True)
-    year = models.IntegerField()
+    year = models.IntegerField(db_index=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.0, db_index=True)
-    mileage = models.IntegerField()
+    mileage = models.IntegerField(db_index=True)
     fuel_type = models.CharField(max_length=20, choices=FUEL_TYPES, db_index=True)
     body_type = models.CharField(max_length=20, choices=BODY_TYPES, default='sedan', db_index=True)
     exterior_color = models.CharField(max_length=20, default='white')
@@ -123,9 +110,9 @@ class Car(models.Model):
     dealer = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, null=True, blank=True, related_name='cars')
     broker = models.ForeignKey(BrokerProfile, on_delete=models.CASCADE, null=True, blank=True, related_name='cars')
     posted_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posted_cars', db_index=True)
-    verification_status = models.CharField(max_length=20, choices=VERIFICATION_STATUSES, default='pending')
-    priority = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+    verification_status = models.CharField(max_length=20, choices=VERIFICATION_STATUSES, default='pending', db_index=True)
+    priority = models.BooleanField(default=False, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     # Extra

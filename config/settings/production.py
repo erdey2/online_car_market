@@ -1,27 +1,16 @@
-# ruff: noqa: E501
-from .base import *  # noqa: F403
-from .base import DATABASES
-from .base import INSTALLED_APPS
-from .base import REDIS_URL
+from .base import *
 from .base import env
 
-# GENERAL
-# ------------------------------------------------------------------------------
-SECRET_KEY = env("DJANGO_SECRET_KEY")
-ALLOWED_HOSTS = [
-    'online-car-market.onrender.com',
-    'localhost',
-    '127.0.0.1',
-]
-
 DEBUG = False
+SECRET_KEY = env("DJANGO_SECRET_KEY")
+ALLOWED_HOSTS = ["online-car-market.onrender.com"]
 
-# DATABASES
-# ------------------------------------------------------------------------------
+DATABASES = {
+    "default": env.db("DATABASE_URL")
+}
 DATABASES["default"]["CONN_MAX_AGE"] = env.int("CONN_MAX_AGE", default=60)
 
 # CACHES
-# ------------------------------------------------------------------------------
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
@@ -34,7 +23,6 @@ CACHES = {
 }
 
 # SECURITY
-# ------------------------------------------------------------------------------
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_SSL_REDIRECT = env.bool("DJANGO_SECURE_SSL_REDIRECT", default=True)
 SESSION_COOKIE_SECURE = True
@@ -65,13 +53,10 @@ EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD")
 # ------------------------------------------------------------------------------
 ADMIN_URL = env("DJANGO_ADMIN_URL")
 
-# Anymail (optional if used)
-# ------------------------------------------------------------------------------
 INSTALLED_APPS += ["anymail"]
 ANYMAIL = {}
 
 # LOGGING
-# ------------------------------------------------------------------------------
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": True,
@@ -103,26 +88,6 @@ LOGGING = {
     },
 }
 
-# Sentry
-# ------------------------------------------------------------------------------
-"""
-SENTRY_DSN = env("SENTRY_DSN")
-SENTRY_LOG_LEVEL = env.int("DJANGO_SENTRY_LOG_LEVEL", logging.INFO)
-sentry_logging = LoggingIntegration(
-    level=SENTRY_LOG_LEVEL,
-    event_level=logging.ERROR,
-)
-integrations = [sentry_logging, DjangoIntegration(), RedisIntegration()]
-sentry_sdk.init(
-    dsn=SENTRY_DSN,
-    integrations=integrations,
-    environment=env("SENTRY_ENVIRONMENT", default="production"),
-    traces_sample_rate=env.float("SENTRY_TRACES_SAMPLE_RATE", default=0.0),
-)
-"""
-
-# Your stuff...
-# ------------------------------------------------------------------------------
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 

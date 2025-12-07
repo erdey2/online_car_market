@@ -244,9 +244,9 @@ class ExpenseFilter(django_filters.FilterSet):
     ),
 )
 class ExpenseViewSet(ModelViewSet):
-    queryset = Expense.objects.all()
     serializer_class = ExpenseSerializer
     permission_classes = [IsAuthenticated]
+    queryset = Expense.objects.all()
     filter_backends = [DjangoFilterBackend]
     filterset_class = ExpenseFilter
 
@@ -260,24 +260,26 @@ class ExpenseViewSet(ModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
+        base_qs = Expense.objects.select_related("company")
+
         # Dealers can only see their own expenses
         if has_role(user, 'dealer'):
             dealer_profile = DealerProfile.objects.filter(profile__user=user).first()
-            return Expense.objects.filter(dealer=dealer_profile) if dealer_profile else Expense.objects.none()
+            return base_qs.filter(company=dealer_profile) if dealer_profile else base_qs.none()
 
         # Admin-level roles can see everything
         if has_role(user, ['super_admin', 'admin', 'accountant']):
-            return Expense.objects.all()
+            return base_qs
 
         # Others see nothing
-        return Expense.objects.none()
+        return base_qs.none()
 
     def perform_create(self, serializer):
         """Restrict dealer so they can only create THEIR OWN expense"""
         user = self.request.user
         if has_role(user, 'dealer'):
             dealer_profile = DealerProfile.objects.filter(profile__user=user).first()
-            serializer.save(dealer=dealer_profile)
+            serializer.save(company=dealer_profile)
         else:
             serializer.save()
 

@@ -2,6 +2,7 @@ from rest_framework import serializers
 from rolepermissions.checkers import has_role
 from ..models import Expense, FinancialReport, CarExpense, Revenue, ExchangeRate
 from online_car_market.sales.models import Sale
+from online_car_market.dealers.models import DealerProfile
 import bleach
 
 class ExchangeRateSerializer(serializers.ModelSerializer):
@@ -160,19 +161,21 @@ class RevenueSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 class ExpenseSerializer(serializers.ModelSerializer):
+    company_name = serializers.CharField(source="company.company_name", read_only=True)
+    # company = serializers.PrimaryKeyRelatedField(queryset=DealerProfile.objects.all(), required=False)
     class Meta:
         model = Expense
         fields = [
             'id',
-            'dealer',
+            'company_name',
             'type',
             'amount',
             'currency',
             'exchange_rate',
-            'date',
+            'created_at',
             'description'
         ]
-        read_only_fields = ['id', 'date']
+        read_only_fields = ['id', 'created_at']
 
     def validate_type(self, value):
         """Sanitize type field."""

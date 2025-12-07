@@ -1,5 +1,5 @@
 import logging
-from django.db.models import Q
+from django.db.models import Q, Avg
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -157,51 +157,42 @@ class CarViewSet(viewsets.ModelViewSet):
     serializer_class = CarSerializer
     permission_classes = [IsAuthenticatedOrReadOnly & CanPostCar]
     parser_classes = [MultiPartParser, FormParser]
-    queryset = Car.objects.all()
 
     def get_queryset(self):
         user = self.request.user
-        queryset = self.queryset
 
-        # Super admin / admin: see everything
-        if has_role(user, ['super_admin', 'admin']):
-            queryset = queryset.order_by('-priority', '-created_at')
+        qs = (Car.objects.select_related(
+                "dealer", "dealer__profile", "dealer__profile__user",
+                "broker", "broker__profile", "broker__profile__user",
+                "posted_by"
+            )
+            .prefetch_related(
+                "images",  # Car.images (reverse FK)
+                "bids",  # Car.bids (reverse FK)
+            )
+            # annotate dealer/broker average rating (one DB aggregate per result set, not per instance)
+            .annotate(dealer_avg=Avg("dealer__ratings__rating"), broker_avg=Avg("broker__ratings__rating"))
+            .order_by("-priority", "-created_at")
+        )
 
-        # Dealer: see ONLY their own cars
-        elif has_role(user, 'dealer'):
-            queryset = queryset.filter(
-                dealer__profile__user=user
-            ).order_by('-priority', '-created_at')
-
-        # Seller: see ONLY cars posted by him/her
-        elif has_role(user, 'seller'):
-            queryset = queryset.filter(
-                posted_by=user
-            ).order_by('-priority', '-created_at')
-
-        # Broker: see ONLY their own cars
-        elif has_role(user, 'broker'):
-            queryset = queryset.filter(
-                broker__profile__user=user
-            ).order_by('-priority', '-created_at')
-
-        # Buyer/unauthenticated: only verified cars
+        # Role filters
+        if has_role(user, ["super_admin", "admin"]):
+            pass
+        elif has_role(user, "dealer"):
+            qs = qs.filter(dealer__profile__user=user)
+        elif has_role(user, "seller"):
+            qs = qs.filter(posted_by=user)
+        elif has_role(user, "broker"):
+            qs = qs.filter(broker__profile__user=user)
         else:
-            queryset = queryset.filter(
-                verification_status='verified'
-            ).order_by('-priority', '-created_at')
+            qs = qs.filter(verification_status="verified")
 
-        # Optional filter: broker_email
-        broker_email = self.request.query_params.get('broker_email')
+        # broker_email as a single filter join — NO extra get() query
+        broker_email = self.request.query_params.get("broker_email")
         if broker_email:
-            from online_car_market.brokers.models import BrokerProfile
-            try:
-                broker_profile = BrokerProfile.objects.get(profile__user__email=broker_email)
-                queryset = queryset.filter(broker=broker_profile)
-            except BrokerProfile.DoesNotExist:
-                queryset = queryset.none()
+            qs = qs.filter(broker__profile__user__email=broker_email)
 
-        return queryset
+        return qs
 
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy", "bid", "pay", "broker_payment"]:

@@ -170,7 +170,7 @@ class CarImageSerializer(serializers.ModelSerializer):
         return instance
 
 
-# ---------------- CarSerializer ----------------
+# CarSerializer
 class CarSerializer(serializers.ModelSerializer):
     dealer = serializers.PrimaryKeyRelatedField(queryset=DealerProfile.objects.all(), required=False, allow_null=True)
     broker = serializers.PrimaryKeyRelatedField(queryset=BrokerProfile.objects.all(), required=False, allow_null=True)
@@ -181,12 +181,17 @@ class CarSerializer(serializers.ModelSerializer):
     verification_status = serializers.ChoiceField(choices=Car.VERIFICATION_STATUSES, read_only=True)
     make_ref = serializers.PrimaryKeyRelatedField(queryset=CarMake.objects.all(), required=False, allow_null=True)
     model_ref = serializers.PrimaryKeyRelatedField(queryset=CarModel.objects.all(), required=False, allow_null=True)
-    dealer_average_rating = serializers.SerializerMethodField(read_only=True)
-    broker_average_rating = serializers.SerializerMethodField(read_only=True)
+    dealer_average_rating = serializers.FloatField(source="dealer_avg", read_only=True)
+    broker_average_rating = serializers.FloatField(source="broker_avg", read_only=True)
 
     class Meta:
         model = Car
-        fields = "__all__"
+        fields = [
+            'vin', 'origin', 'make_ref', 'model_ref', 'year', 'price', 'mileage', 'fuel_type', 'body_type',
+            'exterior_color', 'interior_color', 'engine', 'drivetrain', 'condition', 'trim', 'description',
+            'dealer', 'broker', 'posted_by', 'images', 'uploaded_images', 'bids', 'dealer_average_rating',
+            'broker_average_rating', 'verification_status'
+        ]
         read_only_fields = [
             "id",
             "created_at",

@@ -5,7 +5,7 @@ from online_car_market.users.models import User, Profile
 from rolepermissions.checkers import has_role
 
 class DealerProfile(models.Model):
-    profile = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name='dealer_profile')
+    profile = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name='dealer_profile', db_index=True)
     company_name = models.CharField(max_length=255)
     license_number = models.CharField(max_length=50)
     tax_id = models.CharField(max_length=100, null=True, blank=True)
