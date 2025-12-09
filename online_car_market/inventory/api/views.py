@@ -3,6 +3,9 @@ from django.db.models import Q, Avg
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
+from django.core.cache import cache
+from django.views.decorators.cache import cache_page
+from django.utils.decorators import method_decorator
 
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
@@ -59,6 +62,22 @@ class CarMakeViewSet(ModelViewSet):
     queryset = CarMake.objects.all()
     serializer_class = CarMakeSerializer
 
+    ''' manual cache
+    def list(self, request, *args, **kwargs):
+        key = "car_makes_list"
+        data = cache.get(key)
+        if data:
+            return Response(data)
+
+        response = super().list(request, *args, **kwargs)
+        # Make sure the data is serializable
+        cache.set(key, list(response.data), 60 * 60 * 12)
+        return response '''
+
+    @method_decorator(cache_page(60 * 60 * 12, key_prefix='car_makes_list'))
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
             return [AllowAny()]   # No authentication required
@@ -94,6 +113,10 @@ class CarMakeViewSet(ModelViewSet):
 class CarModelViewSet(ModelViewSet):
     queryset = CarModel.objects.select_related('make').all()
     serializer_class = CarModelSerializer
+
+    @method_decorator(cache_page(60 * 60 * 12, key_prefix='car_models_list'))
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
@@ -157,6 +180,8 @@ class CarViewSet(viewsets.ModelViewSet):
     serializer_class = CarSerializer
     permission_classes = [IsAuthenticatedOrReadOnly & CanPostCar]
     parser_classes = [MultiPartParser, FormParser]
+
+
 
     def get_queryset(self):
         user = self.request.user
@@ -228,21 +253,13 @@ class CarViewSet(viewsets.ModelViewSet):
                 index = key.split('[')[1].split(']')[0]
                 caption = request.data.get(f"uploaded_images[{index}].caption")
                 is_featured = request.data.get(f"uploaded_images[{index}].is_featured", "false").lower() == "true"
-                uploaded_images.append({
-                    "image_file": file,
-                    "caption": caption,
-                    "is_featured": is_featured
-                })
+                uploaded_images.append({"image_file": file, "caption": caption, "is_featured": is_featured })
 
         # 4. Save CarImage instances
         first_image_id = None
         for i, img_data in enumerate(uploaded_images):
-            car_image = CarImage.objects.create(
-                car=car,
-                image=img_data['image_file'],
-                caption=img_data['caption'],
-                is_featured=img_data['is_featured']
-            )
+            car_image = CarImage.objects.create(car=car, image=img_data['image_file'], caption=img_data['caption'],
+                                                is_featured=img_data['is_featured'] )
             if i == 0:
                 first_image_id = car_image.id
 

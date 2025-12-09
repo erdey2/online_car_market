@@ -9,14 +9,6 @@ DATABASES = {
     'default': env.db("DATABASE_URL")
 }
 
-# CACHES
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": "",
-    },
-}
-
 # EMAIL
 EMAIL_BACKEND = env(
     "DJANGO_EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend",

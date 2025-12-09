@@ -8,7 +8,7 @@ from online_car_market.brokers.models import BrokerProfile
 User = get_user_model()
 
 class CarMake(models.Model):
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=100, unique=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     # updated_at = models.DateTimeField(auto_now=True)
 

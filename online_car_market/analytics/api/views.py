@@ -17,8 +17,7 @@ from online_car_market.brokers.models import BrokerProfile
 from online_car_market.payment.models import Payment
 from online_car_market.accounting.models import Expense, CarExpense, Revenue
 from online_car_market.users.permissions.drf_permissions import (IsSuperAdminOrAdminOrDealer, IsSuperAdminOrAdminOrBroker,
-                                                                 IsSuperAdminOrAdmin, IsDealerOrAccountant, IsDealer, IsBuyer,
-                                                                 IsBroker)
+                                                                 IsSuperAdminOrAdmin, IsDealer, IsBuyer, IsBroker)
 from .serializers import CarViewAnalyticsSerializer
 
 logger = logging.getLogger(__name__)

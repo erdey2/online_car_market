@@ -260,12 +260,12 @@ class ExpenseViewSet(ModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
-        base_qs = Expense.objects.select_related("company")
+        base_qs = Expense.objects.select_related("expenses")
 
         # Dealers can only see their own expenses
         if has_role(user, 'dealer'):
             dealer_profile = DealerProfile.objects.filter(profile__user=user).first()
-            return base_qs.filter(company=dealer_profile) if dealer_profile else base_qs.none()
+            return base_qs.filter(expenses=dealer_profile) if dealer_profile else base_qs.none()
 
         # Admin-level roles can see everything
         if has_role(user, ['super_admin', 'admin', 'accountant']):
@@ -279,7 +279,7 @@ class ExpenseViewSet(ModelViewSet):
         user = self.request.user
         if has_role(user, 'dealer'):
             dealer_profile = DealerProfile.objects.filter(profile__user=user).first()
-            serializer.save(company=dealer_profile)
+            serializer.save(expenses=dealer_profile)
         else:
             serializer.save()
 

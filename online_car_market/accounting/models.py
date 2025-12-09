@@ -17,21 +17,21 @@ class ExchangeRate(models.Model):
         return f"1 USD = {self.rate} ETB ({self.date})"
 
 class Expense(models.Model):
-    company = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, related_name='company', null=True, blank=True)
+    company = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, null=True, blank=True, related_name='expenses')
     type = models.CharField(max_length=100)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    description = models.TextField(blank=True)
     currency = models.CharField(max_length=10, choices=[('USD', 'USD'), ('ETB', 'ETB')], default='ETB')
     exchange_rate = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # store rate used for conversion
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
-    description = models.TextField(blank=True)
 
     def __str__(self):
         return f"{self.type} - {self.amount} ({self.company}) on {self.created_at}"
 
 class CarExpense(models.Model):
     """Expense related to a specific car purchase."""
-    dealer = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, related_name='car_expenses')
-    car = models.ForeignKey(Car, on_delete=models.CASCADE, related_name='expenses')
+    company = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, related_name='car_expenses')
+    car = models.ForeignKey(Car, on_delete=models.CASCADE, related_name='car_expenses')
     description = models.CharField(max_length=200)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=3, choices=Currency.choices, default=Currency.USD)
@@ -60,10 +60,10 @@ class Revenue(models.Model):
         ('other', 'Other'),
     ])
     amount = models.DecimalField(max_digits=12, decimal_places=2)
+    description = models.TextField(blank=True)
     currency = models.CharField(max_length=3, choices=Currency.choices, default=Currency.ETB)
     converted_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
-    description = models.TextField(blank=True)
 
     def save(self, *args, **kwargs):
         if self.currency == Currency.USD:
