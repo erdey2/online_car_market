@@ -65,9 +65,11 @@ THIRD_PARTY_APPS = [
     "allauth.socialaccount",
     "drf_spectacular",
     'rolepermissions',
+    'channels',
     'cloudinary',
     'cloudinary_storage',
     'templated_mail',
+    "online_car_market.notifications.apps.NotificationsConfig",
 ]
 
 LOCAL_APPS = [
@@ -81,7 +83,6 @@ LOCAL_APPS = [
     "online_car_market.dealers",
     "online_car_market.brokers",
     "online_car_market.buyers",
-    "online_car_market.notifications",
     "online_car_market.otp_reset",
     "online_car_market.payment",
 ]
@@ -133,6 +134,17 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
 ]
 CORS_ALLOW_ALL_ORIGINS = False
+
+ASGI_APPLICATION = "config.asgi.application"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
+}
 
 CACHES = {
     "default": {

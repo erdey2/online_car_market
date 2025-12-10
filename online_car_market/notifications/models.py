@@ -5,17 +5,21 @@ User = get_user_model()
 
 class Notification(models.Model):
     recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
-    actor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
-    verb = models.CharField(max_length=140) # 'booked', 'paid', 'assigned'
-    description = models.TextField(blank=True) # optional long text
-    data = models.JSONField(default=dict, blank=True) # structured payload
+    message = models.TextField()
+    data = models.JSONField(default=dict, blank=True)  # for structured info
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        ordering = ['-created_at']
         indexes = [
-        models.Index(fields=['recipient', 'is_read']), models.Index(fields=['created_at']),
+            models.Index(fields=['recipient', 'is_read']),
+            models.Index(fields=['created_at']),
         ]
+
+    def __str__(self):
+        return f"Notification to {self.recipient}: {self.message[:50]}"
+
 
 class Device(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='devices')

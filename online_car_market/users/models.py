@@ -62,9 +62,7 @@ class Profile(models.Model):
         return self.first_name or self.user.email.split('@')[0]
 
     class Meta:
-        indexes = [
-            models.Index(fields=['user'], name='idx_profile_user'),
-        ]
+        indexes = [models.Index(fields=['user'], name='idx_profile_user')]
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
 def create_user_profile(sender, instance, created, **kwargs):
