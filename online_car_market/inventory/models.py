@@ -30,7 +30,7 @@ class CarModel(models.Model):
         unique_together = ('make', 'name')
 
     def __str__(self):
-        return f"{self.make.name} {self.name}"
+        return f"{self.name}"
 
 class Car(models.Model):
     VERIFICATION_STATUSES = [

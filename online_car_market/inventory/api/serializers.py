@@ -53,11 +53,16 @@ class CarMakeSerializer(serializers.ModelSerializer):
 class CarModelSerializer(serializers.ModelSerializer):
     make_id = serializers.IntegerField(source='make.id', read_only=True)
     make_name = serializers.CharField(source='make.name', read_only=True)
-    make = serializers.PrimaryKeyRelatedField(queryset=CarMake.objects.all(), write_only=True, required=True )
 
     class Meta:
         model = CarModel
         fields = ['id', 'name', 'make_id', 'make_name', 'make']
+        extra_kwargs = {
+            'make': {'write_only': True, 'required': True}
+        }
+
+    def get_make_name(self, obj):
+        return obj.make.name if obj.make else None
 
     def validate_name(self, value):
         """

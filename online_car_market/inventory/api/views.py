@@ -111,16 +111,21 @@ class CarMakeViewSet(ModelViewSet):
 )
 class CarModelViewSet(ModelViewSet):
     serializer_class = CarModelSerializer
-    queryset = CarModel.objects.select_related('make').order_by("make__name", "name")
+
+    def get_queryset(self):
+        return (
+            CarModel.objects
+            .select_related("make")
+            .order_by("make__name", "name")
+        )
 
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
-            return [AllowAny()]  # Public access
-        return [IsSuperAdminOrAdmin()]  # Admin access for create/update/delete
+            return [AllowAny()]
+        return [IsSuperAdminOrAdmin()]
 
-    @method_decorator(cache_page(60 * 60 * 12, key_prefix='car_models_list'))
+    @method_decorator(cache_page(60 * 60 * 12, key_prefix="car_models_list"))
     def list(self, request, *args, **kwargs):
-        # The cache_page decorator will handle caching the response automatically
         return super().list(request, *args, **kwargs)
 
     @receiver([post_save, post_delete], sender=CarModel)
