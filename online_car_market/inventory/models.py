@@ -10,7 +10,6 @@ User = get_user_model()
 class CarMake(models.Model):
     name = models.CharField(max_length=100, unique=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    # updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['name']
@@ -20,15 +19,12 @@ class CarMake(models.Model):
     def __str__(self):
         return self.name
 
-
 class CarModel(models.Model):
     make = models.ForeignKey(CarMake, on_delete=models.CASCADE, related_name='models')
     name = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
-    # updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['make__name', 'name']
         verbose_name = 'Car Model'
         verbose_name_plural = 'Car Models'
         unique_together = ('make', 'name')

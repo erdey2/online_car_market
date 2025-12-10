@@ -1,10 +1,12 @@
 import logging
 from django.db.models import Q, Avg
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
-from django.core.cache import cache
 from django.views.decorators.cache import cache_page
+from django.core.cache import cache
 from django.utils.decorators import method_decorator
 
 from rest_framework.viewsets import ModelViewSet
@@ -31,6 +33,10 @@ from online_car_market.users.models import Profile
 from online_car_market.users.permissions.business_permissions import IsAdminOrReadOnly
 
 logger = logging.getLogger(__name__)
+
+CACHE_KEY_MAKES = "car_makes_list"
+CACHE_KEY_MODELS = "car_models_list"
+CACHE_KEY_CARS = "car_list"
 
 @extend_schema_view(
     list=extend_schema(
@@ -62,21 +68,14 @@ class CarMakeViewSet(ModelViewSet):
     queryset = CarMake.objects.all()
     serializer_class = CarMakeSerializer
 
-    ''' manual cache
-    def list(self, request, *args, **kwargs):
-        key = "car_makes_list"
-        data = cache.get(key)
-        if data:
-            return Response(data)
-
-        response = super().list(request, *args, **kwargs)
-        # Make sure the data is serializable
-        cache.set(key, list(response.data), 60 * 60 * 12)
-        return response '''
-
     @method_decorator(cache_page(60 * 60 * 12, key_prefix='car_makes_list'))
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
+
+    @receiver([post_save, post_delete], sender=CarMake)
+    def refresh_car_make_cache(sender, instance, **kwargs):
+        queryset = list(CarMake.objects.values("id", "name"))
+        cache.set(CACHE_KEY_MAKES, queryset, 60 * 60 * 12)
 
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
@@ -111,17 +110,23 @@ class CarMakeViewSet(ModelViewSet):
     ),
 )
 class CarModelViewSet(ModelViewSet):
-    queryset = CarModel.objects.select_related('make').all()
     serializer_class = CarModelSerializer
-
-    @method_decorator(cache_page(60 * 60 * 12, key_prefix='car_models_list'))
-    def list(self, request, *args, **kwargs):
-        return super().list(request, *args, **kwargs)
+    queryset = CarModel.objects.select_related('make').order_by("make__name", "name")
 
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
-            return [AllowAny()]   # No authentication required
-        return [IsSuperAdminOrAdmin()]   # Only admins for create/update/delete
+            return [AllowAny()]  # Public access
+        return [IsSuperAdminOrAdmin()]  # Admin access for create/update/delete
+
+    @method_decorator(cache_page(60 * 60 * 12, key_prefix='car_models_list'))
+    def list(self, request, *args, **kwargs):
+        # The cache_page decorator will handle caching the response automatically
+        return super().list(request, *args, **kwargs)
+
+    @receiver([post_save, post_delete], sender=CarModel)
+    def refresh_car_model_cache(sender, instance, **kwargs):
+        queryset = list(CarModel.objects.select_related("make").values("id", "name", "make__id", "make__name"))
+        cache.set(CACHE_KEY_MODELS, queryset, 60 * 60 * 12)
 
 @extend_schema_view(
 list=extend_schema(
@@ -181,7 +186,14 @@ class CarViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticatedOrReadOnly & CanPostCar]
     parser_classes = [MultiPartParser, FormParser]
 
+    @method_decorator(cache_page(60 * 60 * 15, key_prefix='car_list'))
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
 
+    @receiver([post_save, post_delete], sender=Car)
+    def refresh_car_list_cache(sender, instance, **kwargs):
+        queryset = list(Car.objects.all())
+        cache.set(CACHE_KEY_CARS, queryset, 60 * 60 * 12)
 
     def get_queryset(self):
         user = self.request.user

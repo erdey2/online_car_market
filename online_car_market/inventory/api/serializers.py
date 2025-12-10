@@ -9,12 +9,9 @@ from online_car_market.dealers.models import DealerProfile, DealerStaff
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.users.models import Profile
 from online_car_market.bids.api.serializers import BidSerializer
-from online_car_market.payment.models import Payment
 from django.contrib.auth import get_user_model
-import re
-import bleach
+import re, bleach, logging
 from datetime import datetime
-import logging
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -54,23 +51,13 @@ class CarMakeSerializer(serializers.ModelSerializer):
         return data
 
 class CarModelSerializer(serializers.ModelSerializer):
-    """
-    Serializer for CarModel model.
-    Provides read-only access to id, name, slug, and nested make details.
-    Validates unique model names per make and sanitizes input for create/update.
-    """
-    make = CarMakeSerializer(read_only=True)
-    make_id = serializers.PrimaryKeyRelatedField(
-        queryset=CarMake.objects.all(),
-        source='make',
-        write_only=True,
-        required=True
-    )
+    make_id = serializers.IntegerField(source='make.id', read_only=True)
+    make_name = serializers.CharField(source='make.name', read_only=True)
+    make = serializers.PrimaryKeyRelatedField(queryset=CarMake.objects.all(), write_only=True, required=True )
 
     class Meta:
         model = CarModel
-        fields = ['id', 'name', 'make', 'make_id']
-        read_only_fields = ['id', 'make']
+        fields = ['id', 'name', 'make_id', 'make_name', 'make']
 
     def validate_name(self, value):
         """
@@ -96,7 +83,7 @@ class CarModelSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Only admins or super admins can create or update models.")
         return data
 
-# ---------------- CarImageSerializer ----------------
+# CarImageSerializer
 class CarImageSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField(read_only=True)
     image_file = serializers.ImageField(write_only=True, required=False)
