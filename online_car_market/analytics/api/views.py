@@ -321,7 +321,7 @@ class AnalyticsViewSet(ViewSet):
         ],
         responses={200: {"type": "array", "items": {"type": "object"}}}
     )
-    @action(detail=False, methods=['get'], url_path="top-sellers", permission_classes=[IsSuperAdminOrAdmin])
+    @action(detail=False, methods=['get'], url_path="top-sellers", permission_classes=[IsDealer])
     def top_sellers(self, request):
         month = request.query_params.get("month")
         year = request.query_params.get("year")
@@ -342,7 +342,7 @@ class AnalyticsViewSet(ViewSet):
         ],
         responses={200: {"type": "array", "items": {"type": "object"}}}
     )
-    @action(detail=False, methods=['get'], url_path="high-sales-cars", permission_classes=[IsSuperAdminOrAdmin])
+    @action(detail=False, methods=['get'], url_path="high-sales-cars", permission_classes=[IsDealer])
     def high_sales_rate(self, request):
         month = request.query_params.get("month")
         year = request.query_params.get("year")
