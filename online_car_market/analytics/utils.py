@@ -1,5 +1,5 @@
 from datetime import datetime
-from django.db.models import Count
+from django.db.models import Count, Q
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.inventory.models import Car
 from django.utils import timezone
