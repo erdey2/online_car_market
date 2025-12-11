@@ -12,6 +12,8 @@ celery==5.5.3
 certifi==2025.7.14
 cffi==1.17.1
 chardet==5.2.0
+channels==4.3.2
+channels_redis==4.3.0
 charset-normalizer==3.4.2
 click==8.2.1
 click-didyoumean==0.3.1
