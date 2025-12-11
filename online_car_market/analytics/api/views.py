@@ -19,6 +19,8 @@ from online_car_market.accounting.models import Expense, CarExpense, Revenue
 from online_car_market.users.permissions.drf_permissions import (IsSuperAdminOrAdminOrDealer, IsSuperAdminOrAdminOrBroker,
                                                                  IsSuperAdminOrAdmin, IsDealer, IsBuyer, IsBroker)
 from .serializers import CarViewAnalyticsSerializer
+from ..utils import get_top_sellers, get_high_sales_rate_cars, parse_month_year
+
 
 logger = logging.getLogger(__name__)
 
@@ -309,6 +311,48 @@ class AnalyticsViewSet(ViewSet):
                 } for stat in model_stats
             ]
         })
+
+    @extend_schema(
+        tags=["Analytics"],
+        description="Retrieve the top sellers based on the number of cars sold in the specified month.",
+        parameters=[
+            OpenApiParameter(name="month", type=int, location="query", description="Month (1-12)"),
+            OpenApiParameter(name="year", type=int, location="query", description="Year"),
+        ],
+        responses={200: {"type": "array", "items": {"type": "object"}}}
+    )
+    @action(detail=False, methods=['get'], url_path="top-sellers", permission_classes=[IsSuperAdminOrAdmin])
+    def top_sellers(self, request):
+        month = request.query_params.get("month")
+        year = request.query_params.get("year")
+
+        month_date = parse_month_year(month, year)
+        if month and not month_date:
+            return Response({"detail": "Invalid month/year."}, status=400)
+
+        sellers = get_top_sellers(month_date)
+        return Response(sellers, status=200)
+
+    @extend_schema(
+        tags=["Analytics"],
+        description="Retrieve cars with the highest sales rate in the specified month.",
+        parameters=[
+            OpenApiParameter(name="month", type=int, location="query", description="Month (1-12)"),
+            OpenApiParameter(name="year", type=int, location="query", description="Year"),
+        ],
+        responses={200: {"type": "array", "items": {"type": "object"}}}
+    )
+    @action(detail=False, methods=['get'], url_path="high-sales-cars", permission_classes=[IsSuperAdminOrAdmin])
+    def high_sales_rate(self, request):
+        month = request.query_params.get("month")
+        year = request.query_params.get("year")
+
+        month_date = parse_month_year(month, year)
+        if month and not month_date:
+            return Response({"detail": "Invalid month/year."}, status=400)
+
+        cars = get_high_sales_rate_cars(month_date)
+        return Response(cars, status=200)
 
     @extend_schema(
         tags=["Analytics"],
