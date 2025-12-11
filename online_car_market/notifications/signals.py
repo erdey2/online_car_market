@@ -13,10 +13,15 @@ def notify_new_car(sender, instance, created, **kwargs):
     if not created:
         return
 
+    channel_layer = get_channel_layer()
+    if channel_layer is None:
+        print("Channel layer not configured")
+        return
+
     admin_users = User.objects.filter(is_superuser=True)
 
     for user in admin_users:
-        n = Notification.objects.create(recipient=user, verb="new_car", message=f"A new car '{instance.title}' has been posted." )
+        n = Notification.objects.create(recipient=user, message=f"A new car '{instance.vin}' has been posted." )
 
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
@@ -26,7 +31,6 @@ def notify_new_car(sender, instance, created, **kwargs):
                 "data": {
                     "id": n.id,
                     "message": n.message,
-                    "verb": n.verb,
                     "created_at": str(n.created_at)
                 }
             }
