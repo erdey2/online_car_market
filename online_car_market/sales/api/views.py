@@ -1,6 +1,5 @@
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.permissions import BasePermission
 from rolepermissions.checkers import has_role
 from online_car_market.sales.models import Sale, Lead
 from online_car_market.dealers.models import DealerStaff
@@ -104,7 +103,6 @@ class SaleViewSet(ModelViewSet):
 
         elif has_role(user, 'seller'):
             try:
-                # Assuming Seller is linked via DealerStaff (or directly to dealer)
                 dealer_staff = DealerStaff.objects.get(user=user)
                 return self.queryset.filter(car__dealer=dealer_staff.dealer)
             except DealerStaff.DoesNotExist:
@@ -123,62 +121,71 @@ class SaleViewSet(ModelViewSet):
 @extend_schema_view(
     list=extend_schema(
         tags=["Dealers - Sales"],
-        description="List leads based on user role: brokers/dealers see leads for their cars, admins see all.",
+        description="List leads based on user role: brokers/dealers see leads for their cars, sellers see leads for their dealer, admins see all.",
         responses={
             200: LeadSerializer(many=True),
             403: OpenApiResponse(
-                response={"type": "object", "properties": {"detail": {"type": "string"}}},
                 description="User lacks permission.",
-                examples=[OpenApiExample("Forbidden", value={"detail": "You do not have permission to perform this action."})]
+                examples=[OpenApiExample("Forbidden", value={"detail": "You do not have permission."})]
             )
         }
     ),
     retrieve=extend_schema(
         tags=["Dealers - Sales"],
-        description="Retrieve a specific lead if user is the assigned broker/dealer or admin.",
+        description="Retrieve a specific lead if the user has permission.",
         responses={
             200: LeadSerializer,
             404: OpenApiResponse(
-                response={"type": "object", "properties": {"detail": {"type": "string"}}},
                 description="Lead not found.",
                 examples=[OpenApiExample("Not Found", value={"detail": "Not found."})]
+            ),
+            403: OpenApiResponse(
+                description="Forbidden.",
+                examples=[OpenApiExample("Forbidden", value={"detail": "You do not have permission."})]
             )
         }
     ),
     create=extend_schema(
         tags=["Dealers - Sales"],
-        description="Create a lead (brokers for their cars, dealers for their cars, admins).",
+        description="Create a lead. Allowed for brokers, dealers, sellers, and admins.",
         request=LeadSerializer,
         responses={
             201: LeadSerializer,
             400: OpenApiResponse(
-                response={"type": "object", "properties": {"detail": {"type": "string"}}},
                 description="Invalid input.",
                 examples=[OpenApiExample("Invalid input", value={"detail": "Invalid data."})]
             ),
             403: OpenApiResponse(
-                response={"type": "object", "properties": {"detail": {"type": "string"}}},
-                description="User lacks permission.",
-                examples=[OpenApiExample("Forbidden", value={"detail": "Only brokers, dealers, or admins can create leads."})]
+                description="Forbidden.",
+                examples=[OpenApiExample("Forbidden", value={"detail": "Permission denied."})]
             )
         }
     ),
     update=extend_schema(
         tags=["Dealers - Sales"],
-        description="Update a lead (brokers for their cars, dealers for their cars, admins).",
+        description="Update a lead.",
         request=LeadSerializer,
-        responses={200: LeadSerializer}
+        responses={
+            200: LeadSerializer,
+            403: OpenApiResponse(description="Forbidden.")
+        }
     ),
     partial_update=extend_schema(
         tags=["Dealers - Sales"],
         description="Partially update a lead.",
         request=LeadSerializer,
-        responses={200: LeadSerializer}
+        responses={
+            200: LeadSerializer,
+            403: OpenApiResponse(description="Forbidden.")
+        }
     ),
     destroy=extend_schema(
         tags=["Dealers - Sales"],
-        description="Delete a lead (brokers for their cars, dealers for their cars, admins).",
-        responses={204: None}
+        description="Delete a lead.",
+        responses={
+            204: None,
+            403: OpenApiResponse(description="Forbidden.")
+        }
     ),
 )
 class LeadViewSet(ModelViewSet):
@@ -187,24 +194,44 @@ class LeadViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_permissions(self):
+        # Only write operations require CanManageSales
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [IsAuthenticated(), CanManageSales()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
         user = self.request.user
+
+        # Admins see everything
         if has_role(user, ['super_admin', 'admin']):
             return self.queryset
-        elif has_role(user, 'broker'):
-            try:
-                broker_profile = BrokerProfile.objects.get(profile__user=user)
-                return self.queryset.filter(car__broker=broker_profile)
-            except BrokerProfile.DoesNotExist:
-                return self.queryset.none()
-        elif has_role(user, 'dealer'):
-            try:
-                dealer_profile = DealerProfile.objects.get(profile__user=user)
-                return self.queryset.filter(car__dealer=dealer_profile)
-            except DealerProfile.DoesNotExist:
-                return self.queryset.none()
+
+        # Broker: cars assigned to this broker
+        if has_role(user, 'broker'):
+            broker = BrokerProfile.objects.filter(profile__user=user).first()
+            if broker:
+                return self.queryset.filter(car__broker=broker)
+            return self.queryset.none()
+
+        # Dealer: all cars of dealer
+        if has_role(user, 'dealer'):
+            dealer = DealerProfile.objects.filter(profile__user=user).first()
+            if dealer:
+                return self.queryset.filter(car__dealer=dealer)
+            return self.queryset.none()
+
+        # Seller: leads for cars of their dealer
+        if has_role(user, 'seller'):
+            staff = DealerStaff.objects.filter(user=user).first()
+            if staff:
+                return self.queryset.filter(car__dealer=staff.dealer)
+            return self.queryset.none()
+
+        # Buyer: their own leads
+        if has_role(user, 'buyer'):
+            buyer = BuyerProfile.objects.filter(profile__user=user).first()
+            if buyer:
+                return self.queryset.filter(buyer=user)
+            return self.queryset.none()
+
         return self.queryset.none()
