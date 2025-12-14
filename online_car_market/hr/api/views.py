@@ -1,4 +1,4 @@
-import sys
+import logging
 from django.utils import timezone
 from ..models import Employee, Contract, Attendance, Leave
 from .serializers import (EmployeeSerializer, ContractSerializer, AttendanceSerializer,
@@ -13,6 +13,7 @@ from online_car_market.users.permissions.business_permissions import IsHRorDeale
 from drf_spectacular.utils import extend_schema_view, extend_schema, OpenApiResponse
 from templated_mail.mail import BaseEmailMessage
 
+logger = logging.getLogger(__name__)
 
 @extend_schema_view(
     list=extend_schema(
@@ -126,7 +127,7 @@ class ContractViewSet(viewsets.ModelViewSet):
     serializer_class = ContractSerializer
     permission_classes = [IsHRorDealer]
 
-    print("SEND CONTRACT ACTION HIT", file=sys.stderr)
+    # print("SEND CONTRACT ACTION HIT", file=sys.stderr)
 
     @action(detail=True, methods=['post'])
     def send_to_employee(self, request, pk=None):

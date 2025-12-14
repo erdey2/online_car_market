@@ -59,34 +59,46 @@ ANYMAIL = {}
 # LOGGING
 LOGGING = {
     "version": 1,
-    "disable_existing_loggers": True,
+    "disable_existing_loggers": False,  # important
     "formatters": {
         "verbose": {
-            "format": "%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s",
+            "format": "%(levelname)s %(asctime)s %(name)s %(message)s",
         },
     },
     "handlers": {
         "console": {
-            "level": "DEBUG",
             "class": "logging.StreamHandler",
             "formatter": "verbose",
         },
     },
-    "root": {"level": "INFO", "handlers": ["console"]},
     "loggers": {
-        "django.db.backends": {
-            "level": "ERROR",
+        "django": {
             "handlers": ["console"],
+            "level": "INFO",
+            "propagate": True,
+        },
+        "django.server": {  # per-request logs
+            "handlers": ["console"],
+            "level": "INFO",
             "propagate": False,
         },
-        "sentry_sdk": {"level": "ERROR", "handlers": ["console"], "propagate": False},
-        "django.security.DisallowedHost": {
-            "level": "ERROR",
+        "gunicorn.error": {  # gunicorn internal logs
             "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "gunicorn.access": {  # gunicorn access logs
+            "handlers": ["console"],
+            "level": "INFO",
             "propagate": False,
         },
     },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
 }
+
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
