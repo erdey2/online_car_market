@@ -47,7 +47,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Salary cannot be negative.")
         return value
 
-    def validate_employee_email(self, email: str) -> User:
+    def validate_user_email(self, email: str) -> User:
         """Resolve email → User + prevent duplicate Employee."""
         try:
             user = User.objects.get(email=email)
@@ -60,6 +60,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
         else:  # create
             if hasattr(user, "employee_profile"):
                 raise serializers.ValidationError("This user is already an employee.")
+
         return user
 
     def create(self, validated_data: dict) -> Employee:

@@ -128,21 +128,37 @@ class ContractViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def send_to_employee(self, request, pk=None):
         contract = self.get_object()
+
         if contract.status != 'draft':
             return Response({"detail": "Already sent"}, status=400)
 
         contract.status = 'sent_to_employee'
-        contract.save()
+        contract.save(update_fields=["status"])
 
-        BaseEmailMessage(
-            template_name='email/contract_sent.html',
-            context={
-                'name': contract.employee.user.profile.get_full_name(),
-                'pdf_url': contract.draft_document_url
-            }
-        ).send(to=[contract.employee.user.email])
+        try:
+            profile = getattr(contract.employee.user, "profile", None)
+            name = profile.get_full_name() if profile else contract.employee.user.email
 
-        return Response({"detail": "Sent!", "pdf_url": contract.draft_document_url})
+            BaseEmailMessage(
+                template_name='email/contract_sent.html',
+                context={
+                    'name': name,
+                    'pdf_url': contract.draft_document_url
+                }
+            ).send(to=[contract.employee.user.email])
+        except Exception as e:
+            return Response(
+                {
+                    "detail": "Contract sent, but email failed",
+                    "pdf_url": contract.draft_document_url,
+                    "error": str(e),
+                },
+                status=207,  # Multi-Status
+            )
+
+        return Response(
+            {"detail": "Sent!", "pdf_url": contract.draft_document_url}
+        )
 
     @action(detail=True, methods=['post'])
     def upload_signed(self, request, pk=None):
