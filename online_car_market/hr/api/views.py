@@ -1,3 +1,4 @@
+import sys
 from django.utils import timezone
 from ..models import Employee, Contract, Attendance, Leave
 from .serializers import (EmployeeSerializer, ContractSerializer, AttendanceSerializer,
@@ -124,6 +125,8 @@ class ContractViewSet(viewsets.ModelViewSet):
     queryset = Contract.objects.select_related('employee__user__profile').all()
     serializer_class = ContractSerializer
     permission_classes = [IsHRorDealer]
+
+    print("SEND CONTRACT ACTION HIT", file=sys.stderr)
 
     @action(detail=True, methods=['post'])
     def send_to_employee(self, request, pk=None):
