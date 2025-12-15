@@ -1,4 +1,3 @@
-from rest_framework import viewsets
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -8,7 +7,7 @@ from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.decorators import action
-from online_car_market.users.permissions.drf_permissions import IsBuyer, IsSuperAdminOrAdmin
+from online_car_market.users.permissions.drf_permissions import IsBuyer, IsSuperAdminOrAdmin, IsDealer, IsBroker
 
 
 @extend_schema_view(
@@ -53,105 +52,58 @@ from online_car_market.users.permissions.drf_permissions import IsBuyer, IsSuper
     ),
 )
 class BidViewSet(ModelViewSet):
-    permission_classes = [IsAuthenticated]
     serializer_class = BidSerializer
-    queryset = Bid.objects.all()
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
+
+        qs = (Bid.objects.select_related("user", "user__profile", "car").order_by("-created_at"))
+
         if has_role(user, ["admin", "superadmin"]):
-            return Bid.objects.all()
-        return Bid.objects.filter(user=user)
+            return qs
+
+        return qs.filter(user=user)
 
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy", "list", "retrieve"]:
             return [IsAuthenticated(), IsBuyer()]
-        elif self.action in ["manage"]:
+
+        if self.action == "manage":
             return [IsAuthenticated(), IsSuperAdminOrAdmin()]
-        return [IsAuthenticated()]
 
-    def list(self, request, *args, **kwargs):
-        if not has_role(request.user, 'buyer'):
-            return Response({"detail": "User does not have buyer role."}, status=status.HTTP_403_FORBIDDEN)
-        return super().list(request, *args, **kwargs)
+        return super().get_permissions()
 
-    def create(self, request, *args, **kwargs):
-        if not has_role(request.user, 'buyer'):
-            return Response({"detail": "User does not have buyer role."}, status=status.HTTP_403_FORBIDDEN)
-        serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(user=request.user)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    # Bid history per car
+    @action(detail=False, methods=["get"], url_path="car/(?P<car_id>[^/.]+)/history")
+    def car_bid_history(self, request, car_id=None):
+        bids = (
+            Bid.objects
+            .filter(car_id=car_id)
+            .select_related("user", "user__profile", "car")
+            .order_by("-created_at")
+        )
+        serializer = self.get_serializer(bids, many=True)
+        return Response(serializer.data)
 
-    def retrieve(self, request, *args, **kwargs):
-        if not has_role(request.user, 'buyer'):
-            return Response({"detail": "User does not have buyer role."}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            bid = self.get_queryset().get(pk=kwargs['pk'])
-            serializer = self.get_serializer(bid)
-            return Response(serializer.data)
-        except Bid.DoesNotExist:
-            return Response({"detail": "Bid not found or access denied."}, status=status.HTTP_404_NOT_FOUND)
-
-    def update(self, request, *args, **kwargs):
-        if not has_role(request.user, 'buyer'):
-            return Response({"detail": "User does not have buyer role."}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            bid = self.get_queryset().get(pk=kwargs['pk'])
-            serializer = self.get_serializer(bid, data=request.data)
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except Bid.DoesNotExist:
-            return Response({"detail": "Bid not found or access denied."}, status=status.HTTP_404_NOT_FOUND)
-
-    def partial_update(self, request, *args, **kwargs):
-        if not has_role(request.user, 'buyer'):
-            return Response({"detail": "User does not have buyer role."}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            bid = self.get_queryset().get(pk=kwargs['pk'])
-            serializer = self.get_serializer(bid, data=request.data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except Bid.DoesNotExist:
-            return Response({"detail": "Bid not found or access denied."}, status=status.HTTP_404_NOT_FOUND)
-
-    def destroy(self, request, *args, **kwargs):
-        if not has_role(request.user, 'buyer'):
-            return Response({"detail": "User does not have buyer role."}, status=status.HTTP_403_FORBIDDEN)
-        try:
-            bid = self.get_queryset().get(pk=kwargs['pk'])
-            bid.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        except Bid.DoesNotExist:
-            return Response({"detail": "Bid not found or access denied."}, status=status.HTTP_404_NOT_FOUND)
-
-    @extend_schema(
-        tags=["Bids"],
-        summary="Approve or Reject a Bid",
-        description="Admins or SuperAdmins can approve or reject a bid. "
-                    "Expected body: `{ 'status': 'approved' }` or `{ 'status': 'rejected' }`.",
-        request={
-            "application/json": {
-                "type": "object",
-                "properties": {"status": {"type": "string", "enum": ["approved", "rejected"]}},
-                "required": ["status"],
-            }
-        },
-        responses={200: {"description": "Bid successfully updated"}},
-    )
+    # Admin manage bid
     @action(detail=True, methods=["patch"], permission_classes=[IsSuperAdminOrAdmin])
     def manage(self, request, pk=None):
         bid = self.get_object()
         status_value = request.data.get("status")
+
         if status_value not in ["approved", "rejected"]:
-            return Response({"error": "Invalid status. Must be 'approved' or 'rejected'."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Invalid status"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         bid.status = status_value
-        bid.save()
-        return Response({"detail": f"Bid {status_value} successfully."}, status=status.HTTP_200_OK)
+        bid.save(update_fields=["status"])
+
+        return Response(
+            {"detail": f"Bid {status_value} successfully."},
+            status=status.HTTP_200_OK
+        )
 
 

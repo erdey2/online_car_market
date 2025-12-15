@@ -1,6 +1,7 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from online_car_market.inventory.models import Car
+from online_car_market.bids.models import Bid
 from django.contrib.auth import get_user_model
 from .models import Notification
 from asgiref.sync import async_to_sync
@@ -35,3 +36,36 @@ def notify_new_car(sender, instance, created, **kwargs):
                 }
             }
         )
+
+""" @receiver(post_save, sender=Bid)
+def notify_seller_on_bid(sender, instance, created, **kwargs):
+    if not created:
+        return
+
+    car = instance.car
+    seller = car.user  # adjust if your seller field is different
+
+    notification = Notification.objects.create(
+        recipient=seller,
+        actor=instance.user,
+        verb="placed a bid",
+        description=f"New bid of {instance.amount} on {car}",
+        data={
+            "car_id": car.id,
+            "bid_id": instance.id,
+            "amount": str(instance.amount),
+        }
+    )
+
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        f"user_{seller.id}",
+        {
+            "type": "send_notification",
+            "data": {
+                "id": notification.id,
+                "message": notification.description,
+                "created_at": notification.created_at.isoformat(),
+            }
+        }
+    ) """

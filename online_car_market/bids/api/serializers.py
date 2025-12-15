@@ -11,13 +11,20 @@ class ProfileSerializer(serializers.ModelSerializer):
         model = Profile
         fields = ['first_name', 'last_name', 'contact']
 
+
 class CarSerializer(serializers.ModelSerializer):
     class Meta:
         model = Car
         fields = ['make', 'model']
 
+
 class BidSerializer(serializers.ModelSerializer):
-    car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all(), write_only=True )
+    # WRITE
+    car = serializers.PrimaryKeyRelatedField(
+        queryset=Car.objects.all(),
+        write_only=True
+    )
+
     # READ
     car_detail = CarSerializer(source='car', read_only=True)
     profile = ProfileSerializer(source='user.profile', read_only=True)
@@ -26,8 +33,8 @@ class BidSerializer(serializers.ModelSerializer):
         model = Bid
         fields = [
             'id',
-            'car',          # for create/update
-            'car_detail',   # for response
+            'car',
+            'car_detail',
             'profile',
             'amount',
             'created_at',
@@ -51,5 +58,3 @@ class BidSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)
-
-
