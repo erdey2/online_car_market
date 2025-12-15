@@ -75,6 +75,12 @@ class BidViewSet(ModelViewSet):
         return super().get_permissions()
 
     # Bid history per car
+    @extend_schema(
+        tags=["Bids"],
+        summary="Bid history per car",
+        description="Retrieve all bids for a specific car, ordered by most recent.",
+        responses={200: BidSerializer(many=True)},
+    )
     @action(detail=False, methods=["get"], url_path="car/(?P<car_id>[^/.]+)/history")
     def car_bid_history(self, request, car_id=None):
         bids = (
@@ -87,6 +93,24 @@ class BidViewSet(ModelViewSet):
         return Response(serializer.data)
 
     # Admin manage bid
+    @extend_schema(
+        tags=["Bids"],
+        summary="Approve or reject a bid",
+        description="Admins or SuperAdmins can approve or reject a bid.",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "enum": ["approved", "rejected"]
+                    }
+                },
+                "required": ["status"],
+            }
+        },
+        responses={200: {"description": "Bid successfully updated"}},
+    )
     @action(detail=True, methods=["patch"], permission_classes=[IsSuperAdminOrAdmin])
     def manage(self, request, pk=None):
         bid = self.get_object()
