@@ -6,15 +6,33 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 class BidSerializer(serializers.ModelSerializer):
-    id = serializers.IntegerField(read_only=True)
-    car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all())
     user = serializers.PrimaryKeyRelatedField(read_only=True)
-    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
-    created_at = serializers.DateTimeField(read_only=True)
+
+    first_name = serializers.CharField(
+        source="user.profile.first_name",
+        read_only=True
+    )
+    last_name = serializers.CharField(
+        source="user.profile.last_name",
+        read_only=True
+    )
+    contact = serializers.CharField(
+        source="user.profile.contact",
+        read_only=True
+    )
 
     class Meta:
         model = Bid
-        fields = ['id', 'car', 'user', 'amount', 'created_at']
+        fields = [
+            'id',
+            'car',
+            'user',
+            'amount',
+            'created_at',
+            'first_name',
+            'last_name',
+            'contact',
+        ]
         read_only_fields = ['id', 'user', 'created_at']
 
     def validate_car(self, value):
