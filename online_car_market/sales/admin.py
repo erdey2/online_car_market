@@ -1,3 +1,5 @@
 from django.contrib import admin
+from .models import Sale, Lead
 
-# Register your models here.
+admin.register(Sale)
+admin.register(Lead)
