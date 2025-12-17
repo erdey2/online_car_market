@@ -28,7 +28,7 @@ def generate_financial_report(dealer, report_type="profit_loss", month=None, yea
     conversion_rate = Decimal(conversion_rate) if conversion_rate else Decimal('57.00')  # Example default ETB/USD rate
 
     # Filter expenses by dealer and date
-    expenses_qs = Expense.objects.filter(dealer=dealer, date__month=month, date__year=year)
+    expenses_qs = Expense.objects.filter(dealer=dealer, created_at__month=month, created_at__year=year)
 
     # If expenses are in USD, convert to ETB
     total_expenses_usd = expenses_qs.filter(currency='USD').aggregate(total=Sum('amount'))['total'] or Decimal(0)
