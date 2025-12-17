@@ -6,28 +6,23 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
-class ProfileSerializer(serializers.ModelSerializer):
+class ProfileMiniSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
-        fields = ['first_name', 'last_name', 'contact']
+        fields = ['id', 'first_name', 'last_name', 'contact']
 
-
-class CarSerializer(serializers.ModelSerializer):
+class CarMiniSerializer(serializers.ModelSerializer):
     class Meta:
         model = Car
-        fields = ['make', 'model']
-
+        fields = ['id', 'make', 'model']
 
 class BidSerializer(serializers.ModelSerializer):
     # WRITE
-    car = serializers.PrimaryKeyRelatedField(
-        queryset=Car.objects.all(),
-        write_only=True
-    )
+    car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all(), write_only=True)
 
     # READ
-    car_detail = CarSerializer(source='car', read_only=True)
-    profile = ProfileSerializer(source='user.profile', read_only=True)
+    car_detail = CarMiniSerializer(source='car', read_only=True)
+    profile = ProfileMiniSerializer(source='user.profile', read_only=True)
 
     class Meta:
         model = Bid

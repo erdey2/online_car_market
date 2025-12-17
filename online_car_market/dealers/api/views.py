@@ -1,59 +1,86 @@
-from django.utils import timezone
-from rest_framework import serializers, status, viewsets
-from rest_framework.viewsets import ModelViewSet, ViewSet
-from rest_framework.permissions import IsAuthenticated, BasePermission
+from rest_framework import serializers, status
+from rest_framework.viewsets import (ModelViewSet, GenericViewSet,ViewSet)
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rolepermissions.checkers import has_role, has_permission
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiResponse
-from .serializers import (DealerRatingSerializer, DealerProfileSerializer, VerifyDealerSerializer, DealerStaffSerializer)
+
+from rolepermissions.checkers import has_role
+from drf_spectacular.utils import (extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiResponse )
+
+from .serializers import ( DealerRatingSerializer, DealerProfileSerializer, VerifyDealerSerializer, DealerStaffSerializer )
 from ..models import DealerStaff
-from online_car_market.users.permissions.drf_permissions import IsSuperAdmin, IsAdmin
-from online_car_market.dealers.utils import get_high_sales_rate_cars, get_top_sellers
 from online_car_market.dealers.models import DealerProfile, DealerRating
-from online_car_market.users.permissions.business_permissions import IsRatingOwnerOrAdmin, IsDealerWithManageStaff
+
+from online_car_market.users.permissions.drf_permissions import ( IsSuperAdmin, IsAdmin)
+from online_car_market.users.permissions.business_permissions import ( IsRatingOwnerOrAdmin, IsDealerWithManageStaff)
 
 import logging
 
 logger = logging.getLogger(__name__)
 
-class ProfileViewSet(viewsets.ViewSet):
+class ProfileViewSet(GenericViewSet):
     """
-    Endpoint to get or update the authenticated user's profile
+    Retrieve or partially update the authenticated user's profile
     (dealer, seller, accountant, hr).
     """
+
     permission_classes = [IsAuthenticated]
 
-    STAFF_ROLES = ['seller', 'accountant', 'hr']  # add more staff roles here
+    STAFF_ROLES = ["seller", "accountant", "hr"]
+
+    def get_serializer_class(self):
+        user = self.request.user
+
+        if has_role(user, "dealer"):
+            return DealerProfileSerializer
+
+        if has_role(user, self.STAFF_ROLES):
+            return DealerStaffSerializer
+
+        # Required fallback to avoid schema errors
+        return serializers.Serializer
 
     @extend_schema(
         tags=["Profiles"],
-        description="Retrieve the authenticated user's profile."
+        responses={
+            200: DealerProfileSerializer | DealerStaffSerializer,
+            403: OpenApiResponse(description="User does not have an allowed role."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description="Retrieve the authenticated user's profile.",
     )
-    def retrieve(self, request):
+    def retrieve(self, request, *args, **kwargs):
         user = request.user
 
         # Dealer profile
-        if has_role(user, 'dealer'):
+        if has_role(user, "dealer"):
             try:
                 dealer_profile = DealerProfile.objects.get(profile__user=user)
             except DealerProfile.DoesNotExist:
-                return Response({"detail": "Dealer profile not found."}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"detail": "Dealer profile not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
-            return Response(DealerProfileSerializer(dealer_profile).data)
+            serializer = DealerProfileSerializer(dealer_profile)
+            return Response(serializer.data)
 
-        # Staff profile: seller / accountant / hr
+        # Staff profile (seller / accountant / hr)
         if has_role(user, self.STAFF_ROLES):
             staff_profile = (
                 DealerStaff.objects.filter(user=user)
-                .select_related('dealer', 'user')
+                .select_related("dealer", "user")
                 .first()
             )
 
             if not staff_profile:
-                return Response({"detail": "Staff profile not found."}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"detail": "Staff profile not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
-            return Response(DealerStaffSerializer(staff_profile).data)
+            serializer = DealerStaffSerializer(staff_profile)
+            return Response(serializer.data)
 
         return Response(
             {"detail": "User does not have an allowed role."},
@@ -62,30 +89,46 @@ class ProfileViewSet(viewsets.ViewSet):
 
     @extend_schema(
         tags=["Profiles"],
-        description="Partially update the authenticated user's profile."
+        request=DealerProfileSerializer | DealerStaffSerializer,
+        responses={
+            200: DealerProfileSerializer | DealerStaffSerializer,
+            403: OpenApiResponse(description="User does not have an allowed role."),
+            404: OpenApiResponse(description="Profile not found."),
+        },
+        description="Partially update the authenticated user's profile.",
     )
-    def partial_update(self, request):
+    def partial_update(self, request, *args, **kwargs):
         user = request.user
 
         # Dealer update
-        if has_role(user, 'dealer'):
+        if has_role(user, "dealer"):
             try:
                 dealer_profile = DealerProfile.objects.get(profile__user=user)
             except DealerProfile.DoesNotExist:
-                return Response({"detail": "Dealer profile not found."}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"detail": "Dealer profile not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
-            serializer = DealerProfileSerializer(dealer_profile, data=request.data, partial=True)
+            serializer = DealerProfileSerializer(
+                dealer_profile, data=request.data, partial=True
+            )
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(serializer.data)
 
-        # Staff update (seller, accountant, hr)
+        # Staff update
         if has_role(user, self.STAFF_ROLES):
             staff_profile = DealerStaff.objects.filter(user=user).first()
             if not staff_profile:
-                return Response({"detail": "Staff profile not found."}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"detail": "Staff profile not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
-            serializer = DealerStaffSerializer(staff_profile, data=request.data, partial=True)
+            serializer = DealerStaffSerializer(
+                staff_profile, data=request.data, partial=True
+            )
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(serializer.data)
@@ -95,81 +138,69 @@ class ProfileViewSet(viewsets.ViewSet):
             status=status.HTTP_403_FORBIDDEN,
         )
 
+# DEALER STAFF MANAGEMENT
 @extend_schema_view(
     create=extend_schema(
         tags=["Dealers - Staff Management"],
         summary="Add a new staff member",
-        description="Allow dealers to add staff members such as sellers or accountants to their dealership.",
         request=DealerStaffSerializer,
-        responses={
-            201: DealerStaffSerializer,
-            403: OpenApiResponse(description="Permission denied"),
-        },
+        responses={201: DealerStaffSerializer},
     ),
     list=extend_schema(
         tags=["Dealers - Staff Management"],
         summary="List all dealer staff",
-        description="Retrieve a list of all staff members assigned to the currently authenticated dealer, including their roles and contact details.",
         responses={200: DealerStaffSerializer(many=True)},
     ),
     retrieve=extend_schema(
         tags=["Dealers - Staff Management"],
         summary="Retrieve staff details",
-        description="Fetch detailed information about a specific staff member using their unique ID.",
-        responses={
-            200: DealerStaffSerializer,
-            404: OpenApiResponse(description="Not found"),
-        },
+        responses={200: DealerStaffSerializer},
     ),
     update=extend_schema(
         tags=["Dealers - Staff Management"],
         summary="Update staff information",
-        description="Update an existing staff member’s details such as role or association using a full update (PUT).",
         request=DealerStaffSerializer,
-        responses={200: DealerStaffSerializer, 403: "Permission denied"},
+        responses={200: DealerStaffSerializer},
     ),
     partial_update=extend_schema(
         tags=["Dealers - Staff Management"],
         summary="Partially update staff information",
-        description="Partially update selected fields of a staff member (PATCH), such as changing their role or status.",
         request=DealerStaffSerializer,
-        responses={200: DealerStaffSerializer, 403: "Permission denied"},
+        responses={200: DealerStaffSerializer},
     ),
     destroy=extend_schema(
         tags=["Dealers - Staff Management"],
         summary="Delete a staff member",
-        description="Remove a staff member from the dealer’s staff list (DELETE). Only dealers with appropriate permissions can perform this action.",
-        responses={204: None, 403: "Permission denied"},
+        responses={204: None},
     ),
 )
-class DealerStaffViewSet(viewsets.ModelViewSet):
-    """
-    Manage dealer staff members — allowing dealers to create, view, update, or remove
-    their staff such as sellers and accountants. Only authenticated dealers with the
-    `manage_staff` permission can access these endpoints.
-    """
+class DealerStaffViewSet(ModelViewSet):
     queryset = DealerStaff.objects.all()
     serializer_class = DealerStaffSerializer
     permission_classes = [IsDealerWithManageStaff]
 
     def get_queryset(self):
-        return self.queryset.filter(dealer=self.request.user.profile.dealer_profile)
+        return self.queryset.filter(
+            dealer=self.request.user.profile.dealer_profile
+        )
 
-    def perform_create(self, serializer):
-        serializer.save()
-
+# DEALER RATINGS
 @extend_schema_view(
-    list=extend_schema(tags=["Dealers - Ratings"], description="List all ratings for a dealer."),
-    retrieve=extend_schema(tags=["Dealers - Ratings"], description="Retrieve a specific dealer rating."),
-    create=extend_schema(tags=["Dealers - Ratings"], description="Create a dealer rating (authenticated users only)."),
-    update=extend_schema(tags=["Dealers - Ratings"], description="Update a dealer rating (rating owner or admin only)."),
-    partial_update=extend_schema(tags=["Dealers - Ratings"], description="Partially update a dealer rating."),
-    destroy=extend_schema(tags=["Dealers - Ratings"], description="Delete a dealer rating (rating owner or admin only)."),
+    list=extend_schema(tags=["Dealers - Ratings"]),
+    retrieve=extend_schema(tags=["Dealers - Ratings"]),
+    create=extend_schema(tags=["Dealers - Ratings"]),
+    update=extend_schema(tags=["Dealers - Ratings"]),
+    partial_update=extend_schema(tags=["Dealers - Ratings"]),
+    destroy=extend_schema(tags=["Dealers - Ratings"]),
 )
 @extend_schema(
     parameters=[
-        OpenApiParameter(name="dealer_pk", type=OpenApiTypes.INT, location="path", description="Parent Dealer ID"),
-        OpenApiParameter(name="id", type=OpenApiTypes.INT, location="path", description="Rating ID"),
+        OpenApiParameter(
+            name="dealer_pk",
+            type=OpenApiTypes.INT,
+            location="path",
+            description="Dealer ID",
+        )
     ]
 )
 class DealerRatingViewSet(ModelViewSet):
@@ -177,47 +208,66 @@ class DealerRatingViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        dealer_pk = self.kwargs.get('dealer_pk')
+        dealer_pk = self.kwargs.get("dealer_pk")
         user = self.request.user
-        if has_role(user, ['super_admin', 'admin']):
+
+        if has_role(user, ["super_admin", "admin"]):
             return DealerRating.objects.filter(dealer_id=dealer_pk)
+
         return DealerRating.objects.filter(dealer_id=dealer_pk, user=user)
 
     def get_permissions(self):
-        if self.action in ['update', 'partial_update', 'destroy']:
+        if self.action in ["update", "partial_update", "destroy"]:
             return [IsAuthenticated(), IsRatingOwnerOrAdmin()]
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
-        dealer_pk = self.kwargs.get('dealer_pk')
+        dealer_pk = self.kwargs.get("dealer_pk")
         try:
             dealer = DealerProfile.objects.get(pk=dealer_pk)
             serializer.save(dealer=dealer, user=self.request.user)
-            logger.info(f"Dealer rating created by {self.request.user.email} for dealer {dealer_pk}")
+            logger.info(
+                f"Dealer rating created by {self.request.user.email} for dealer {dealer_pk}"
+            )
         except DealerProfile.DoesNotExist:
             logger.error(f"Dealer {dealer_pk} not found for rating creation")
-            raise serializers.ValidationError({"dealer": "Dealer does not exist."})
+            raise serializers.ValidationError(
+                {"dealer": "Dealer does not exist."}
+            )
 
+# DEALER VERIFICATION
 @extend_schema_view(
     verify=extend_schema(
         tags=["Dealers - Verification"],
         request=VerifyDealerSerializer,
         responses={200: VerifyDealerSerializer},
-        description="Verify a dealer profile (admin/super_admin only)."
+        description="Verify a dealer profile (admin/super_admin only).",
     )
 )
 class DealerVerificationViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsSuperAdmin | IsAdmin]
 
-    @action(detail=True, methods=['patch'])
+    @action(detail=True, methods=["patch"])
     def verify(self, request, pk=None):
         try:
             dealer = DealerProfile.objects.get(pk=pk)
-            serializer = VerifyDealerSerializer(dealer, data=request.data, partial=True, context={'request': request})
+            serializer = VerifyDealerSerializer(
+                dealer,
+                data=request.data,
+                partial=True,
+                context={"request": request},
+            )
             serializer.is_valid(raise_exception=True)
             serializer.save()
-            logger.info(f"Dealer {dealer.pk} verification updated by {request.user.email}")
+
+            logger.info(
+                f"Dealer {dealer.pk} verification updated by {request.user.email}"
+            )
             return Response(serializer.data)
+
         except DealerProfile.DoesNotExist:
             logger.error(f"Dealer {pk} not found for verification")
-            return Response({"error": "Dealer not found."}, status=404)
+            return Response(
+                {"error": "Dealer not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )

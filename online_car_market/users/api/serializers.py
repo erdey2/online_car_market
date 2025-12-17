@@ -207,7 +207,6 @@ class CustomRegisterSerializer(RegisterSerializer):
 
         return user
 
-
 class ProfileSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)
     buyer_profile = BuyerProfileSerializer(read_only=True)
