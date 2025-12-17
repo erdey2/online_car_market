@@ -5,7 +5,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from rolepermissions.checkers import has_role
-from drf_spectacular.utils import (extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiResponse )
+from drf_spectacular.utils import (extend_schema, extend_schema_view, OpenApiParameter, OpenApiTypes, OpenApiResponse,
+                                   PolymorphicProxySerializer )
 
 from .serializers import ( DealerRatingSerializer, DealerProfileSerializer, VerifyDealerSerializer, DealerStaffSerializer )
 from ..models import DealerStaff
@@ -43,7 +44,11 @@ class ProfileViewSet(GenericViewSet):
     @extend_schema(
         tags=["Profiles"],
         responses={
-            200: DealerProfileSerializer | DealerStaffSerializer,
+            200: PolymorphicProxySerializer(
+                component_name='ProfilePolymorphic',
+                serializers=[DealerProfileSerializer, DealerStaffSerializer],
+                resource_type_field_name=None,  # No discriminator field needed
+            ),
             403: OpenApiResponse(description="User does not have an allowed role."),
             404: OpenApiResponse(description="Profile not found."),
         },
@@ -89,9 +94,17 @@ class ProfileViewSet(GenericViewSet):
 
     @extend_schema(
         tags=["Profiles"],
-        request=DealerProfileSerializer | DealerStaffSerializer,
+        request=PolymorphicProxySerializer(
+            component_name='ProfileUpdatePolymorphic',
+            serializers=[DealerProfileSerializer, DealerStaffSerializer],
+            resource_type_field_name=None,
+        ),
         responses={
-            200: DealerProfileSerializer | DealerStaffSerializer,
+            200: PolymorphicProxySerializer(
+                component_name='ProfilePolymorphic',
+                serializers=[DealerProfileSerializer, DealerStaffSerializer],
+                resource_type_field_name=None,
+            ),
             403: OpenApiResponse(description="User does not have an allowed role."),
             404: OpenApiResponse(description="Profile not found."),
         },
