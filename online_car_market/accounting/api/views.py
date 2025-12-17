@@ -13,7 +13,9 @@ from ..models import Expense, FinancialReport, DealerProfile, CarExpense, Revenu
 from .serializers import ExpenseSerializer, FinancialReportSerializer, CarExpenseSerializer, RevenueSerializer, ExchangeRateSerializer
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse
 from online_car_market.accounting.utils import generate_financial_report
+from online_car_market.dealers.models import DealerStaff
 from online_car_market.users.permissions.business_permissions import CanManageAccounting
+
 
 # Exchange rate
 @extend_schema_view(
@@ -364,7 +366,6 @@ class FinancialReportViewSet(ModelViewSet):
     )
     @action(detail=False, methods=['post'], url_path='generate')
     def generate_report(self, request):
-        """Generate a new financial report for the dealer or administrator."""
         user = request.user
         report_type = request.data.get('type', 'profit_loss')
         month = request.data.get('month')
@@ -373,11 +374,37 @@ class FinancialReportViewSet(ModelViewSet):
         if not has_role(user, ['super_admin', 'admin', 'dealer', 'accountant']):
             return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
 
-        dealer = DealerProfile.objects.filter(profile__user=user).first()
+        dealer = None
+
+        if has_role(user, "dealer"):
+            dealer = DealerProfile.objects.filter(profile__user=user).first()
+
+        elif has_role(user, "accountant"):
+            dealer_id = (
+                DealerStaff.objects
+                .filter(user=user)
+                .values_list("dealer_id", flat=True)
+                .first()
+            )
+            if dealer_id:
+                dealer = DealerProfile.objects.filter(id=dealer_id).first()
+
+        elif has_role(user, ["admin", "super_admin"]):
+            dealer_id = request.data.get("dealer_id")
+            if dealer_id:
+                dealer = DealerProfile.objects.filter(id=dealer_id).first()
+
         if not dealer:
             return Response(
-                {"detail": "Dealer profile not found or not linked correctly."},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "detail": (
+                        "Dealer could not be resolved. "
+                        "Dealers use their own profile, "
+                        "accountants must be linked to a dealer, "
+                        "and admins must provide dealer_id."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
@@ -386,5 +413,6 @@ class FinancialReportViewSet(ModelViewSet):
             return Response(serializer.data, status=status.HTTP_200_OK)
         except ValueError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 
 
