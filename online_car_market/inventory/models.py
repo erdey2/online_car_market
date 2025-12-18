@@ -110,6 +110,7 @@ class Car(models.Model):
     priority = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
+    sold_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
     # Extra
     bluetooth = models.BooleanField(default=False)
@@ -170,6 +171,10 @@ class Car(models.Model):
             self.make = self.make_ref.name
         if self.model_ref and not self.model:
             self.model = self.model_ref.name
+
+        if self.status == 'sold':
+            if not self.sold_at:  # First time becoming sold
+                self.sold_at = timezone.now()
         super().save(*args, **kwargs)
 
     def __str__(self):
