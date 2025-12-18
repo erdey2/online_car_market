@@ -98,8 +98,8 @@ class CarImageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CarImage
-        # fields = ["id", "car", "image_file", "image_url", "is_featured", "caption", "uploaded_at"]
-        fields = '__all__'
+        fields = ["id", "car", "image_file", "image_url", "is_featured", "caption", "uploaded_at"]
+        # fields = '__all__'
         read_only_fields = ["id", "image_url", "uploaded_at"]
 
     @extend_schema_field(serializers.CharField(allow_null=True))

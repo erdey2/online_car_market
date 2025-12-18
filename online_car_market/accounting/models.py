@@ -2,6 +2,8 @@ from django.db import models
 from online_car_market.dealers.models import DealerProfile
 from django.utils import timezone
 from online_car_market.inventory.models import Car
+from .mixin import InvoiceDeclarationMixin
+from .utils import generate_invoice_number
 
 # Financial Report
 class Currency(models.TextChoices):
@@ -16,7 +18,7 @@ class ExchangeRate(models.Model):
     def __str__(self):
         return f"1 USD = {self.rate} ETB ({self.date})"
 
-class Expense(models.Model):
+class Expense(InvoiceDeclarationMixin, models.Model):
     company = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, null=True, blank=True, related_name='expenses')
     type = models.CharField(max_length=100)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
@@ -28,7 +30,15 @@ class Expense(models.Model):
     def __str__(self):
         return f"{self.type} - {self.amount} ({self.company}) on {self.created_at}"
 
-class CarExpense(models.Model):
+    def save(self, *args, **kwargs):
+        if not self.invoice_number:
+            self.invoice_number = generate_invoice_number(
+                model=Expense,
+                prefix="EXP"
+            )
+        super().save(*args, **kwargs)
+
+class CarExpense(InvoiceDeclarationMixin, models.Model):
     """Expense related to a specific car purchase."""
     company = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, related_name='car_expenses')
     car = models.ForeignKey(Car, on_delete=models.CASCADE, related_name='car_expenses')
@@ -39,19 +49,25 @@ class CarExpense(models.Model):
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
 
     def save(self, *args, **kwargs):
-        """Automatically convert to ETB when in USD."""
         if self.currency == Currency.USD:
             latest_rate = ExchangeRate.objects.order_by('-date').first()
             if latest_rate:
                 self.converted_amount = self.amount * latest_rate.rate
         else:
             self.converted_amount = self.amount
+
+        if not self.invoice_number:
+            self.invoice_number = generate_invoice_number(
+                model=CarExpense,
+                prefix="CAR"
+            )
+
         super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.car} - {self.description} ({self.amount} {self.currency})"
 
-class Revenue(models.Model):
+class Revenue(InvoiceDeclarationMixin, models.Model):
     """Tracks income sources."""
     dealer = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, related_name='revenues')
     source = models.CharField(max_length=100, choices=[
@@ -72,6 +88,13 @@ class Revenue(models.Model):
                 self.converted_amount = self.amount * latest_rate.rate
         else:
             self.converted_amount = self.amount
+
+        if not self.invoice_number:
+            self.invoice_number = generate_invoice_number(
+                model=Revenue,
+                prefix="REV"
+            )
+
         super().save(*args, **kwargs)
 
     def __str__(self):
