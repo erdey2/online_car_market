@@ -162,6 +162,10 @@ class CarImageSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+class CarMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Car
+        fields = ['id', 'make', 'model']
 
 # CarSerializer
 class CarSerializer(serializers.ModelSerializer):

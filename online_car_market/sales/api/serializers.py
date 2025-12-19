@@ -3,7 +3,7 @@ from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
 from online_car_market.sales.models import Sale, Lead
 from online_car_market.inventory.models import Car
-from online_car_market.buyers.models import BuyerProfile
+from online_car_market.inventory.api.serializers import CarMiniSerializer
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.dealers.models import DealerProfile, DealerStaff
 from django.contrib.auth import get_user_model
@@ -136,11 +136,19 @@ class SaleSerializer(serializers.ModelSerializer):
 
 class LeadSerializer(serializers.ModelSerializer):
     assigned_sales = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False, allow_null=True)
-    car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all(), required=False, allow_null=True)
+    car = CarMiniSerializer(read_only=True)
 
     class Meta:
         model = Lead
-        fields = ['id', 'name', 'contact', 'status', 'assigned_sales', 'car', 'created_at']
+        fields = [
+            'id',
+            'name',
+            'contact',
+            'status',
+            'assigned_sales',
+            'car',
+            'created_at'
+        ]
         read_only_fields = ['id', 'created_at']
 
     def validate_name(self, value):
