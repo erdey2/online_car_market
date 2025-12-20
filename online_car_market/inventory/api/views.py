@@ -208,7 +208,7 @@ class CarViewSet(viewsets.ModelViewSet):
                 "broker", "broker__profile", "broker__profile__user",
                 "posted_by"
             )
-            .prefetch_related("images", "bids")
+            .prefetch_related("images", "bids", "ratings")
             # annotate dealer/broker average rating (one DB aggregate per result set, not per instance)
             .annotate(dealer_avg=Avg("dealer__ratings__rating"), broker_avg=Avg("broker__ratings__rating"))
             .order_by("-priority", "-created_at")

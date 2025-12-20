@@ -232,7 +232,6 @@ class CarView(models.Model):
     def __str__(self):
         return f"{self.user or self.ip_address} viewed {self.car}"
 
-
 class Inspection(models.Model):
     STATUS_CHOICES = [('pending', 'Pending Verification'), ('verified', 'Verified'), ('rejected', 'Rejected'),]
     car = models.OneToOneField(Car, on_delete=models.CASCADE, related_name='inspection', help_text="Car being inspected")
@@ -281,6 +280,7 @@ class Inspection(models.Model):
     class Meta:
         verbose_name = "Car Inspection"
         verbose_name_plural = "Car Inspections"
+
 
 
 
