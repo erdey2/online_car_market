@@ -48,6 +48,12 @@ class CarExpenseSerializer(serializers.ModelSerializer):
         model = CarExpense
         fields = '__all__'
         extra_fields = ['vin_code', 'origin']
+        read_only_fields=[
+            'converted_amount',
+            'invoice_number',
+            'declaration_number',
+            'created_at',
+        ]
 
     def validate_amount(self, value):
         """Ensure the expense amount is positive."""
@@ -172,10 +178,17 @@ class ExpenseSerializer(serializers.ModelSerializer):
             'amount',
             'currency',
             'exchange_rate',
+            'description',
+            'invoice_number',
+            'declaration_number',
             'created_at',
-            'description'
         ]
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = [
+            'invoice_number',
+            'declaration_number',
+            'exchange_rate',
+            'created_at',
+        ]
 
     def validate_type(self, value):
         """Sanitize type field."""

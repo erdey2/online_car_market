@@ -23,7 +23,6 @@ def generate_financial_report(dealer, report_type="profit_loss", month=None, yea
     if not dealer:
         raise ValueError("Dealer must be provided.")
 
-    # ✅ Local imports (break circular dependency)
     from .models import Expense, Revenue, FinancialReport
 
     today = timezone.now()
