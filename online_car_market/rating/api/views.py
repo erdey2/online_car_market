@@ -1,11 +1,15 @@
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import ValidationError
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.serializers import ValidationError
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
-from django.db.models import Avg
-
+from django.db.models import Avg, Count
 from ..models import CarRating
 from .serializers import CarRatingSerializer, CarRatingReadSerializer
+from online_car_market.inventory.models import Car
+from online_car_market.inventory.api.serializers import CarSerializer
+
 
 @extend_schema_view(
     list=extend_schema(
@@ -52,16 +56,20 @@ from .serializers import CarRatingSerializer, CarRatingReadSerializer
             204: OpenApiResponse(description="Rating deleted successfully"),
             403: OpenApiResponse(description="Forbidden: cannot delete others' ratings")
         }
+    ),
+    ratings_stats=extend_schema(
+        summary="List cars with aggregated ratings",
+        description="Returns each car with average rating and rating count",
+        responses=OpenApiResponse(
+            response=CarSerializer(many=True),
+            description="Car list with avg_rating and rating_count"
+        )
     )
 )
 class CarRatingViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        """
-        Users see ratings for all cars (read)
-        Users can only update/delete their own ratings
-        """
         return CarRating.objects.select_related('car', 'user')
 
     def get_serializer_class(self):
@@ -70,10 +78,7 @@ class CarRatingViewSet(ModelViewSet):
         return CarRatingSerializer
 
     def perform_create(self, serializer):
-        try:
-            serializer.save()
-        except Exception:
-            raise ValidationError("You have already rated this car.")
+        serializer.save(user=self.request.user)
 
     def perform_update(self, serializer):
         if serializer.instance.user != self.request.user:
@@ -84,3 +89,17 @@ class CarRatingViewSet(ModelViewSet):
         if instance.user != self.request.user:
             raise ValidationError("You can only delete your own rating.")
         instance.delete()
+
+    @action(detail=False, methods=['get'], url_path='ratings-stats', url_name='ratings_stats')
+    def ratings_stats(self, request):
+        """
+        Returns a list of all cars with aggregated ratings:
+        - avg_rating
+        - rating_count
+        """
+        cars = Car.objects.all().annotate(
+            avg_rating=Avg('ratings__rating'),
+            rating_count=Count('ratings')
+        )
+        serializer = CarSerializer(cars, many=True)
+        return Response(serializer.data)
