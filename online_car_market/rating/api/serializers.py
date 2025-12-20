@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from ..models import CarRating
+from online_car_market.inventory.api.serializers import CarMiniSerializer
 from online_car_market.inventory.models import Car
 
 class CarRatingSerializer(serializers.ModelSerializer):
@@ -42,14 +43,14 @@ class CarRatingSerializer(serializers.ModelSerializer):
         return attrs
 
 class CarRatingReadSerializer(serializers.ModelSerializer):
-    car = serializers.StringRelatedField()
+    car_detail = CarMiniSerializer(source='car', read_only=True)
     user = serializers.StringRelatedField()
 
     class Meta:
         model = CarRating
         fields = [
             'id',
-            'car',
+            'car_detail',
             'user',
             'rating',
             'comment',
