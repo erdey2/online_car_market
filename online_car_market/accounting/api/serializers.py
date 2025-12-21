@@ -49,6 +49,7 @@ class CarExpenseSerializer(serializers.ModelSerializer):
         fields = '__all__'
         extra_fields = ['vin_code', 'origin']
         read_only_fields=[
+            'id',
             'converted_amount',
             'invoice_number',
             'declaration_number',
@@ -105,7 +106,22 @@ class CarExpenseSerializer(serializers.ModelSerializer):
 class RevenueSerializer(serializers.ModelSerializer):
     class Meta:
         model = Revenue
-        fields = '__all__'
+        fields = [
+            'dealer',
+            'source',
+            'amount',
+            'description',
+            'currency',
+            'converted_amount',
+            'invoice_number',
+            'created_at'
+        ]
+        read_only_fields = [
+            'id',
+            'invoice_number',
+            'converted_amount',
+            'created_at'
+        ]
 
     def validate_amount(self, value):
         """Ensure the revenue amount is positive."""
@@ -176,16 +192,15 @@ class ExpenseSerializer(serializers.ModelSerializer):
             'company_name',
             'type',
             'amount',
+            'description',
             'currency',
             'exchange_rate',
-            'description',
             'invoice_number',
-            'declaration_number',
             'created_at',
         ]
         read_only_fields = [
+            'id',
             'invoice_number',
-            'declaration_number',
             'exchange_rate',
             'created_at',
         ]

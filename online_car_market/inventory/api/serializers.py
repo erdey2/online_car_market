@@ -174,7 +174,7 @@ class CarSerializer(serializers.ModelSerializer):
     posted_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
     images = CarImageSerializer(many=True, read_only=True)
     uploaded_images = CarImageSerializer(many=True, write_only=True, required=False)
-    bids = BidSerializer(many=True, read_only=True)
+    # bids = BidSerializer(many=True, read_only=True)
     verification_status = serializers.ChoiceField(choices=Car.VERIFICATION_STATUSES, read_only=True)
     make_ref = serializers.PrimaryKeyRelatedField(queryset=CarMake.objects.all(), required=False, allow_null=True)
     model_ref = serializers.PrimaryKeyRelatedField(queryset=CarModel.objects.all(), required=False, allow_null=True)
@@ -186,8 +186,11 @@ class CarSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = [
             "id",
+            "posted_by",
             "created_at",
             "updated_at",
+            "sold_at",
+            "uploaded_images",
             "verification_status",
             "priority",
             "dealer_average_rating",
