@@ -266,37 +266,59 @@ class AttendanceViewSet(viewsets.ModelViewSet):
     serializer_class = AttendanceSerializer
     permission_classes = [IsHR]
 
-
 @extend_schema_view(
     list=extend_schema(
         tags=["Dealers - Human Resource Management"],
-        summary="List all leave requests",
-        description="Retrieve all employee leave requests including pending, approved, and denied statuses.",
+        summary="List leave requests (HR only)",
+        description=(
+            "Retrieve all employee leave requests including pending, approved, "
+            "and denied statuses. "
+            "**Only HR users are allowed to list all leave requests.**"
+        ),
     ),
     create=extend_schema(
         tags=["Dealers - Human Resource Management"],
-        summary="Request leave",
-        description="Employees or HR staff can create a leave request specifying the duration and reason.",
+        summary="Request leave (Employee)",
+        description=(
+            "Authenticated employees can request leave for themselves by "
+            "specifying start date, end date, and reason. "
+            "The leave is created with status **pending** by default."
+        ),
     ),
     retrieve=extend_schema(
         tags=["Dealers - Human Resource Management"],
         summary="View leave details",
-        description="Retrieve detailed information about a specific leave request.",
+        description=(
+            "Retrieve detailed information about a specific leave request. "
+            "HR users can view any leave request, while employees can only "
+            "view their own leave requests."
+        ),
     ),
     update=extend_schema(
         tags=["Dealers - Human Resource Management"],
-        summary="Approve or deny leave",
-        description="HR can update a leave request to approve or deny it. This automatically logs who reviewed it.",
+        summary="Approve or deny leave (HR only)",
+        description=(
+            "HR users can approve or deny a leave request. "
+            "When the status is updated to **approved** or **denied**, "
+            "the system automatically records the HR user as the approver."
+        ),
     ),
     partial_update=extend_schema(
         tags=["Dealers - Human Resource Management"],
-        summary="Partially approve or deny leave",
-        description="HR can partially update specific fields of a leave request, such as status or reviewer.",
+        summary="Partially approve or deny leave (HR only)",
+        description=(
+            "HR users can partially update a leave request, typically to "
+            "approve or deny it. "
+            "The approver is automatically logged when the status changes."
+        ),
     ),
     destroy=extend_schema(
         tags=["Dealers - Human Resource Management"],
-        summary="Delete leave request",
-        description="Remove a leave request from the system if it was created by mistake or no longer needed.",
+        summary="Delete leave request (HR only)",
+        description=(
+            "HR users can delete a leave request if it was created by mistake "
+            "or is no longer required."
+        ),
     ),
 )
 class LeaveViewSet(viewsets.ModelViewSet):
