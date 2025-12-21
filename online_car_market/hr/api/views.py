@@ -303,27 +303,45 @@ class LeaveViewSet(viewsets.ModelViewSet):
     queryset = Leave.objects.select_related("employee__user", "approved_by").all()
     serializer_class = LeaveSerializer
 
-    def get_permissions(self):
-        """
-        PERMISSION RULES:
-        - Any authenticated employee can CREATE a leave request (for themselves)
-        - Only HR can update, approve/deny, or delete leaves
-        - Listing leaves HR only
-        """
-        if self.action == "create":
-            return [permissions.IsAuthenticated()]  # employee or HR
-        elif self.action in ["update", "partial_update", "destroy"]:
-            return [IsHR()]  # only HR
-        elif self.action in ["list", "retrieve"]:
-            return [IsHR()]
+    def get_queryset(self):
+        user = self.request.user
 
-        return [IsHR()]
+        if has_role(user, 'hr'):
+            return Leave.objects.select_related(
+                "employee__user", "approved_by"
+            )
+
+        return Leave.objects.filter(
+            employee__user=user).select_related(
+            "employee__user", "approved_by"
+        )
+
+        # Employee can only see their own leave requests
+        return Leave.objects.select_related(
+            "employee__user", "approved_by"
+        ).filter(employee__user=user)
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [permissions.IsAuthenticated()]  # employee requests leave
+
+        if self.action in ['update', 'partial_update', 'destroy']:
+            return [IsHR()]  # HR approves/denies
+
+        if self.action in ['list', 'retrieve']:
+            return [IsHR()]  # HR sees all
+
+        return [permissions.IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        """
+        Employee requests leave for themselves
+        """
+        serializer.save(employee=self.request.user.employee)
 
     def perform_update(self, serializer):
-        """
-        Auto-set reviewer when status changes
-        """
         new_status = serializer.validated_data.get("status")
+
         if new_status in ["approved", "denied"]:
             serializer.save(approved_by=self.request.user)
         else:

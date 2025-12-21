@@ -3,7 +3,6 @@ from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
 from online_car_market.brokers.models import BrokerRating, BrokerProfile
 from online_car_market.users.models import User
-from online_car_market.common.serializers import ProfileLiteSerializer
 from rolepermissions.roles import get_user_roles
 import bleach
 import logging
