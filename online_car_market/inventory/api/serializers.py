@@ -92,13 +92,13 @@ class CarModelSerializer(serializers.ModelSerializer):
 class CarImageSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField(read_only=True)
     image_file = serializers.ImageField(write_only=True, required=False)
-    car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all(), required=False)
+    # car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all(), required=False)
     is_featured = serializers.BooleanField(required=False, default=False)
     caption = serializers.CharField(required=False, allow_null=True, allow_blank=True)
 
     class Meta:
         model = CarImage
-        fields = ["id", "car", "image_file", "image_url", "is_featured", "caption", "uploaded_at"]
+        fields = ["id", "image_file", "image_url", "is_featured", "caption", "uploaded_at"]
         # fields = '__all__'
         read_only_fields = ["id", "image_url", "uploaded_at"]
 
