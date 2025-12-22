@@ -99,12 +99,21 @@ class Attendance(models.Model):
         verbose_name_plural = 'Attendances'
 
 class Leave(models.Model):
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        APPROVED = 'approved', 'Approved'
+        REJECTED = 'rejected', 'Rejected'
+
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='leaves')
-    start_date = models.DateField()
-    end_date = models.DateField()
+    start_date = models.DateField(db_index=True)
+    end_date = models.DateField(db_index=True)
     reason = models.TextField()
-    status = models.CharField(max_length=20, choices=[('pending', 'Pending'), ('approved', 'Approved'), ('denied', 'Denied')], default='pending')
-    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='leave_approvals')
+
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='leave_approvals')
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -115,3 +124,4 @@ class Leave(models.Model):
     class Meta:
         verbose_name = 'Leave'
         verbose_name_plural = 'Leaves'
+

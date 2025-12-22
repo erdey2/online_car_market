@@ -1,15 +1,18 @@
 import logging
 from django.utils import timezone
+from django.db.models import Count
+from django.db.models.functions import TruncMonth, TruncYear
 from ..models import Employee, Contract, Attendance, Leave
 from .serializers import (EmployeeSerializer, ContractSerializer, AttendanceSerializer,
                           LeaveSerializer, SignedUploadSerializer, FinalUploadSerializer)
 from cloudinary.uploader import upload
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rolepermissions.checkers import has_role
 from online_car_market.users.permissions.drf_permissions import IsHR
-from online_car_market.users.permissions.business_permissions import IsHRorDealer
+from online_car_market.users.permissions.business_permissions import IsHRorDealer, IsOwnerOrHR
 from drf_spectacular.utils import extend_schema_view, extend_schema, OpenApiResponse
 from templated_mail.mail import BaseEmailMessage
 
@@ -322,47 +325,78 @@ class AttendanceViewSet(viewsets.ModelViewSet):
     ),
 )
 class LeaveViewSet(viewsets.ModelViewSet):
-    queryset = Leave.objects.select_related("employee__user", "approved_by").all()
     serializer_class = LeaveSerializer
 
     def get_queryset(self):
         user = self.request.user
+        qs = Leave.objects.select_related("employee__user", "approved_by")
 
         if has_role(user, 'hr'):
-            return Leave.objects.select_related(
-                "employee__user", "approved_by"
-            )
-
-        return Leave.objects.filter(
-            employee__user=user
-        ).select_related(
-            "employee__user", "approved_by"
-        )
-
-        # Employee can only see their own leave requests
-        return Leave.objects.select_related(
-            "employee__user", "approved_by"
-        ).filter(employee__user=user)
+            return qs
+        return qs.filter(employee__user=user)
 
     def get_permissions(self):
-        if self.action == 'create':
-            return [permissions.IsAuthenticated()]
-
-        if self.action in ['update', 'partial_update', 'destroy']:
+        if self.action in ['approve', 'reject', 'destroy']:
             return [IsHR()]
+        return [IsAuthenticated()]
 
-        if self.action in ['list', 'retrieve']:
-            return [permissions.IsAuthenticated()]
+    # Employee: my leaves
+    @action(
+        detail=False,
+        methods=['get'],
+        url_path='me',
+        permission_classes=[IsAuthenticated]
+    )
+    def my_leaves(self, request):
+        leaves = self.get_queryset()
+        serializer = self.get_serializer(leaves, many=True)
+        return Response(serializer.data)
 
-        return [permissions.IsAuthenticated()]
+    # HR: approve leave
+    @action(
+        detail=True,
+        methods=['post'],
+        permission_classes=[IsHR]
+    )
+    def approve(self, request, pk=None):
+        leave = self.get_object()
+
+        if leave.status != Leave.Status.PENDING:
+            return Response(
+                {"detail": "Only pending leaves can be approved."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        leave.status = Leave.Status.APPROVED
+        leave.approved_by = request.user
+        leave.save()
+
+        return Response({"status": "approved"})
+
+    # HR: reject leave
+    @action(
+        detail=True,
+        methods=['post'],
+        permission_classes=[IsHR]
+    )
+    def reject(self, request, pk=None):
+        leave = self.get_object()
+
+        if leave.status != Leave.Status.PENDING:
+            return Response(
+                {"detail": "Only pending leaves can be rejected."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        leave.status = Leave.Status.REJECTED
+        leave.approved_by = request.user
+        leave.save()
+
+        return Response({"status": "rejected"})
 
     def perform_create(self, serializer):
         serializer.save()
 
     def perform_update(self, serializer):
-        new_status = serializer.validated_data.get("status")
-
-        if new_status in ["approved", "denied"]:
-            serializer.save(approved_by=self.request.user)
-        else:
-            serializer.save()
+        # Do NOT allow status updates here
+        serializer.save()

@@ -24,6 +24,10 @@ class IsHRorDealer(BasePermission):
     def has_permission(self, request, view):
         return bool(request.user.is_authenticated and has_role(request.user, ["hr", "dealer"]))
 
+class IsOwnerOrHR(BasePermission):
+    def has_object_permission(self, request, view, obj):
+        return has_role(request.user, 'hr') or (obj.employee.user == request.user)
+
 class CanPostCar(BasePermission):
     """
     Controls car posting and management permissions.
