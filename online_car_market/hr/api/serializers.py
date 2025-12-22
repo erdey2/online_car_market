@@ -292,12 +292,3 @@ class LeaveSerializer(serializers.ModelSerializer):
             data["reason"] = bleach.clean(data["reason"], tags=[], attributes={})
 
         return data
-
-    def create(self, validated_data):
-        employee = validated_data.pop("employee_email")
-        return Leave.objects.create(employee=employee, **validated_data)
-
-    def update(self, instance, validated_data):
-        # Do not allow changing employee
-        validated_data.pop("employee_email", None)
-        return super().update(instance, validated_data)
