@@ -357,12 +357,7 @@ class LeaveViewSet(viewsets.ModelViewSet):
         return [permissions.IsAuthenticated()]
 
     def perform_create(self, serializer):
-        try:
-            employee = self.request.user.employee_profile
-        except Employee.DoesNotExist:
-            raise ValidationError("Employee profile not found for this user.")
-
-        serializer.save(employee=employee)
+        serializer.save()
 
     def perform_update(self, serializer):
         new_status = serializer.validated_data.get("status")
