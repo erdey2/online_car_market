@@ -7,7 +7,6 @@ from cloudinary.uploader import upload
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from rest_framework.serializers import ValidationError
 from rolepermissions.checkers import has_role
 from online_car_market.users.permissions.drf_permissions import IsHR
 from online_car_market.users.permissions.business_permissions import IsHRorDealer
@@ -335,7 +334,8 @@ class LeaveViewSet(viewsets.ModelViewSet):
             )
 
         return Leave.objects.filter(
-            employee__user=user).select_related(
+            employee__user=user
+        ).select_related(
             "employee__user", "approved_by"
         )
 
@@ -346,13 +346,13 @@ class LeaveViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action == 'create':
-            return [permissions.IsAuthenticated()]  # employee requests leave
+            return [permissions.IsAuthenticated()]
 
         if self.action in ['update', 'partial_update', 'destroy']:
-            return [IsHR()]  # HR approves/denies
+            return [IsHR()]
 
         if self.action in ['list', 'retrieve']:
-            return [IsHR()]  # HR sees all
+            return [permissions.IsAuthenticated()]
 
         return [permissions.IsAuthenticated()]
 
