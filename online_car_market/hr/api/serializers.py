@@ -261,8 +261,10 @@ class LeaveSerializer(serializers.ModelSerializer):
         ]
 
     def get_employee_full_name(self, obj):
-        user = obj.employee.user
-        return f"{user.first_name} {user.last_name}".strip()
+        profile = getattr(obj.employee.user, "profile", None)
+        if not profile:
+            return ""
+        return f"{profile.first_name} {profile.last_name}".strip()
 
     def validate_employee_email(self, email):
         try:
