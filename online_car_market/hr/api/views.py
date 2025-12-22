@@ -7,6 +7,7 @@ from cloudinary.uploader import upload
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.serializers import ValidationError
 from rolepermissions.checkers import has_role
 from online_car_market.users.permissions.drf_permissions import IsHR
 from online_car_market.users.permissions.business_permissions import IsHRorDealer
@@ -356,10 +357,12 @@ class LeaveViewSet(viewsets.ModelViewSet):
         return [permissions.IsAuthenticated()]
 
     def perform_create(self, serializer):
-        """
-        Employee requests leave for themselves
-        """
-        serializer.save(employee=self.request.user.employee)
+        try:
+            employee = self.request.user.employee_profile
+        except Employee.DoesNotExist:
+            raise ValidationError("Employee profile not found for this user.")
+
+        serializer.save(employee=employee)
 
     def perform_update(self, serializer):
         new_status = serializer.validated_data.get("status")
