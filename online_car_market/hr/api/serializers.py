@@ -251,6 +251,7 @@ class LeaveSerializer(serializers.ModelSerializer):
             "employee_email_display",
             "employee_full_name",
             "approved_by_email",
+            "status",
             "created_at",
             "updated_at",
         ]
