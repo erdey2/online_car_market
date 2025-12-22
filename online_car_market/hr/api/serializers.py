@@ -227,9 +227,13 @@ class AttendanceSerializer(serializers.ModelSerializer):
 
 class LeaveSerializer(serializers.ModelSerializer):
     employee_email = serializers.EmailField(write_only=True, required=True)
-    employee_email_display = serializers.EmailField(source="employee.user.email", read_only=True)
+    employee_email_display = serializers.EmailField(
+        source="employee.user.email", read_only=True
+    )
     employee_full_name = serializers.SerializerMethodField(read_only=True)
-    approved_by_email = serializers.EmailField(source="approved_by.email", read_only=True)
+    approved_by_email = serializers.EmailField(
+        source="approved_by.email", read_only=True
+    )
 
     class Meta:
         model = Leave
@@ -257,8 +261,8 @@ class LeaveSerializer(serializers.ModelSerializer):
         ]
 
     def get_employee_full_name(self, obj):
-        profile = obj.employee.user.profile
-        return f"{profile.first_name} {profile.last_name}".strip()
+        user = obj.employee.user
+        return f"{user.first_name} {user.last_name}".strip()
 
     def validate_employee_email(self, email):
         try:
@@ -269,26 +273,41 @@ class LeaveSerializer(serializers.ModelSerializer):
     def validate(self, data):
         start = data.get("start_date")
         end = data.get("end_date")
-        employee = data.get("employee") or (self.instance.employee if self.instance else None)
+        employee = data.get("employee")
 
         if start and end and start > end:
-            raise serializers.ValidationError("Start date must be before end date.")
+            raise serializers.ValidationError(
+                "Start date must be before end date."
+            )
 
-        # Prevent overlapping approved leave
         if employee and start and end:
             overlap = Leave.objects.filter(
                 employee=employee,
                 status="approved",
                 start_date__lte=end,
-                end_date__gte=start
+                end_date__gte=start,
             )
             if self.instance:
                 overlap = overlap.exclude(pk=self.instance.pk)
-            if overlap.exists():
-                raise serializers.ValidationError("This employee already has approved leave during this time range.")
 
-        # Sanitize reason
+            if overlap.exists():
+                raise serializers.ValidationError(
+                    "This employee already has approved leave during this time range."
+                )
+
         if "reason" in data:
-            data["reason"] = bleach.clean(data["reason"], tags=[], attributes={})
+            data["reason"] = bleach.clean(
+                data["reason"], tags=[], attributes={}
+            )
 
         return data
+
+    def create(self, validated_data):
+        # REMOVE employee_email before model creation
+        employee = validated_data.pop("employee_email")
+
+        return Leave.objects.create(
+            employee=employee,
+            **validated_data
+        )
+
