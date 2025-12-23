@@ -13,7 +13,7 @@ from rest_framework.permissions import IsAuthenticated
 from rolepermissions.checkers import has_role
 from online_car_market.users.permissions.drf_permissions import IsHR
 from online_car_market.users.permissions.business_permissions import IsHRorDealer, IsOwnerOrHR
-from drf_spectacular.utils import extend_schema_view, extend_schema, OpenApiResponse
+from drf_spectacular.utils import extend_schema_view, extend_schema, OpenApiResponse, OpenApiParameter
 from templated_mail.mail import BaseEmailMessage
 
 logger = logging.getLogger(__name__)
@@ -269,59 +269,33 @@ class AttendanceViewSet(viewsets.ModelViewSet):
     serializer_class = AttendanceSerializer
     permission_classes = [IsHR]
 
+# leave viewset
 @extend_schema_view(
     list=extend_schema(
         tags=["Dealers - Human Resource Management"],
-        summary="List leave requests (HR only)",
-        description=(
-            "Retrieve all employee leave requests including pending, approved, "
-            "and denied statuses. "
-            "**Only HR users are allowed to list all leave requests.**"
-        ),
-    ),
-    create=extend_schema(
-        tags=["Dealers - Human Resource Management"],
-        summary="Request leave (Employee)",
-        description=(
-            "Authenticated employees can request leave for themselves by "
-            "specifying start date, end date, and reason. "
-            "The leave is created with status **pending** by default."
-        ),
+        summary="List leave requests",
+        description="HR can see all leave requests. Employees see only their own.",
     ),
     retrieve=extend_schema(
         tags=["Dealers - Human Resource Management"],
-        summary="View leave details",
-        description=(
-            "Retrieve detailed information about a specific leave request. "
-            "HR users can view any leave request, while employees can only "
-            "view their own leave requests."
-        ),
+        summary="Retrieve leave details",
+    ),
+    create=extend_schema(
+        tags=["Dealers - Human Resource Management"],
+        summary="Request leave",
+        description="Employees can request leave. Status defaults to pending.",
     ),
     update=extend_schema(
         tags=["Dealers - Human Resource Management"],
-        summary="Approve or deny leave (HR only)",
-        description=(
-            "HR users can approve or deny a leave request. "
-            "When the status is updated to **approved** or **denied**, "
-            "the system automatically records the HR user as the approver."
-        ),
+        summary="Update leave request (HR)",
     ),
     partial_update=extend_schema(
         tags=["Dealers - Human Resource Management"],
-        summary="Partially approve or deny leave (HR only)",
-        description=(
-            "HR users can partially update a leave request, typically to "
-            "approve or deny it. "
-            "The approver is automatically logged when the status changes."
-        ),
+        summary="Partially update leave request (HR)",
     ),
     destroy=extend_schema(
         tags=["Dealers - Human Resource Management"],
         summary="Delete leave request (HR only)",
-        description=(
-            "HR users can delete a leave request if it was created by mistake "
-            "or is no longer required."
-        ),
     ),
 )
 class LeaveViewSet(viewsets.ModelViewSet):
@@ -341,30 +315,38 @@ class LeaveViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     # Employee: my leaves
-    @action(
-        detail=False,
-        methods=['get'],
-        url_path='me',
-        permission_classes=[IsAuthenticated]
+    @extend_schema(
+        tags=["Dealers - Human Resource Management"],
+        summary="List my leave requests",
+        description="Authenticated employees retrieve only their own leave requests.",
+        responses={200: LeaveSerializer(many=True)},
     )
+    @action(detail=False, methods=['get'], url_path='me', permission_classes=[IsAuthenticated])
     def my_leaves(self, request):
         leaves = self.get_queryset()
         serializer = self.get_serializer(leaves, many=True)
         return Response(serializer.data)
 
     # HR: approve leave
-    @action(
-        detail=True,
-        methods=['post'],
-        permission_classes=[IsHR]
+    @extend_schema(
+        tags=["Dealers - Human Resource Management"],
+        summary="Approve leave request",
+        description="""Approve a pending leave request.""",
+        request=None,
+        responses={
+            200: OpenApiResponse(description="Leave approved successfully"),
+            400: OpenApiResponse(description="Leave is not pending"),
+            403: OpenApiResponse(description="Permission denied"),
+            404: OpenApiResponse(description="Leave not found"),
+        },
     )
+    @action(detail=True, methods=['post'], permission_classes=[IsHR])
     def approve(self, request, pk=None):
         leave = self.get_object()
 
         if leave.status != Leave.Status.PENDING:
             return Response(
-                {"detail": "Only pending leaves can be approved."},
-                status=status.HTTP_400_BAD_REQUEST
+                {"detail": "Only pending leaves can be approved."}, status=status.HTTP_400_BAD_REQUEST
             )
 
         leave.status = Leave.Status.APPROVED
@@ -374,18 +356,25 @@ class LeaveViewSet(viewsets.ModelViewSet):
         return Response({"status": "approved"})
 
     # HR: reject leave
-    @action(
-        detail=True,
-        methods=['post'],
-        permission_classes=[IsHR]
+    @extend_schema(
+        tags=["Dealers - Human Resource Management"],
+        summary="Reject leave request",
+        description="""Reject a pending leave request.""",
+        request=None,
+        responses={
+            200: OpenApiResponse(description="Leave rejected successfully"),
+            400: OpenApiResponse(description="Leave is not pending"),
+            403: OpenApiResponse(description="Permission denied"),
+            404: OpenApiResponse(description="Leave not found"),
+        },
     )
+    @action(detail=True, methods=['post'], permission_classes=[IsHR])
     def reject(self, request, pk=None):
         leave = self.get_object()
 
         if leave.status != Leave.Status.PENDING:
             return Response(
-                {"detail": "Only pending leaves can be rejected."},
-                status=status.HTTP_400_BAD_REQUEST
+                {"detail": "Only pending leaves can be rejected."}, status=status.HTTP_400_BAD_REQUEST
             )
 
         leave.status = Leave.Status.REJECTED
@@ -394,9 +383,58 @@ class LeaveViewSet(viewsets.ModelViewSet):
 
         return Response({"status": "rejected"})
 
+    @extend_schema(
+        tags=["Dealers - Human Resource Management"],
+        summary="Leave analytics",
+        description="""Provides aggregated leave statistics.""",
+        parameters=[
+            OpenApiParameter(
+                name="year",
+                type=int,
+                required=False,
+                description="Year for analytics (e.g. 2025)",
+            ),
+            OpenApiParameter(
+                name="month",
+                type=int,
+                required=False,
+                description="Optional month (1–12). If provided, returns monthly analytics.",
+            ),
+        ],
+        responses={
+            200: OpenApiResponse(
+                description="Aggregated leave statistics by status"
+            )
+        },
+    )
+    @action(detail=False, methods=['get'], url_path='analytics', permission_classes=[IsHR])
+    def analytics(self, request):
+        year = request.query_params.get('year')
+        month = request.query_params.get('month')
+
+        qs = Leave.objects.all()
+
+        if year:
+            qs = qs.filter(start_date__year=year)
+
+        if month:
+            qs = qs.filter(start_date__month=month)
+
+        # Grouping logic
+        if year and not month:
+            qs = qs.annotate(
+                period=TruncMonth('start_date')
+            ).values('period', 'status')
+        else:
+            qs = qs.values('status')
+
+        data = qs.annotate(total=Count('id')).order_by()
+
+        return Response(data)
+
     def perform_create(self, serializer):
         serializer.save()
 
     def perform_update(self, serializer):
-        # Do NOT allow status updates here
         serializer.save()
+
