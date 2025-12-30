@@ -88,6 +88,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
         return user
 
+class UserMiniSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email']
+
 class UserRoleSerializer(serializers.Serializer):
     user_id = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
     role = serializers.ChoiceField(choices=[

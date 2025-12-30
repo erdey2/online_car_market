@@ -4,6 +4,7 @@ from rolepermissions.checkers import has_role
 from online_car_market.sales.models import Sale, Lead
 from online_car_market.inventory.models import Car
 from online_car_market.inventory.api.serializers import CarMiniSerializer
+from online_car_market.users.api.serializers import UserMiniSerializer
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.dealers.models import DealerProfile, DealerStaff
 from django.contrib.auth import get_user_model
@@ -135,7 +136,8 @@ class SaleSerializer(serializers.ModelSerializer):
         return sale
 
 class LeadSerializer(serializers.ModelSerializer):
-    assigned_sales = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False, allow_null=True)
+    # assigned_sales = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False, allow_null=True)
+    assigned_sales = UserMiniSerializer(read_only=True)
     car = CarMiniSerializer(read_only=True)
 
     class Meta:
