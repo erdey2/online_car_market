@@ -89,9 +89,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return user
 
 class UserMiniSerializer(serializers.ModelSerializer):
+    full_name = serializers.CharField(source='profile.get_full_name', read_only=True)
+
     class Meta:
         model = User
-        fields = ['id', 'username', 'email']
+        fields = ['id', 'email', 'full_name']
 
 class UserRoleSerializer(serializers.Serializer):
     user_id = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
