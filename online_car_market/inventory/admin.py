@@ -1,9 +1,8 @@
-# inventory/admin.py
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import Car, CarImage, CarMake, CarModel
 
-# --- Car Make & Model Admin ---
+# Car Make & Model Admin
 @admin.register(CarMake)
 class CarMakeAdmin(admin.ModelAdmin):
     search_fields = ["name"]
@@ -12,7 +11,7 @@ class CarMakeAdmin(admin.ModelAdmin):
 class CarModelAdmin(admin.ModelAdmin):
     search_fields = ["name"]
 
-# --- CarImage Inline ---
+# CarImage Inline
 class CarImageInline(admin.TabularInline):
     model = CarImage
     extra = 1
@@ -29,10 +28,10 @@ class CarImageInline(admin.TabularInline):
 
     image_preview.short_description = "Image Preview"
 
-# --- Car Admin ---
+# Car Admin
 @admin.register(Car)
 class CarAdmin(admin.ModelAdmin):
-    list_display = ['make', 'model', 'year', 'price', 'mileage', 'fuel_type', 'body_type',  'featured_image_preview']
+    list_display = ['origin', 'vin_code', 'make', 'model', 'year', 'price', 'mileage', 'fuel_type', 'body_type',  'featured_image_preview']
     search_fields = ['make', 'model', 'year', 'fuel_type', 'body_type']
     list_filter = ['make_ref', 'year', 'fuel_type', 'body_type', 'status', 'sale_type', 'verification_status', 'priority']
     autocomplete_fields = ['make_ref', 'model_ref']
@@ -40,7 +39,7 @@ class CarAdmin(admin.ModelAdmin):
     inlines = [CarImageInline]
 
     fields = (
-        'make', 'model', 'make_ref', 'model_ref', 'year', 'price', 'mileage',
+        'origin', 'vin_code', 'make', 'model', 'make_ref', 'model_ref', 'year', 'price', 'mileage',
         'fuel_type', 'body_type', 'exterior_color', 'interior_color', 'engine',
         'bluetooth', 'drivetrain', 'status', 'sale_type', 'auction_end',
         'dealer', 'broker', 'posted_by', 'verification_status', 'priority',
