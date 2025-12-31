@@ -31,7 +31,7 @@ class CarImageInline(admin.TabularInline):
 # Car Admin
 @admin.register(Car)
 class CarAdmin(admin.ModelAdmin):
-    list_display = ['origin', 'vin_code', 'make', 'model', 'year', 'price', 'mileage', 'fuel_type', 'body_type',  'featured_image_preview']
+    list_display = ['origin', 'vin', 'make', 'model', 'year', 'price', 'mileage', 'fuel_type', 'body_type',  'featured_image_preview']
     search_fields = ['make', 'model', 'year', 'fuel_type', 'body_type']
     list_filter = ['make_ref', 'year', 'fuel_type', 'body_type', 'status', 'sale_type', 'verification_status', 'priority']
     autocomplete_fields = ['make_ref', 'model_ref']
@@ -39,7 +39,7 @@ class CarAdmin(admin.ModelAdmin):
     inlines = [CarImageInline]
 
     fields = (
-        'origin', 'vin_code', 'make', 'model', 'make_ref', 'model_ref', 'year', 'price', 'mileage',
+        'origin', 'vin', 'make', 'model', 'make_ref', 'model_ref', 'year', 'price', 'mileage',
         'fuel_type', 'body_type', 'exterior_color', 'interior_color', 'engine',
         'bluetooth', 'drivetrain', 'status', 'sale_type', 'auction_end',
         'dealer', 'broker', 'posted_by', 'verification_status', 'priority',
