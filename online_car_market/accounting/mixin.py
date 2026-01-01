@@ -4,8 +4,9 @@ class InvoiceDeclarationMixin(models.Model):
     invoice_number = models.CharField(
         max_length=50,
         unique=True,
-        null=True,
-        blank=True,
+        editable=False,
+        # null=True,
+        # blank=True,
         db_index=True
     )
     declaration_number = models.CharField(

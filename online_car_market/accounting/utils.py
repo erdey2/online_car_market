@@ -4,7 +4,6 @@ from django.utils import timezone
 from django.utils.timezone import now
 from django.db import transaction
 
-
 def generate_invoice_number(model, prefix="INV"):
     year = now().year
 

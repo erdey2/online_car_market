@@ -31,11 +31,9 @@ class Expense(InvoiceDeclarationMixin, models.Model):
         return f"{self.type} - {self.amount} ({self.company}) on {self.created_at}"
 
     def save(self, *args, **kwargs):
-        if not self.invoice_number:
-            self.invoice_number = generate_invoice_number(
-                model=Expense,
-                prefix="EXP"
-            )
+        if self._state.adding:
+            self.invoice_number = generate_invoice_number(model=CarExpense, prefix="CAR")
+
         super().save(*args, **kwargs)
 
 class CarExpense(InvoiceDeclarationMixin, models.Model):
@@ -56,11 +54,8 @@ class CarExpense(InvoiceDeclarationMixin, models.Model):
         else:
             self.converted_amount = self.amount
 
-        if not self.invoice_number:
-            self.invoice_number = generate_invoice_number(
-                model=CarExpense,
-                prefix="CAR"
-            )
+        if self._state.adding:
+            self.invoice_number = generate_invoice_number(model=CarExpense, prefix="CAR")
 
         super().save(*args, **kwargs)
 
@@ -89,11 +84,8 @@ class Revenue(InvoiceDeclarationMixin, models.Model):
         else:
             self.converted_amount = self.amount
 
-        if not self.invoice_number:
-            self.invoice_number = generate_invoice_number(
-                model=Revenue,
-                prefix="REV"
-            )
+        if self._state.adding:
+            self.invoice_number = generate_invoice_number(model=CarExpense, prefix="CAR")
 
         super().save(*args, **kwargs)
 
