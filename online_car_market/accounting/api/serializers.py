@@ -44,6 +44,7 @@ class ExchangeRateSerializer(serializers.ModelSerializer):
 class CarExpenseSerializer(serializers.ModelSerializer):
     vin_code = serializers.CharField(source="car.vin", read_only=True)
     origin = serializers.CharField(source="car.origin", read_only=True)
+
     class Meta:
         model = CarExpense
         fields = '__all__'
@@ -52,7 +53,6 @@ class CarExpenseSerializer(serializers.ModelSerializer):
             'id',
             'converted_amount',
             'invoice_number',
-            'declaration_number',
             'created_at',
         ]
 
@@ -75,18 +75,29 @@ class CarExpenseSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, data):
-        """Convert USD to ETB if necessary and ensure conversion is valid."""
         amount = data.get('amount')
         currency = data.get('currency')
+
+        if amount is None and currency is None:
+            return data
+
+        if amount is None or currency is None:
+            raise serializers.ValidationError(
+                "Both amount and currency are required."
+            )
+
         if currency == 'USD':
-            latest_rate = ExchangeRate.objects.order_by('-date').first()
-            if not latest_rate:
-                raise serializers.ValidationError("No exchange rate available for USD to ETB.")
-            data['converted_amount'] = amount * latest_rate.rate
+            rate = ExchangeRate.objects.order_by('-date').first()
+            if not rate:
+                raise serializers.ValidationError("No exchange rate available.")
+            data['converted_amount'] = amount * rate.rate
+
         elif currency == 'ETB':
             data['converted_amount'] = amount
+
         else:
-            raise serializers.ValidationError("Unsupported currency for conversion.")
+            raise serializers.ValidationError("Unsupported currency.")
+
         return data
 
     def create(self, validated_data):
