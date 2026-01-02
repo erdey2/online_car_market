@@ -88,7 +88,6 @@ class CarModelSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Only admins or super admins can create or update models.")
         return data
 
-# CarImageSerializer
 class CarImageSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField(read_only=True)
     image_file = serializers.ImageField(write_only=True, required=False)
@@ -97,7 +96,8 @@ class CarImageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CarImage
-        fields = ["id", "image_file", "image_url", "is_featured", "caption", "uploaded_at"]
+        # fields = ["id", "image_file", "image_url", "is_featured", "caption", "uploaded_at"]
+        fields = '__all__'
         read_only_fields = ["id", "image_url", "uploaded_at"]
 
     @extend_schema_field(serializers.CharField(allow_null=True))
