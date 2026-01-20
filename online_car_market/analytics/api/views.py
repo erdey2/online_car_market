@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class AnalyticsViewSet(ViewSet):
-    """ All analytics endpoints in one place. """
+    """ Analytics endpoints """
 
     @extend_schema(
         tags=["Analytics"],
