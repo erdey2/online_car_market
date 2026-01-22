@@ -406,7 +406,12 @@ class AnalyticsViewSet(ViewSet):
 
         analytics = (
             queryset
-            .annotate(period=trunc_func)
+            .annotate(
+                period=trunc_func,
+                make=F("car__make_ref__name"),
+                model=F("car__model_ref__name"),
+                dealer_id=F("car__dealer_id"),
+            )
             .values(
                 "car_id",
                 "dealer_id",
