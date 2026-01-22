@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 from cloudinary.models import CloudinaryField
 from django.contrib.auth import get_user_model
@@ -227,7 +228,23 @@ class CarView(models.Model):
     viewed_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=['car', 'user'], name='unique_car_user_view')]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["car", "user"],
+                condition=Q(user__isnull=False),
+                name="unique_car_user_view"
+            ),
+            models.UniqueConstraint(
+                fields=["car", "ip_address"],
+                condition=Q(user__isnull=True),
+                name="unique_car_ip_view"
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["viewed_at"]),
+            models.Index(fields=["car", "viewed_at"]),
+            models.Index(fields=["user"]),
+        ]
 
     def __str__(self):
         return f"{self.user or self.ip_address} viewed {self.car}"

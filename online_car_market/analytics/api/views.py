@@ -356,64 +356,71 @@ class AnalyticsViewSet(ViewSet):
 
     @extend_schema(
         tags=["Analytics"],
-        description="View analytics for all cars grouped by day/week/month.",
-        responses={
-            200: CarViewAnalyticsSerializer(many=True),
-            403: OpenApiResponse(description="Forbidden"),
-            500: OpenApiResponse(description="Internal server error"),
-        }
+        description="View car analytics with optional filters",
+        parameters=[
+            OpenApiParameter("range", str, description="day | week | month | year"),
+            OpenApiParameter("car_id", int, description="Filter by car ID"),
+            OpenApiParameter("dealer_id", int, description="Filter by dealer ID"),
+            OpenApiParameter("date_from", str, description="YYYY-MM-DD"),
+            OpenApiParameter("date_to", str, description="YYYY-MM-DD"),
+        ],
     )
-    @action(detail=False, methods=['get'], permission_classes=[IsSuperAdminOrAdmin])
+    @action(detail=False, methods=["get"], permission_classes=[IsSuperAdminOrAdmin])
     def view_analytics(self, request):
 
-        # Determine grouping type
-        range_type = request.GET.get("range", "month")  # default = month
+        range_type = request.GET.get("range", "month")
+        car_id = request.GET.get("car_id")
+        dealer_id = request.GET.get("dealer_id")
+        date_from = request.GET.get("date_from")
+        date_to = request.GET.get("date_to")
 
-        if range_type == "day":
-            trunc_func = TruncDay("viewed_at")
-        elif range_type == "week":
-            trunc_func = TruncWeek("viewed_at")
-        elif range_type == "year":
-            trunc_func = TruncYear("viewed_at")
-        else:
-            trunc_func = TruncMonth("viewed_at")
+        # ---- Time grouping ----
+        trunc_map = {
+            "day": TruncDay,
+            "week": TruncWeek,
+            "year": TruncYear,
+            "month": TruncMonth,
+        }
+        trunc_func = trunc_map.get(range_type, TruncMonth)("viewed_at")
 
-        try:
-            analytics = (
-                CarView.objects
-                .annotate(
-                    period=trunc_func,
-                    c_id=F("car__id"),
-                    car_make=F("car__make_ref__name"),
-                    car_model=F("car__model_ref__name")
-                )
-                .values("car_id", "car_make", "car_model", "period")
-                .annotate(
-                    total_views=Count("id"),
-                    unique_viewers=Count("user", distinct=True)
-                )
-                .order_by("-period", "-total_views")
+        queryset = CarView.objects.select_related(
+            "car",
+            "car__dealer",
+            "car__make_ref",
+            "car__model_ref",
+        )
+
+        # ---- Filters ----
+        if car_id:
+            queryset = queryset.filter(car_id=car_id)
+
+        if dealer_id:
+            queryset = queryset.filter(car__dealer_id=dealer_id)
+
+        if date_from:
+            queryset = queryset.filter(viewed_at__date__gte=date_from)
+
+        if date_to:
+            queryset = queryset.filter(viewed_at__date__lte=date_to)
+
+        analytics = (
+            queryset
+            .annotate(period=trunc_func)
+            .values(
+                "car_id",
+                "car__dealer_id",
+                "car__make_ref__name",
+                "car__model_ref__name",
+                "period",
             )
+            .annotate(
+                total_views=Count("id"),
+                unique_viewers=Count("user", distinct=True),
+            )
+            .order_by("-period", "-total_views")
+        )
 
-            analytics_list = list(analytics)
-
-            formatted = [
-                {
-                    "car_id": item["car_id"],
-                    "car_make": item["car_make"],
-                    "car_model": item["car_model"],
-                    "period": item["period"],  # day/week/month
-                    "total_views": item["total_views"],
-                    "unique_viewers": item["unique_viewers"],
-                }
-                for item in analytics_list
-            ]
-
-            return Response(formatted)
-
-        except Exception as e:
-            logger.exception(f"Error in view_analytics: {str(e)}")
-            return Response({"error": "Internal server error"}, status=500)
+        return Response(analytics)
 
     @extend_schema(
         tags=["Analytics"],
