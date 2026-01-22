@@ -16,6 +16,7 @@ from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.payment.models import Payment
 from online_car_market.accounting.models import Expense, CarExpense, Revenue
+from online_car_market.rating.models import CarRating
 from online_car_market.users.permissions.drf_permissions import (IsSuperAdminOrAdminOrDealer, IsSuperAdminOrAdminOrBroker,
                                                                  IsSuperAdminOrAdmin, IsDealer, IsBuyer, IsBroker)
 from .serializers import CarViewAnalyticsSerializer
@@ -408,9 +409,9 @@ class AnalyticsViewSet(ViewSet):
             .annotate(period=trunc_func)
             .values(
                 "car_id",
-                "car__dealer_id",
-                "car__make_ref__name",
-                "car__model_ref__name",
+                "dealer_id",
+                "make",
+                "model",
                 "period",
             )
             .annotate(
@@ -418,6 +419,66 @@ class AnalyticsViewSet(ViewSet):
                 unique_viewers=Count("user", distinct=True),
             )
             .order_by("-period", "-total_views")
+        )
+
+        return Response(analytics)
+
+    @extend_schema(
+        tags=["Analytics"],
+        description="Rating analytics with filters",
+        parameters=[
+            OpenApiParameter("car_id", int, description="Filter by car ID"),
+            OpenApiParameter("dealer_id", int, description="Filter by dealer ID"),
+            OpenApiParameter("date_from", str, description="YYYY-MM-DD"),
+            OpenApiParameter("date_to", str, description="YYYY-MM-DD"),
+        ],
+    )
+    @action(detail=False, methods=["get"])
+    def rating_analytics(self, request):
+
+        car_id = request.GET.get("car_id")
+        dealer_id = request.GET.get("dealer_id")
+        date_from = request.GET.get("date_from")
+        date_to = request.GET.get("date_to")
+
+        queryset = CarRating.objects.select_related(
+            "car",
+            "car_dealer",
+            "car_make",
+            "car_model",
+        )
+
+        # ---- Filters ----
+        if car_id:
+            queryset = queryset.filter(car_id=car_id)
+
+        if dealer_id:
+            queryset = queryset.filter(car__dealer_id=dealer_id)
+
+        if date_from:
+            queryset = queryset.filter(created_at__date__gte=date_from)
+
+        if date_to:
+            queryset = queryset.filter(created_at__date__lte=date_to)
+
+        analytics = (
+            queryset
+            .values(
+                "car_id",
+                "car__dealer_id",
+                "car__make_ref__name",
+                "car__model_ref__name",
+            )
+            .annotate(
+                average_rating=Avg("rating"),
+                total_ratings=Count("id"),
+                rating_1=Count("id", filter=Q(rating=1)),
+                rating_2=Count("id", filter=Q(rating=2)),
+                rating_3=Count("id", filter=Q(rating=3)),
+                rating_4=Count("id", filter=Q(rating=4)),
+                rating_5=Count("id", filter=Q(rating=5)),
+            )
+            .order_by("-average_rating", "-total_ratings")
         )
 
         return Response(analytics)
