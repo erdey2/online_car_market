@@ -430,6 +430,52 @@ class AnalyticsViewSet(ViewSet):
 
     @extend_schema(
         tags=["Analytics"],
+        description="View car viewers analytics with optional filters",
+        parameters=[
+            OpenApiParameter("car_id", int, description="Filter by car ID"),
+            OpenApiParameter("dealer_id", int, description="Filter by dealer ID"),
+            OpenApiParameter("date_from", str, description="YYYY-MM-DD"),
+            OpenApiParameter("date_to", str, description="YYYY-MM-DD"),
+        ],
+    )
+    @action(detail=False, methods=["get"], permission_classes=[IsSuperAdminOrAdmin])
+    def view_viewers(self, request):
+        car_id = request.GET.get("car_id")
+        dealer_id = request.GET.get("dealer_id")
+        date_from = request.GET.get("date_from")
+        date_to = request.GET.get("date_to")
+
+        queryset = CarView.objects.select_related(
+            "user",
+            "car",
+            "car__dealer"
+        )
+
+        if car_id:
+            queryset = queryset.filter(car_id=car_id)
+
+        if dealer_id:
+            queryset = queryset.filter(car__dealer_id=dealer_id)
+
+        if date_from:
+            queryset = queryset.filter(viewed_at__date__gte=date_from)
+
+        if date_to:
+            queryset = queryset.filter(viewed_at__date__lte=date_to)
+
+        data = queryset.values(
+            "car_id",
+            "user_id",
+            "user__email",
+            "user__first_name",
+            "user__last_name",
+            "viewed_at",
+        ).order_by("-viewed_at")
+
+        return Response(data)
+
+    @extend_schema(
+        tags=["Analytics"],
         description="Rating analytics with filters",
         parameters=[
             OpenApiParameter("car_id", int, description="Filter by car ID"),
