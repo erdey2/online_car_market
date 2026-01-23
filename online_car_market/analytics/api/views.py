@@ -375,7 +375,7 @@ class AnalyticsViewSet(ViewSet):
         date_from = request.GET.get("date_from")
         date_to = request.GET.get("date_to")
 
-        # ---- Time grouping ----
+        # Time grouping
         trunc_map = {
             "day": TruncDay,
             "week": TruncWeek,
@@ -473,6 +473,10 @@ class AnalyticsViewSet(ViewSet):
                 "user__profile__last_name",
                 Value("")
             ),
+            contact=Coalesce(
+                "user__profile__contact",
+                Value("")
+            ),
             viewer_type=Case(
                 When(user__isnull=True, then=Value("anonymous")),
                 default=Value("registered"),
@@ -484,6 +488,7 @@ class AnalyticsViewSet(ViewSet):
             "user__email",
             "first_name",
             "last_name",
+            "contact",
             "viewed_at",
             "viewer_type",
         ).order_by("-viewed_at")
