@@ -1,6 +1,6 @@
 import logging
-from django.db.models import Avg, Count, Sum, Q, F, Subquery, OuterRef
-from django.db.models.functions import TruncDay, TruncWeek, TruncMonth, TruncYear
+from django.db.models import Avg, Count, Sum, Q, F, Subquery, OuterRef, Value, CharField, Case, When
+from django.db.models.functions import TruncDay, TruncWeek, TruncMonth, TruncYear, Coalesce
 from django.contrib.postgres.aggregates import ArrayAgg
 
 from rest_framework.viewsets import ViewSet
@@ -447,6 +447,7 @@ class AnalyticsViewSet(ViewSet):
 
         queryset = CarView.objects.select_related(
             "user",
+            "user__profile",
             "car",
             "car__dealer"
         )
@@ -463,13 +464,28 @@ class AnalyticsViewSet(ViewSet):
         if date_to:
             queryset = queryset.filter(viewed_at__date__lte=date_to)
 
-        data = queryset.values(
+        data = queryset.annotate(
+            first_name=Coalesce(
+                "user__profile__first_name",
+                Value("")
+            ),
+            last_name=Coalesce(
+                "user__profile__last_name",
+                Value("")
+            ),
+            viewer_type=Case(
+                When(user__isnull=True, then=Value("anonymous")),
+                default=Value("registered"),
+                output_field=CharField()
+            )
+        ).values(
             "car_id",
             "user_id",
             "user__email",
-            "user__first_name",
-            "user__last_name",
+            "first_name",
+            "last_name",
             "viewed_at",
+            "viewer_type",
         ).order_by("-viewed_at")
 
         return Response(data)
