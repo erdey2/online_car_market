@@ -2,6 +2,7 @@ import logging
 from django.db.models import Avg, Count, Sum, Q, F, Subquery, OuterRef, Value, CharField, Case, When
 from django.db.models.functions import TruncDay, TruncWeek, TruncMonth, TruncYear, Coalesce
 from django.contrib.postgres.aggregates import ArrayAgg
+from django.db.models.functions import JSONObject
 
 from rest_framework.viewsets import ViewSet
 from rest_framework.decorators import action, permission_classes
@@ -549,6 +550,17 @@ class AnalyticsViewSet(ViewSet):
                 rating_3=Count("id", filter=Q(rating=3)),
                 rating_4=Count("id", filter=Q(rating=4)),
                 rating_5=Count("id", filter=Q(rating=5)),
+
+                reviews=ArrayAgg(
+                    JSONObject(
+                        email=F("user__email"),  # adjust if relation differs
+                        rating=F("rating"),
+                        comment=F("comment"),
+                        created_at=F("created_at"),
+                    ),
+                    filter=Q(comment__isnull=False),
+                    distinct=True,
+                ),
             )
             .order_by("-average_rating", "-total_ratings")
         )
