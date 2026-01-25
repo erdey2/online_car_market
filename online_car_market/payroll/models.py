@@ -25,6 +25,7 @@ class SalaryComponent(models.Model):
     component_type = models.CharField(max_length=10, choices=COMPONENT_TYPE)
     is_taxable = models.BooleanField(default=True)
     is_pensionable = models.BooleanField(default=False)
+    is_system = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name

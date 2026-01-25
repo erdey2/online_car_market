@@ -62,10 +62,9 @@ urlpatterns = [
     path('api/brokers/', include("online_car_market.brokers.api.urls")),
     path('api/buyers/', include("online_car_market.buyers.api.urls")),
     path('api/analytics/', include('online_car_market.analytics.api.urls')),
-    # path('api/payroll/', include('online_car_market.payroll.api.urls')),
+    path('api/payroll/', include('online_car_market.payroll.api.urls')),
     path('api/notifications/', include("online_car_market.notifications.api.urls")),
     path('api/ratings/', include('online_car_market.rating.api.urls')),
-
 
     path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
@@ -74,7 +73,6 @@ urlpatterns = [
     path('api/auth/', include('dj_rest_auth.urls')),
     path('api/auth/registration/', include('dj_rest_auth.registration.urls')),
     path('api/otp-reset/', include('online_car_market.otp_reset.api.urls')),
-
 
     # Schema in raw OpenAPI format:
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),

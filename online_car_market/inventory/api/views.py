@@ -82,7 +82,6 @@ class CarMakeViewSet(ModelViewSet):
             return [AllowAny()]   # No authentication required
         return [IsSuperAdminOrAdmin()]   # Only admins for create/update/delete
 
-
 @extend_schema_view(
     list=extend_schema(
         tags=["Cars - Models"],
