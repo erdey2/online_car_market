@@ -4,10 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
 
 from online_car_market.payroll.models import PayrollRun, PayrollItem
-from online_car_market.payroll.api.serializers import (
-    PayrollRunSerializer,
-    PayrollItemSerializer,
-)
+from online_car_market.payroll.api.serializers import PayrollRunSerializer, PayrollItemSerializer
 from online_car_market.payroll.services.payroll_runner import run_payroll
 from online_car_market.payroll.services.payroll_validator import can_post_payroll
 from online_car_market.payroll.selectors.payroll_queries import get_payslip_for_employee

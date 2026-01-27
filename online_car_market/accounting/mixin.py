@@ -7,6 +7,7 @@ class InvoiceDeclarationMixin(models.Model):
         editable=False,
         # null=True,
         # blank=True,
+
         db_index=True
     )
     declaration_number = models.CharField(
