@@ -5,8 +5,8 @@ class InvoiceDeclarationMixin(models.Model):
         max_length=50,
         unique=True,
         editable=False,
-        # null=True,
-        # blank=True,
+        null=True,
+        blank=True,
 
         db_index=True
     )

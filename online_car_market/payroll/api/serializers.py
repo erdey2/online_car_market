@@ -1,47 +1,52 @@
 from rest_framework import serializers
-from online_car_market.payroll.models import (
-    Employee,
-    PayrollRun,
-    PayrollItem,
-    PayrollLine,
-    SalaryComponent
-)
+from online_car_market.payroll.models import Employee, PayrollRun, PayrollItem, PayrollLine, SalaryComponent
 
-# Salary Component
 class SalaryComponentSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalaryComponent
         fields = ["id", "name", "component_type"]
 
-
-# Payroll Line (earnings/deductions
 class PayrollLineSerializer(serializers.ModelSerializer):
-    component = SalaryComponentSerializer()
+    name = serializers.CharField(source="component.name")
 
     class Meta:
         model = PayrollLine
-        fields = ["component", "amount"]
+        fields = ["name", "amount"]
 
-
-# Payroll Item (Payslip)
-class PayrollItemSerializer(serializers.ModelSerializer):
-    lines = PayrollLineSerializer(
-        many=True,
-        source="payrollline_set"
-    )
+class PayslipSerializer(serializers.ModelSerializer):
+    earnings = serializers.SerializerMethodField()
+    deductions = serializers.SerializerMethodField()
 
     class Meta:
         model = PayrollItem
-        fields = [
+        fields = (
             "employee",
             "gross_earnings",
             "total_deductions",
             "net_salary",
-            "lines",
-        ]
+            "earnings",
+            "deductions",
+        )
 
-# Payroll Run
+    def get_earnings(self, obj):
+        return PayrollLineSerializer(
+            obj.payrollline_set.filter(component__component_type=SalaryComponent.EARNING),
+            many=True
+        ).data
+
+    def get_deductions(self, obj):
+        return PayrollLineSerializer(
+            obj.payrollline_set.filter(component__component_type=SalaryComponent.DEDUCTION),
+            many=True
+        ).data
+
 class PayrollRunSerializer(serializers.ModelSerializer):
     class Meta:
         model = PayrollRun
         fields = ["id", "period", "status", "created_at"]
+
+class EmployeeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Employee
+        fields = ["id", "user", "employee_id", "hire_date", "is_active"]
+

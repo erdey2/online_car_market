@@ -35,18 +35,35 @@ class EmployeeSalary(models.Model):
     component = models.ForeignKey(SalaryComponent, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
 
+    class Meta:
+        unique_together = ("employee", "component")
+
 class PayrollRun(models.Model):
+    DRAFT = "draft"
+    APPROVED = "approved"
+    POSTED = "posted"
+
+    STATUS_CHOICES = [
+        (DRAFT, "Draft"),
+        (APPROVED, "Approved"),
+        (POSTED, "Posted"),
+    ]
+
     period = models.DateField()  # e.g. 2026-01-01
     status = models.CharField(
         max_length=10,
-        choices=[
-            ("draft", "Draft"),
-            ("approved", "Approved"),
-            ("posted", "Posted"),
-        ],
-        default="draft"
+        choices=STATUS_CHOICES,
+        default=DRAFT
     )
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["period"],
+                name="unique_payroll_per_period"
+            )
+        ]
 
 class PayrollItem(models.Model):
     payroll_run = models.ForeignKey(PayrollRun, on_delete=models.CASCADE)
@@ -55,6 +72,14 @@ class PayrollItem(models.Model):
     gross_earnings = models.DecimalField(max_digits=12, decimal_places=2)
     total_deductions = models.DecimalField(max_digits=12, decimal_places=2)
     net_salary = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["payroll_run", "employee"],
+                name="unique_payroll_item_per_employee"
+            )
+        ]
 
 class PayrollLine(models.Model):
     payroll_item = models.ForeignKey(PayrollItem, on_delete=models.CASCADE)

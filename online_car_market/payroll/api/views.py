@@ -1,18 +1,21 @@
+from rest_framework.generics import ListAPIView
+from online_car_market.payroll.models import PayrollItem, Employee, SalaryComponent
+from online_car_market.payroll.api.serializers import EmployeeSerializer, SalaryComponentSerializer, PayslipSerializer
+from online_car_market.payroll.selectors.payroll_queries import get_latest_payslip
+from rest_framework.permissions import IsAuthenticated
+
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAdminUser
+from django.core.exceptions import ValidationError
 
-from online_car_market.payroll.models import PayrollRun, PayrollItem
-from online_car_market.payroll.api.serializers import PayrollRunSerializer, PayrollItemSerializer
+from online_car_market.payroll.models import PayrollRun
 from online_car_market.payroll.services.payroll_runner import run_payroll
-from online_car_market.payroll.services.payroll_validator import can_post_payroll
-from online_car_market.payroll.selectors.payroll_queries import get_payslip_for_employee
-from rest_framework.permissions import IsAuthenticated
 
 class PayrollRunViewSet(viewsets.ModelViewSet):
     queryset = PayrollRun.objects.all().order_by("-created_at")
-    serializer_class = PayrollRunSerializer
+    serializer_class = None  # keep this if you only use actions
     permission_classes = [IsAdminUser]
 
     @action(detail=True, methods=["post"])
@@ -20,45 +23,41 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
         payroll_run = self.get_object()
 
         try:
-            run_payroll(payroll_run)
+            result = run_payroll(payroll_run)
+        except ValidationError as e:
+            # Friendly API error if payroll is posted
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         except ValueError as e:
+            # Other business rule errors
             return Response(
                 {"detail": str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         return Response(
-            {"detail": "Payroll processed successfully"},
+            {"detail": "Payroll processed successfully", "data": result},
             status=status.HTTP_200_OK
         )
 
-    @action(detail=True, methods=["post"])
-    def post(self, request, pk=None):
-        payroll_run = self.get_object()
-
-        if not can_post_payroll(payroll_run):
-            return Response(
-                {"detail": "Payroll must be approved first"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        payroll_run.status = "posted"
-        payroll_run.save()
-
-        return Response(
-            {"detail": "Payroll posted successfully"},
-            status=status.HTTP_200_OK
-        )
-
-class PayslipViewSet(viewsets.ViewSet):
+class PayslipAPIView(ListAPIView):
+    serializer_class = PayslipSerializer
     permission_classes = [IsAuthenticated]
 
-    def list(self, request):
-        period = request.query_params.get("period")
-        employee = request.user.employee
+    def get_queryset(self):
+        payslip = get_latest_payslip(self.request.user.employee)
+        return PayrollItem.objects.filter(id=payslip.id) if payslip else PayrollItem.objects.none()
 
-        payslip = get_payslip_for_employee(employee, period)
+class EmployeeViewSet(viewsets.ModelViewSet):
+    queryset = Employee.objects.all()
+    serializer_class = EmployeeSerializer
+    permission_classes = [IsAdminUser]
 
-        serializer = PayrollItemSerializer(payslip, many=True)
-        return Response(serializer.data)
+class SalaryComponentViewSet(viewsets.ModelViewSet):
+    queryset = SalaryComponent.objects.all()
+    serializer_class = SalaryComponentSerializer
+    permission_classes = [IsAdminUser]
+
 
