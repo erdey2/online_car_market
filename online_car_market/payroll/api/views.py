@@ -1,9 +1,11 @@
 from rest_framework.generics import ListAPIView
-from online_car_market.payroll.models import PayrollItem, Employee, SalaryComponent
-from online_car_market.payroll.api.serializers import EmployeeSerializer, SalaryComponentSerializer, PayslipSerializer
+from online_car_market.payroll.models import PayrollItem, Employee, SalaryComponent, EmployeeSalary
+from online_car_market.payroll.api.serializers import (EmployeeSerializer, SalaryComponentSerializer,
+                                                       PayslipSerializer, EmployeeSalarySerializer
+                                                       )
 from online_car_market.payroll.selectors.payroll_queries import get_latest_payslip
 from rest_framework.permissions import IsAuthenticated
-
+from rest_framework.viewsets import ModelViewSet
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -59,5 +61,20 @@ class SalaryComponentViewSet(viewsets.ModelViewSet):
     queryset = SalaryComponent.objects.all()
     serializer_class = SalaryComponentSerializer
     permission_classes = [IsAdminUser]
+
+class EmployeeSalaryViewSet(ModelViewSet):
+    queryset = EmployeeSalary.objects.select_related("employee")
+    serializer_class = EmployeeSalarySerializer
+    permission_classes = [IsAdminUser]
+
+    def perform_create(self, serializer):
+        # deactivate old salary if exists
+        employee = serializer.validated_data["employee"]
+        EmployeeSalary.objects.filter(
+            employee=employee, is_active=True
+        ).update(is_active=False)
+
+        serializer.save(is_active=True)
+
 
 

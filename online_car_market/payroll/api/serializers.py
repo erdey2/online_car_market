@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from online_car_market.payroll.models import Employee, PayrollRun, PayrollItem, PayrollLine, SalaryComponent
+from online_car_market.payroll.models import Employee, PayrollRun, PayrollItem, PayrollLine, SalaryComponent, EmployeeSalary
 
 class SalaryComponentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -49,4 +49,21 @@ class EmployeeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
         fields = ["id", "user", "employee_id", "hire_date", "is_active"]
+
+class EmployeeSalarySerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(
+        source="employee.full_name", read_only=True
+    )
+
+    class Meta:
+        model = EmployeeSalary
+        fields = [
+            "id",
+            "employee",
+            "employee_name",
+            "basic_salary",
+            "effective_from",
+            "is_active",
+        ]
+
 
