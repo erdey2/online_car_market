@@ -5,6 +5,7 @@ class SalaryComponentSerializer(serializers.ModelSerializer):
     class Meta:
         model = SalaryComponent
         fields = ["id", "name", "component_type"]
+        read_only_fields = ["id"]
 
 class PayrollLineSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="component.name")
@@ -51,8 +52,11 @@ class EmployeeSerializer(serializers.ModelSerializer):
         fields = ["id", "user", "employee_id", "hire_date", "is_active"]
 
 class EmployeeSalarySerializer(serializers.ModelSerializer):
-    employee_name = serializers.CharField(
-        source="employee.full_name", read_only=True
+    employee_id = serializers.CharField(
+        source="employee.employee_id", read_only=True
+    )
+    component_name = serializers.CharField(
+        source="component.name", read_only=True
     )
 
     class Meta:
@@ -60,10 +64,11 @@ class EmployeeSalarySerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "employee",
-            "employee_name",
-            "basic_salary",
-            "effective_from",
-            "is_active",
+            "employee_id",
+            "component",
+            "component_name",
+            "amount",
         ]
+
 
 

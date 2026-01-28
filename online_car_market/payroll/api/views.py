@@ -63,18 +63,11 @@ class SalaryComponentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
 
 class EmployeeSalaryViewSet(ModelViewSet):
-    queryset = EmployeeSalary.objects.select_related("employee")
+    queryset = EmployeeSalary.objects.select_related(
+        "employee", "component"
+    )
     serializer_class = EmployeeSalarySerializer
     permission_classes = [IsAdminUser]
-
-    def perform_create(self, serializer):
-        # deactivate old salary if exists
-        employee = serializer.validated_data["employee"]
-        EmployeeSalary.objects.filter(
-            employee=employee, is_active=True
-        ).update(is_active=False)
-
-        serializer.save(is_active=True)
 
 
 
