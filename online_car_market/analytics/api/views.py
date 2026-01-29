@@ -3,6 +3,7 @@ from django.db.models import Avg, Count, Sum, Q, F, Subquery, OuterRef, Value, C
 from django.db.models.functions import TruncDay, TruncWeek, TruncMonth, TruncYear, Coalesce
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.db.models.functions import JSONObject
+from rest_framework.permissions import AllowAny
 
 from rest_framework.viewsets import ViewSet
 from rest_framework.decorators import action, permission_classes
@@ -147,7 +148,7 @@ class AnalyticsViewSet(ViewSet):
             500: OpenApiResponse(description="Internal server error"),
         }
     )
-    @action(detail=False, methods=['get'], url_path='buyer-analytics')
+    @action(detail=False, methods=['get'], url_path='buyer-analytics', permission_classes = [AllowAny])
     def buyer_analytics(self, request):
         if not has_role(request.user, ['buyer']):
             return Response(
