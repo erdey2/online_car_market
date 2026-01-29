@@ -20,9 +20,7 @@ from online_car_market.accounting.models import Expense, CarExpense, Revenue
 from online_car_market.rating.models import CarRating
 from online_car_market.users.permissions.drf_permissions import (IsSuperAdminOrAdminOrDealer, IsSuperAdminOrAdminOrBroker,
                                                                  IsSuperAdminOrAdmin, IsDealer, IsBuyer, IsBroker)
-from .serializers import CarViewAnalyticsSerializer
 from ..utils import get_top_sellers, get_high_sales_rate_cars, parse_month_year
-
 
 logger = logging.getLogger(__name__)
 
@@ -506,7 +504,7 @@ class AnalyticsViewSet(ViewSet):
             OpenApiParameter("date_to", str, description="YYYY-MM-DD"),
         ],
     )
-    @action(detail=False, methods=["get"])
+    @action(detail=False, methods=["get"], permission_classes=[IsBuyer])
     def rating_analytics(self, request):
 
         car_id = request.GET.get("car_id")
