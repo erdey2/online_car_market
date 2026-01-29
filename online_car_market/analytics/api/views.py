@@ -147,7 +147,7 @@ class AnalyticsViewSet(ViewSet):
             500: OpenApiResponse(description="Internal server error"),
         }
     )
-    @action(detail=False, methods=['get'], url_path='buyer-analytics', permission_classes=[IsBuyer])
+    @action(detail=False, methods=['get'], url_path='buyer-analytics')
     def buyer_analytics(self, request):
         if not has_role(request.user, ['buyer']):
             return Response(
