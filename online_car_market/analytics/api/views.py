@@ -150,9 +150,6 @@ class AnalyticsViewSet(ViewSet):
     )
     @action(detail=False, methods=['get'], url_path='buyer-analytics', permission_classes = [AllowAny])
     def buyer_analytics(self, request):
-        if not has_role(request.user, ['buyer']):
-            return Response(
-                {"error": "Only buyer can access this analytics."}, status=status.HTTP_403_FORBIDDEN )
         try:
             # Subquery for cheapest car per make/model
             cheapest_car_subquery = Car.objects.filter(
