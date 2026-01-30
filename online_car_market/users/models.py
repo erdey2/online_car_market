@@ -63,10 +63,3 @@ class Profile(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=['user'], name='idx_profile_user')]
-
-@receiver(post_save, sender=settings.AUTH_USER_MODEL)
-def create_user_profile(sender, instance, created, **kwargs):
-    """Automatically create a profile when a new user is created."""
-    from .models import Profile
-    if created:
-        Profile.objects.get_or_create(user=instance)

@@ -183,7 +183,7 @@ class DealerAdmin(admin.ModelAdmin):
 class BrokerAdmin(admin.ModelAdmin):
     list_display = ("id", "profile_user_email", "national_id", "telebirr_account", "is_verified")
     search_fields = ("profile__user__email", "national_id", "telebirr_account")
-    list_filter = ("is_verified",)
+    # list_filter = ("is_verified",)
     readonly_fields = ("is_verified",)
 
     def profile_user_email(self, obj):
