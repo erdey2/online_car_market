@@ -24,7 +24,7 @@ class BrokerApplicationView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        tags=["Brokers - Applications"],
+        tags=["Brokers"],
         summary="Apply or re-apply as broker",
         description="""
             Submit a broker application.
@@ -202,12 +202,12 @@ class AdminBrokerActionView(APIView):
 # Broker Profile ViewSet
 @extend_schema_view(
     me=extend_schema(
-        tags=["Brokers - Profile"],
+        tags=["Brokers"],
         summary="Get my broker profile",
         description="Returns the authenticated broker's own profile.",
     ),
     update_me=extend_schema(
-        tags=["Brokers - Profile"],
+        tags=["Brokers"],
         summary="Update my broker profile",
         description="Partially update the authenticated broker's profile.",
     ),
@@ -239,6 +239,39 @@ class BrokerProfileViewSet(viewsets.GenericViewSet):
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        return Response(serializer.data)
+
+# Broker Verification
+@extend_schema_view(
+    verify=extend_schema(
+        tags=["Admin - Broker Management"],
+        request=VerifyBrokerSerializer,
+        responses={
+            200: VerifyBrokerSerializer,
+            404: OpenApiResponse(description="Broker not found."),
+            403: OpenApiResponse(description="Permission denied."),
+        },
+        description="Verify a broker profile (admin/super_admin only).",
+    )
+)
+class BrokerVerificationViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated, IsSuperAdmin | IsAdmin]
+
+    @action(detail=True, methods=["patch"])
+    def verify(self, request, pk=None):
+        try:
+            broker = BrokerProfile.objects.get(pk=pk)
+        except BrokerProfile.DoesNotExist:
+            return Response({"error": "Broker not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if broker.status != BrokerProfile.Status.APPROVED:
+            return Response({"error": "Only approved brokers can be verified."}, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = VerifyBrokerSerializer(broker, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        logger.info(f"Broker {broker.pk} verification updated by {request.user.email}")
         return Response(serializer.data)
 
 # Broker Ratings
@@ -287,36 +320,3 @@ class BrokerRatingViewSet(viewsets.ModelViewSet):
 
         serializer.save(broker=broker, user=self.request.user)
         logger.info(f"Broker rating created by {self.request.user.email} for broker {broker_pk}")
-
-# Broker Verification
-@extend_schema_view(
-    verify=extend_schema(
-        tags=["Brokers - Verification"],
-        request=VerifyBrokerSerializer,
-        responses={
-            200: VerifyBrokerSerializer,
-            404: OpenApiResponse(description="Broker not found."),
-            403: OpenApiResponse(description="Permission denied."),
-        },
-        description="Verify a broker profile (admin/super_admin only).",
-    )
-)
-class BrokerVerificationViewSet(viewsets.ViewSet):
-    permission_classes = [IsAuthenticated, IsSuperAdmin | IsAdmin]
-
-    @action(detail=True, methods=["patch"])
-    def verify(self, request, pk=None):
-        try:
-            broker = BrokerProfile.objects.get(pk=pk)
-        except BrokerProfile.DoesNotExist:
-            return Response({"error": "Broker not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        if broker.status != BrokerProfile.Status.APPROVED:
-            return Response({"error": "Only approved brokers can be verified."}, status=status.HTTP_400_BAD_REQUEST)
-
-        serializer = VerifyBrokerSerializer(broker, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-
-        logger.info(f"Broker {broker.pk} verification updated by {request.user.email}")
-        return Response(serializer.data)

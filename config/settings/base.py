@@ -286,7 +286,6 @@ SPECTACULAR_SETTINGS = {
         {"name": "Dealers - Ratings", "description": "Manage Dealers ratings"},
         {"name": "Dealers - Verification", "description": "Dealer verifications"},
 
-        {"name": "Brokers - Verification", "description": "Broker Verifications"},
         {"name": "Brokers - Ratings", "description": "Manage Brokers ratings"},
         {"name": "Brokers - Orders", "description": "Broker' orders and order details"},
 

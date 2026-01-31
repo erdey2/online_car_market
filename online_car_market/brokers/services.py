@@ -24,6 +24,7 @@ def reject_broker(broker, admin_user, reason):
     if broker.status != BrokerProfile.Status.PENDING:
         raise ValueError("Only pending brokers can be rejected")
 
+
     broker.status = BrokerProfile.Status.REJECTED
     broker.reviewed_at = timezone.now()
     broker.reviewed_by = admin_user
