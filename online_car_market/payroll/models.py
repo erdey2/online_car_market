@@ -86,5 +86,21 @@ class PayrollLine(models.Model):
     component = models.ForeignKey(SalaryComponent, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
 
+class OvertimeEntry(models.Model):
+    OVERTIME_TYPE_CHOICES = [
+        ("1.5", "Normal Overtime (1.5x)"),
+        ("1.75", "Weekend Overtime (1.75x)"),
+        ("2.0", "Special Overtime (2.0x)"),
+        ("2.5", "Holiday Overtime (2.5x)"),
+    ]
+
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
+    payroll_run = models.ForeignKey("PayrollRun", on_delete=models.CASCADE)
+    overtime_type = models.CharField(max_length=4, choices=OVERTIME_TYPE_CHOICES)
+    hours = models.DecimalField(max_digits=6, decimal_places=2)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 
 

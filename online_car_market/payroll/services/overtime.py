@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 OVERTIME_RATES = {
     "1.5": Decimal("1.5"),
@@ -7,27 +7,28 @@ OVERTIME_RATES = {
     "2.5": Decimal("2.5"),
 }
 
-def calculate_overtime(hourly_rate, hours_by_rate: dict):
+
+def calculate_overtime_amount(
+    basic_salary: Decimal,
+    total_hours_worked: Decimal,
+    overtime_hours: Decimal,
+    overtime_type: str,
+) -> Decimal:
     """
-    hours_by_rate example:
-    {
-        "1.5": 4,
-        "1.75": 3,
-        "2.0": 1,
-        "2.5": 2
-    }
+    Ethiopian overtime calculation:
+    Hourly rate = basic_salary / total_hours_worked
+    Overtime pay = hourly_rate * multiplier * overtime_hours
     """
-    total_hours = Decimal("0")
-    total_amount = Decimal("0")
 
-    for rate, hours in hours_by_rate.items():
-        multiplier = OVERTIME_RATES[rate]
-        hours = Decimal(hours)
+    hourly_rate = (basic_salary / total_hours_worked).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
 
-        total_hours += hours
-        total_amount += hourly_rate * multiplier * hours
+    multiplier = OVERTIME_RATES[overtime_type]
 
-    return {
-        "total_hours": total_hours,
-        "total_amount": total_amount,
-    }
+    overtime_amount = hourly_rate * multiplier * overtime_hours
+
+    return overtime_amount.quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+

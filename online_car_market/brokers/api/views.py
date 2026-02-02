@@ -83,9 +83,7 @@ class BrokerApplicationView(APIView):
 
         if rejected:
             rejected.national_id = request.data.get("national_id")
-            rejected.telebirr_account = request.data.get(
-                "telebirr_account", rejected.telebirr_account
-            )
+            rejected.telebirr_account = request.data.get("telebirr_account", rejected.telebirr_account)
             # Reset review metadata for audit clarity
             rejected.status = BrokerProfile.Status.PENDING
             rejected.reviewed_at = None
@@ -320,3 +318,5 @@ class BrokerRatingViewSet(viewsets.ModelViewSet):
 
         serializer.save(broker=broker, user=self.request.user)
         logger.info(f"Broker rating created by {self.request.user.email} for broker {broker_pk}")
+
+

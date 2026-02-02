@@ -12,7 +12,6 @@ router.register(r'ratings', BrokerRatingViewSet, basename='broker-ratings')
 urlpatterns = [
     # Router URLs
     path('', include(router.urls)),
-
     # Broker self-application
     path('application/', BrokerApplicationView.as_view(), name='broker-application'),
     # Admin workflow actions (lookup by User ID)
