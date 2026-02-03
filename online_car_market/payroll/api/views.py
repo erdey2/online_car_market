@@ -1,7 +1,8 @@
 from rest_framework.generics import ListAPIView
-from online_car_market.payroll.models import PayrollItem, Employee, SalaryComponent, EmployeeSalary
+from online_car_market.payroll.models import PayrollItem, Employee, SalaryComponent, EmployeeSalary, OvertimeEntry
 from online_car_market.payroll.api.serializers import (EmployeeSerializer, SalaryComponentSerializer,
-                                                       PayslipSerializer, EmployeeSalarySerializer
+                                                       PayslipSerializer, PayrollRunSerializer,
+                                                       EmployeeSalarySerializer, OvertimeSerializer
                                                        )
 from online_car_market.payroll.selectors.payroll_queries import get_latest_payslip
 from rest_framework.permissions import IsAuthenticated
@@ -17,7 +18,7 @@ from online_car_market.payroll.services.payroll_runner import run_payroll
 
 class PayrollRunViewSet(viewsets.ModelViewSet):
     queryset = PayrollRun.objects.all().order_by("-created_at")
-    serializer_class = None  # keep this if you only use actions
+    serializer_class = PayrollRunSerializer
     permission_classes = [IsAdminUser]
 
     @action(detail=True, methods=["post"])
@@ -68,6 +69,13 @@ class EmployeeSalaryViewSet(ModelViewSet):
     )
     serializer_class = EmployeeSalarySerializer
     permission_classes = [IsAdminUser]
+
+class OvertimeEmployeeViewSet(ModelViewSet):
+    permission_classes = [IsAdminUser]
+    serializer_class = OvertimeSerializer
+    queryset = OvertimeEntry.objects.all()
+
+
 
 
 

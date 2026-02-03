@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from online_car_market.payroll.models import Employee, PayrollRun, PayrollItem, PayrollLine, SalaryComponent, EmployeeSalary
+from online_car_market.payroll.models import (Employee, PayrollRun, PayrollItem,
+                                              PayrollLine, SalaryComponent, EmployeeSalary,
+                                              OvertimeEntry
+                                              )
 
 class SalaryComponentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -69,6 +72,12 @@ class EmployeeSalarySerializer(serializers.ModelSerializer):
             "component_name",
             "amount",
         ]
+
+class OvertimeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OvertimeEntry
+        fields = ['employee', 'payroll_run', 'overtime_type', 'hours', 'created_at']
+        read_only_fields = ['employee', 'payroll_run', 'created_at']
 
 
 

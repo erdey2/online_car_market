@@ -98,7 +98,6 @@ class OvertimeEntry(models.Model):
     payroll_run = models.ForeignKey("PayrollRun", on_delete=models.CASCADE)
     overtime_type = models.CharField(max_length=4, choices=OVERTIME_TYPE_CHOICES)
     hours = models.DecimalField(max_digits=6, decimal_places=2)
-
     created_at = models.DateTimeField(auto_now_add=True)
 
 

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from online_car_market.payroll.models import Employee, EmployeeSalary, SalaryComponent
+from online_car_market.payroll.models import Employee, EmployeeSalary, SalaryComponent, OvertimeEntry
 
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
@@ -12,3 +12,7 @@ class EmployeeSalaryAdmin(admin.ModelAdmin):
 @admin.register(SalaryComponent)
 class SalaryComponentAdmin(admin.ModelAdmin):
     list_display = ("name", "component_type", "is_taxable", "is_pensionable", "is_system")
+
+@admin.register(OvertimeEntry)
+class OvertimeEntryAdmin(admin.ModelAdmin):
+    list_display = ("employee", "payroll_run", "overtime_type", "hours", "created_at")
