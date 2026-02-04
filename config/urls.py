@@ -71,6 +71,8 @@ urlpatterns = [
 
     # advanced auth
     path('api/auth/', include('dj_rest_auth.urls')),
+    path('api/auth/', include('django.contrib.auth.urls')),
+
     path('api/auth/registration/', include('dj_rest_auth.registration.urls')),
     path('api/otp-reset/', include('online_car_market.otp_reset.api.urls')),
 
