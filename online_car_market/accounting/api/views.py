@@ -1,8 +1,9 @@
 import django_filters
 from django.db.models import Sum
 from django_filters.rest_framework.backends import DjangoFilterBackend
+from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
 
-from rest_framework.viewsets import ModelViewSet
+from rest_framework.viewsets import ModelViewSet, GenericViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from rest_framework.decorators import action
@@ -10,7 +11,8 @@ from rest_framework.response import Response
 
 from rolepermissions.checkers import has_role
 from ..models import Expense, FinancialReport, DealerProfile, CarExpense, Revenue, ExchangeRate
-from .serializers import ExpenseSerializer, FinancialReportSerializer, CarExpenseSerializer, RevenueSerializer, ExchangeRateSerializer
+from .serializers import (ExpenseSerializer, FinancialReportSerializer, CarExpenseSerializer,
+                          RevenueSerializer, ExchangeRateSerializer)
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse
 from online_car_market.accounting.utils import generate_financial_report
 from online_car_market.dealers.models import DealerStaff
@@ -314,7 +316,7 @@ class ExpenseViewSet(ModelViewSet):
         ),
     ),
 )
-class FinancialReportViewSet(ModelViewSet):
+class FinancialReportViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet):
     """
     ViewSet for managing and generating financial reports for dealers.
     Allows accountants, admins, and dealers to view or generate reports that
@@ -331,7 +333,7 @@ class FinancialReportViewSet(ModelViewSet):
         return FinancialReport.objects.all()
 
     @extend_schema(
-        summary="Generate a dealer financial report",
+        summary="Generate dealer's financial report",
         description=(
             "Creates a financial report for the authenticated dealer or specified period. "
             "Includes automatic calculation of total revenue, total expenses, and net profit/loss. "

@@ -1,4 +1,6 @@
 import logging
+
+from cloudinary.api import tags
 from django.db.models import Q, Avg
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
@@ -225,7 +227,6 @@ class CarViewSet(viewsets.ModelViewSet):
         else:
             qs = qs.filter(verification_status="verified")
 
-        # broker_email as a single filter join — NO extra get() query
         broker_email = self.request.query_params.get("broker_email")
         if broker_email:
             qs = qs.filter(broker__profile__user__email=broker_email)
@@ -1068,6 +1069,51 @@ class InspectionViewSet(viewsets.ModelViewSet):
             400: OpenApiResponse(description="Invalid status or bad request."),
             403: OpenApiResponse(description="Forbidden – user not authorized."),
             404: OpenApiResponse(description="Inspection not found."),
+        },
+    )
+    @extend_schema(
+        tags=["Car Inspections"],
+        description=(
+            "Verify or reject a car inspection.\n\n"
+            "**Admin-only action** that updates the inspection status and records "
+            "who verified it and when."
+        ),
+        request=InspectionSerializer,
+        responses={
+            200: OpenApiResponse(
+                description="Inspection verified or rejected successfully.",
+                examples=[
+                    OpenApiExample(
+                        "Verified",
+                        value={"detail": "Inspection verified successfully."}
+                    ),
+                    OpenApiExample(
+                        "Rejected",
+                        value={"detail": "Inspection rejected successfully."}
+                    ),
+                ],
+            ),
+            400: OpenApiResponse(
+                description="Invalid status value.",
+                examples=[
+                    OpenApiExample(
+                        "Invalid Status",
+                        value={"error": "Invalid status. Must be 'verified' or 'rejected'."}
+                    )
+                ],
+            ),
+            403: OpenApiResponse(
+                description="User does not have permission to verify inspections.",
+                examples=[
+                    OpenApiExample(
+                        "Forbidden",
+                        value={"detail": "You do not have permission to perform this action."}
+                    )
+                ],
+            ),
+            404: OpenApiResponse(
+                description="Inspection not found."
+            ),
         },
     )
     @action(detail=True, methods=["patch"], permission_classes=[IsSuperAdminOrAdmin])
