@@ -1073,6 +1073,7 @@ class InspectionViewSet(viewsets.ModelViewSet):
     )
     @extend_schema(
         tags=["Car Inspections"],
+        summary="Verify or reject an inspection.",
         description=(
             "Verify or reject a car inspection.\n\n"
             "**Admin-only action** that updates the inspection status and records "
