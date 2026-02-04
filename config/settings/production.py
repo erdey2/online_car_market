@@ -2,8 +2,11 @@ from .base import *
 from .base import env
 
 DEBUG = False
-SECRET_KEY = env("DJANGO_SECRET_KEY")
-ALLOWED_HOSTS = ["online-car-market.onrender.com"]
+
+ALLOWED_HOSTS = [
+    "online-car-market.onrender.com",
+    ".onrender.com",
+]
 
 DATABASES = {
     "default": env.db("DATABASE_URL")
@@ -33,28 +36,6 @@ SECURE_HSTS_SECONDS = 60
 SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", default=True)
 SECURE_HSTS_PRELOAD = env.bool("DJANGO_SECURE_HSTS_PRELOAD", default=True)
 SECURE_CONTENT_TYPE_NOSNIFF = env.bool("DJANGO_SECURE_CONTENT_TYPE_NOSNIFF", default=True)
-
-# EMAIL
-# ------------------------------------------------------------------------------
-DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", default="online-car-market <noreply@online-car-market>")
-SERVER_EMAIL = env("DJANGO_SERVER_EMAIL", default=DEFAULT_FROM_EMAIL)
-EMAIL_SUBJECT_PREFIX = env("DJANGO_EMAIL_SUBJECT_PREFIX", default="[online-car-market] ")
-ACCOUNT_EMAIL_SUBJECT_PREFIX = EMAIL_SUBJECT_PREFIX
-
-# SIMPLE SMTP EMAIL CONFIGURATION
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = env("EMAIL_HOST", default="smtp.gmail.com")
-EMAIL_PORT = env.int("EMAIL_PORT", default=587)
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = env("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD")
-
-# ADMIN
-# ------------------------------------------------------------------------------
-ADMIN_URL = env("DJANGO_ADMIN_URL")
-
-INSTALLED_APPS += ["anymail"]
-ANYMAIL = {}
 
 # LOGGING
 LOGGING = {
@@ -99,12 +80,10 @@ LOGGING = {
     },
 }
 
-
 CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_CREDENTIALS = False
 
-CORS_ALLOWED_ORIGINS = [
-
-    # "http://localhost:5175",
-    # "https://autodealer-two.vercel.app/",
-]
+''' CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5175",
+    "https://autodealer-two.vercel.app/",
+] '''

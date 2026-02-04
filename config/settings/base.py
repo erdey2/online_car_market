@@ -66,6 +66,7 @@ THIRD_PARTY_APPS = [
     "drf_spectacular",
     'rolepermissions',
     'channels',
+    'anymail',
     'cloudinary',
     'cloudinary_storage',
     'templated_mail',
@@ -214,11 +215,16 @@ CSRF_COOKIE_HTTPONLY = True
 X_FRAME_OPTIONS = "DENY"
 
 # EMAIL
-EMAIL_BACKEND = env("DJANGO_EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
+EMAIL_BACKEND = "anymail.backends.sendgrid.EmailBackend"
 EMAIL_TIMEOUT = 5
+ANYMAIL = {
+    "SENDGRID_API_KEY": env("SENDGRID_API_KEY"),
+}
+DEFAULT_FROM_EMAIL = "Online Car Market <noreply@online-car-market.com>"
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 # Django Admin URL.
-ADMIN_URL = "admin/"
+ADMIN_URL = env("DJANGO_ADMIN_URL", default="admin/")
 ADMINS = [("""Erdey Syoum""", "erdeysyoum@gmail.com")]
 MANAGERS = ADMINS
 
