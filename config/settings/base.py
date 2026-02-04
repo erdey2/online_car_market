@@ -215,11 +215,12 @@ CSRF_COOKIE_HTTPONLY = True
 X_FRAME_OPTIONS = "DENY"
 
 # EMAIL
-EMAIL_BACKEND = "anymail.backends.sendgrid.EmailBackend"
-EMAIL_TIMEOUT = 5
+EMAIL_BACKEND = "anymail.backends.brevo.EmailBackend"
+
 ANYMAIL = {
-    "SENDGRID_API_KEY": env("SENDGRID_API_KEY"),
+    "BREVO_API_KEY": env("BREVO_API_KEY"),
 }
+
 DEFAULT_FROM_EMAIL = "Online Car Market <noreply@online-car-market.com>"
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
