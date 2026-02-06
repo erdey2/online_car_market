@@ -78,6 +78,14 @@ class IsDealerOrAccountant(BasePermission):
              has_role(request.user, 'accountant'))
         )
 
+class IsDealerOrHR(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated and
+            (has_role(request.user, 'dealer') or
+             has_role(request.user, 'HR'))
+        )
+
 class IsBrokerOrSeller(BasePermission):
     message = "Only brokers or sellers can create or edit inspections."
 
@@ -87,3 +95,10 @@ class IsBrokerOrSeller(BasePermission):
 
         # Allow brokers, dealers, or sellers
         return any(has_role(request.user, ["broker", "dealer", "seller"]))
+
+class IsFinance(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and has_role(request.user, "finance")
+
+
+

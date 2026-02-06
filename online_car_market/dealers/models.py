@@ -32,6 +32,7 @@ class DealerStaff(models.Model):
             ('seller', 'Seller'),
             ('accountant', 'Accountant'),
             ('hr', 'HR'),
+            ('finance', 'Finance'),
         ]
     )
     assigned_at = models.DateTimeField(auto_now_add=True)

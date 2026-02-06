@@ -13,6 +13,9 @@ class SuperAdmin(AbstractUserRole):
         'verify_broker': True,
         'verify_dealer': True,
         'view_analytics': True,
+        'run_payroll': True,
+        'approve_payroll': True,
+        'lock_payroll': True,
     }
 
 class Admin(AbstractUserRole):
@@ -27,6 +30,7 @@ class Admin(AbstractUserRole):
         'verify_car': True,
         'verify_broker': True,
         'verify_dealer': True,
+        'run_payroll': True,
     }
 
 class Dealer(AbstractUserRole):
@@ -66,6 +70,8 @@ class HR(AbstractUserRole):
         'manage_leaves': True,
         'view_hr_reports': True,
         'view_payroll': True,
+        'run_payroll': False,
+        'approve_payroll': False,
     }
 
 class Seller(AbstractUserRole):
@@ -85,4 +91,33 @@ class Accountant(AbstractUserRole):
         'manage_accounting': True,
         'request_leave': True,
         'view_own_contract': True,
+        'view_payroll': True,
+        'view_payroll_report': True,
     }
+
+class Finance(AbstractUserRole):
+    """
+        Finance controls payroll & financial validation
+        """
+    available_permissions = {
+        # Read
+        "view_finance": True,
+        "view_payroll": True,
+        "view_payroll_report": True,
+        "view_salary_breakdown": True,
+
+        # Control
+        "run_payroll": True,
+        "approve_payroll": True,
+        "lock_payroll": True,
+
+        # Adjustments
+        "adjust_overtime": True,
+        "adjust_allowances": True,
+
+        # Explicit NO
+        "manage_employees": False,
+        "manage_salary_components": False,
+    }
+
+

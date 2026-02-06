@@ -6,6 +6,8 @@ from online_car_market.payroll.api.serializers import (EmployeeSerializer, Salar
                                                        )
 from online_car_market.payroll.selectors.payroll_queries import get_latest_payslip
 from rest_framework.permissions import IsAuthenticated
+from online_car_market.users.permissions.business_permissions import CanViewPayroll, CanRunPayroll, CanApprovePayroll
+from online_car_market.users.permissions.drf_permissions import IsDealer, IsDealerOrHR, IsFinance
 from rest_framework.viewsets import ModelViewSet
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -19,9 +21,9 @@ from online_car_market.payroll.services.payroll_runner import run_payroll
 class PayrollRunViewSet(viewsets.ModelViewSet):
     queryset = PayrollRun.objects.all().order_by("-created_at")
     serializer_class = PayrollRunSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated, CanViewPayroll]
 
-    @action(detail=True, methods=["post"])
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanRunPayroll])
     def run(self, request, pk=None):
         payroll_run = self.get_object()
 
@@ -45,6 +47,12 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK
         )
 
+    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanApprovePayroll])
+    def approve(self, request, pk=None):
+        payroll_run = self.get_object()
+        payroll_run.approve(by=request.user)
+        return Response({"detail": "Payroll approved"})
+
 class PayslipAPIView(ListAPIView):
     serializer_class = PayslipSerializer
     permission_classes = [IsAuthenticated]
@@ -56,22 +64,20 @@ class PayslipAPIView(ListAPIView):
 class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.all()
     serializer_class = EmployeeSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated, IsDealerOrHR]
 
 class SalaryComponentViewSet(viewsets.ModelViewSet):
     queryset = SalaryComponent.objects.all()
     serializer_class = SalaryComponentSerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated, IsDealer]
 
 class EmployeeSalaryViewSet(ModelViewSet):
-    queryset = EmployeeSalary.objects.select_related(
-        "employee", "component"
-    )
+    queryset = EmployeeSalary.objects.select_related("employee", "component")
     serializer_class = EmployeeSalarySerializer
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated, IsDealerOrHR]
 
 class OvertimeEmployeeViewSet(ModelViewSet):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAuthenticated, IsDealerOrHR | IsFinance]
     serializer_class = OvertimeSerializer
     queryset = OvertimeEntry.objects.all()
 

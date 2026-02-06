@@ -93,12 +93,43 @@ class CanPostCar(BasePermission):
 class CanManageAccounting(BasePermission):
     """Only super_admin, admin, broker, dealer, or accountant can manage accounting data."""
     def has_permission(self, request, view):
-        return has_role(request.user, ['super_admin', 'admin', 'broker', 'dealer', 'accountant'])
+        return has_role(request.user, ['super_admin', 'admin', 'broker', 'dealer', 'accountant', 'finance'])
 
 class CanManageSales(BasePermission):
     """Only super_admin, admin, broker, or dealer can manage sales."""
     def has_permission(self, request, view):
         return has_role(request.user, ['super_admin', 'admin', 'broker', 'dealer', 'seller'])
+
+class CanViewPayroll(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated and
+            has_permission(request.user, "view_payroll")
+        )
+
+class CanRunPayroll(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated and
+            has_permission(request.user, "run_payroll")
+        )
+
+class CanApprovePayroll(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated and
+            has_permission(request.user, "approve_payroll")
+        )
+
+class CanViewSalesData(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated and (
+                has_permission(request.user, 'view_accounting') or
+                has_permission(request.user, 'view_sales_dashboard') or
+                has_permission(request.user, 'view_finance')
+            )
+        )
 
 class IsRatingOwnerOrAdmin(BasePermission):
     def has_object_permission(self, request, view, obj):
@@ -141,4 +172,16 @@ class IsERPUser(BasePermission):
             return True
 
         return False
+
+class IsFinanceOrAdmin(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated and
+            (
+                has_role(request.user, "finance") or
+                has_role(request.user, "admin") or
+                has_role(request.user, "super_admin")
+            )
+        )
+
 
