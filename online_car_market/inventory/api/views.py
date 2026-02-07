@@ -1,5 +1,4 @@
 import logging
-
 from cloudinary.api import tags
 from django.db.models import Q, Avg
 from django.db.models.signals import post_save, post_delete
@@ -227,9 +226,9 @@ class CarViewSet(viewsets.ModelViewSet):
         else:
             qs = qs.filter(verification_status="verified")
 
-        broker_email = self.request.query_params.get("broker_email")
-        if broker_email:
-            qs = qs.filter(broker__profile__user__email=broker_email)
+        # broker_email = self.request.query_params.get("broker_email")
+        # if broker_email:
+            # qs = qs.filter(broker__profile__user__email=broker_email)
 
         return qs
 
@@ -239,7 +238,7 @@ class CarViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
     def create(self, request, *args, **kwargs):
-        # 1. Broker role check
+        # Broker role check
         if has_role(request.user, 'broker'):
             try:
                 broker_profile = BrokerProfile.objects.get(profile__user=request.user)
@@ -254,12 +253,12 @@ class CarViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-        # 2. Save main car data
+        # Save main car data
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         car = serializer.save()
 
-        # 3. Process uploaded images
+        # Process uploaded images
         uploaded_images = []
         for key, file in request.FILES.items():
             if key.startswith("uploaded_images"):
@@ -269,7 +268,7 @@ class CarViewSet(viewsets.ModelViewSet):
                 is_featured = request.data.get(f"uploaded_images[{index}].is_featured", "false").lower() == "true"
                 uploaded_images.append({"image_file": file, "caption": caption, "is_featured": is_featured })
 
-        # 4. Save CarImage instances
+        # Save CarImage instances
         first_image_id = None
         for i, img_data in enumerate(uploaded_images):
             car_image = CarImage.objects.create(car=car, image=img_data['image_file'], caption=img_data['caption'],
@@ -277,13 +276,13 @@ class CarViewSet(viewsets.ModelViewSet):
             if i == 0:
                 first_image_id = car_image.id
 
-        # 5. Ensure at least one featured image
+        # Ensure at least one featured image
         if not CarImage.objects.filter(car=car, is_featured=True).exists() and first_image_id:
             first_image = CarImage.objects.get(id=first_image_id)
             first_image.is_featured = True
             first_image.save()
 
-        # 6. Return full car data
+        # Return full car data
         return Response(self.get_serializer(car).data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
@@ -461,16 +460,16 @@ class UserCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
         user = self.request.user
         queryset = Car.objects.all()
 
-        # 1. Super admin / admin: full access
+        # Super admin / admin: full access
         if has_role(user, ['super_admin', 'admin']):
             return queryset
 
-        # 2. Dealer: see all cars under the dealership
+        # Dealer: see all cars under the dealership
         if hasattr(user, 'profile') and hasattr(user.profile, 'dealer_profile'):
             dealer = user.profile.dealer_profile
             return queryset.filter(dealer=dealer)
 
-        # 3. Broker: see cars posted by the broker
+        # Broker: see cars posted by the broker
         if hasattr(user, 'profile') and hasattr(user.profile, 'broker_profile'):
             broker = user.profile.broker_profile
             return queryset.filter(broker=broker)
