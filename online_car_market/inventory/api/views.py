@@ -218,18 +218,23 @@ class CarViewSet(viewsets.ModelViewSet):
         if has_role(user, ["super_admin", "admin"]):
             pass
         elif has_role(user, "dealer"):
-            qs = qs.filter(dealer__profile__user=user)
+            # qs = qs.filter(dealer__profile__user=user)
+            qs = qs.filter(
+                Q(dealer__profile__user=user) | Q(verification_status="verified")
+            )
+
         elif has_role(user, "seller"):
             qs = qs.filter(posted_by=user)
         elif has_role(user, "broker"):
-            qs = qs.filter(broker__profile__user=user)
+            qs = qs.filter(
+                Q(broker__profile__user=user) | Q(verification_status="verified")
+            )
         else:
             qs = qs.filter(verification_status="verified")
 
-        # broker_email = self.request.query_params.get("broker_email")
-        # if broker_email:
-            # qs = qs.filter(broker__profile__user__email=broker_email)
-
+        broker_email = self.request.query_params.get("broker_email")
+        if broker_email:
+            qs = qs.filter(broker__profile__user__email=broker_email)
         return qs
 
     def get_permissions(self):
