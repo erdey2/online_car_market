@@ -222,7 +222,6 @@ class CarViewSet(viewsets.ModelViewSet):
             qs = qs.filter(
                 Q(dealer__profile__user=user) | Q(verification_status="verified")
             )
-
         elif has_role(user, "seller"):
             qs = qs.filter(posted_by=user)
         elif has_role(user, "broker"):

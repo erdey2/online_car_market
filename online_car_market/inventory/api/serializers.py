@@ -171,7 +171,7 @@ class CarSerializer(serializers.ModelSerializer):
     broker = serializers.PrimaryKeyRelatedField(queryset=BrokerProfile.objects.all(), required=False, allow_null=True)
     posted_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
     images = CarImageSerializer(many=True, read_only=True)
-    uploaded_images = CarImageSerializer(many=True, write_only=True, required=False)
+    # uploaded_images = CarImageSerializer(many=True, write_only=True, required=False)
     bids = BidSerializer(many=True, read_only=True)
     verification_status = serializers.ChoiceField(choices=Car.VERIFICATION_STATUSES, read_only=True)
     make_ref = serializers.PrimaryKeyRelatedField(queryset=CarMake.objects.all(), required=False, allow_null=True)
