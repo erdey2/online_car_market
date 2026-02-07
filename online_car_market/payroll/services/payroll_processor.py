@@ -1,6 +1,7 @@
 from decimal import Decimal
 from django.db import transaction
-from online_car_market.payroll.models import EmployeeSalary, PayrollItem, PayrollLine, SalaryComponent, OvertimeEntry
+from online_car_market.payroll.models import PayrollItem, PayrollLine, SalaryComponent
+from online_car_market.hr.models import EmployeeSalary, OvertimeEntry
 from online_car_market.payroll.services.tax import calculate_income_tax
 from online_car_market.payroll.services.pension import calculate_pension
 from online_car_market.payroll.services.allowances import split_taxable

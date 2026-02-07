@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework import serializers
 from rolepermissions.checkers import has_role
 import bleach
-from ..models import Employee, Contract, Attendance, Leave
+from ..models import Employee, Contract, Attendance, Leave, SalaryComponent, EmployeeSalary, OvertimeEntry
 from online_car_market.hr.utils.pdf import generate_and_upload_pdf
 
 User = get_user_model()
@@ -312,4 +312,35 @@ class LeaveSerializer(serializers.ModelSerializer):
             employee=employee,
             **validated_data
         )
+
+class SalaryComponentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SalaryComponent
+        fields = ["id", "name", "component_type"]
+        read_only_fields = ["id"]
+
+class EmployeeSalarySerializer(serializers.ModelSerializer):
+    employee_id = serializers.CharField(
+        source="employee.employee_id", read_only=True
+    )
+    component_name = serializers.CharField(
+        source="component.name", read_only=True
+    )
+
+    class Meta:
+        model = EmployeeSalary
+        fields = [
+            "id",
+            "employee",
+            "employee_id",
+            "component",
+            "component_name",
+            "amount",
+        ]
+
+class OvertimeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OvertimeEntry
+        fields = "__all__"
+        read_only_fields = ['employee', 'created_at']
 

@@ -1,9 +1,10 @@
 from django.contrib import admin
-from online_car_market.payroll.models import Employee, EmployeeSalary, SalaryComponent, OvertimeEntry
+from online_car_market.payroll.models import Employee, SalaryComponent
+from online_car_market.hr.models import EmployeeSalary, OvertimeEntry
 
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
-    list_display = ("employee_id", "user", "hire_date", "is_active")
+    list_display = ("id", "user", "hire_date", "is_active")
 
 @admin.register(EmployeeSalary)
 class EmployeeSalaryAdmin(admin.ModelAdmin):
@@ -15,4 +16,14 @@ class SalaryComponentAdmin(admin.ModelAdmin):
 
 @admin.register(OvertimeEntry)
 class OvertimeEntryAdmin(admin.ModelAdmin):
-    list_display = ("employee", "payroll_run", "overtime_type", "hours", "created_at")
+    list_display = (
+        "employee",
+        "date",
+        "overtime_type",
+        "hours",
+        "approved",
+        "created_at",
+    )
+    list_filter = ("approved", "overtime_type", "date")
+    search_fields = ("employee__user__email",)
+

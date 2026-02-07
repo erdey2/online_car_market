@@ -1,6 +1,5 @@
 from django.db import models
 from django.utils import timezone
-from cloudinary.models import CloudinaryField
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -124,4 +123,50 @@ class Leave(models.Model):
     class Meta:
         verbose_name = 'Leave'
         verbose_name_plural = 'Leaves'
+
+class SalaryComponent(models.Model):
+    EARNING = "earning"
+    DEDUCTION = "deduction"
+
+    COMPONENT_TYPE = [
+        (EARNING, "Earning"),
+        (DEDUCTION, "Deduction"),
+    ]
+
+    name = models.CharField(max_length=100)
+    component_type = models.CharField(max_length=10, choices=COMPONENT_TYPE)
+    is_taxable = models.BooleanField(default=True)
+    is_pensionable = models.BooleanField(default=False)
+    is_system = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.name
+
+class EmployeeSalary(models.Model):
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE)
+    component = models.ForeignKey(SalaryComponent, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        unique_together = ("employee", "component")
+
+class OvertimeEntry(models.Model):
+    OVERTIME_TYPE_CHOICES = [
+        ("1.5", "Normal Overtime (1.5x)"),
+        ("1.75", "Weekend Overtime (1.75x)"),
+        ("2.0", "Special Overtime (2.0x)"),
+        ("2.5", "Holiday Overtime (2.5x)"),
+    ]
+
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="overtime_entries")
+    overtime_type = models.CharField(max_length=4, choices=OVERTIME_TYPE_CHOICES)
+    hours = models.DecimalField(max_digits=6, decimal_places=2)
+    approved = models.BooleanField(default=False)
+    date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date"]
+
+
 

@@ -1,17 +1,21 @@
 import logging
 from django.utils import timezone
 from django.db.models import Count
-from django.db.models.functions import TruncMonth, TruncYear
-from ..models import Employee, Contract, Attendance, Leave
+from django.db.models.functions import TruncMonth
+from ..models import Employee, Contract, Attendance, Leave, SalaryComponent, EmployeeSalary, OvertimeEntry
 from .serializers import (EmployeeSerializer, ContractSerializer, AttendanceSerializer,
-                          LeaveSerializer, SignedUploadSerializer, FinalUploadSerializer)
+                          LeaveSerializer, SignedUploadSerializer, FinalUploadSerializer,
+                          SalaryComponentSerializer, OvertimeSerializer, EmployeeSalarySerializer
+
+                          )
 from cloudinary.uploader import upload
 from rest_framework import viewsets, status
+from rest_framework.viewsets import ModelViewSet
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rolepermissions.checkers import has_role
-from online_car_market.users.permissions.drf_permissions import IsHR
+from online_car_market.users.permissions.drf_permissions import IsHR, IsDealer, IsDealerOrHR, IsFinance
 from online_car_market.users.permissions.business_permissions import IsHRorDealer, IsOwnerOrHR
 from drf_spectacular.utils import extend_schema_view, extend_schema, OpenApiResponse, OpenApiParameter
 from templated_mail.mail import BaseEmailMessage
@@ -437,4 +441,45 @@ class LeaveViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save()
+
+@extend_schema(
+    tags=["Payroll – Salary Components"],
+    description=(
+        "Manage salary components used in payroll calculations. "
+        "Examples: Basic Salary, Allowances, Overtime, Deductions. "
+        "These components are later assigned to employees."
+    )
+)
+class SalaryComponentViewSet(viewsets.ModelViewSet):
+    queryset = SalaryComponent.objects.all()
+    serializer_class = SalaryComponentSerializer
+    permission_classes = [IsAuthenticated, IsDealer]
+
+@extend_schema(
+    tags=["Payroll – Employee Salary"],
+    description=(
+        "Assign salary components to individual employees. "
+        "Each record links an employee with a salary component "
+        "and a fixed or calculated amount. "
+        "Used during payroll processing."
+    )
+)
+class EmployeeSalaryViewSet(ModelViewSet):
+    queryset = EmployeeSalary.objects.select_related("employee", "component")
+    serializer_class = EmployeeSalarySerializer
+    permission_classes = [IsAuthenticated, IsDealerOrHR]
+
+@extend_schema(
+    tags=["Payroll – Overtime"],
+    description=(
+        "Manage overtime entries for employees. "
+        "Overtime records are used to calculate additional pay "
+        "during payroll processing. "
+        "Finance users may audit and approve overtime data."
+    )
+)
+class OvertimeEmployeeViewSet(ModelViewSet):
+    permission_classes = [IsAuthenticated, IsDealerOrHR | IsFinance]
+    serializer_class = OvertimeSerializer
+    queryset = OvertimeEntry.objects.all()
 
