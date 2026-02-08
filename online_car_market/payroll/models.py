@@ -15,6 +15,7 @@ class PayrollRun(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        db_table = "payroll_payrollrun"
         constraints = [
             models.UniqueConstraint(
                 fields=["period"],
@@ -41,6 +42,7 @@ class PayrollItem(models.Model):
     net_salary = models.DecimalField(max_digits=12, decimal_places=2)
 
     class Meta:
+        db_table = "payroll_payrollitem"
         constraints = [
             models.UniqueConstraint(
                 fields=["payroll_run", "employee"],
@@ -55,6 +57,9 @@ class PayrollLine(models.Model):
         on_delete=models.CASCADE
     )
     amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        db_table = "payroll_payrollline"
 
 
 

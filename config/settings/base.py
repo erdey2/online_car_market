@@ -87,6 +87,7 @@ LOCAL_APPS = [
     "online_car_market.rating",
     "online_car_market.otp_reset",
     "online_car_market.payroll",
+    "online_car_market.advertisement",
     "online_car_market.payment",
 ]
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS

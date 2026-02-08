@@ -106,8 +106,19 @@ class PayslipAPIView(ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        payslip = get_latest_payslip(self.request.user.employee)
-        return PayrollItem.objects.filter(id=payslip.id) if payslip else PayrollItem.objects.none()
+        user = self.request.user
+
+        # User is not an employee (admin, dealer, HR, finance, etc.)
+        if not hasattr(user, "employee_profile"):
+            return PayrollItem.objects.none()
+
+        payslip = get_latest_payslip(user.employee_profile)
+
+        if not payslip:
+            return PayrollItem.objects.none()
+
+        return PayrollItem.objects.filter(id=payslip.id)
+
 
 
 

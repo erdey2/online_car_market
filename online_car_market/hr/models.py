@@ -139,6 +139,9 @@ class SalaryComponent(models.Model):
     is_pensionable = models.BooleanField(default=False)
     is_system = models.BooleanField(default=False)
 
+    class Meta:
+        db_table = 'payroll_salarycomponent'
+
     def __str__(self):
         return self.name
 
@@ -148,6 +151,7 @@ class EmployeeSalary(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
 
     class Meta:
+        db_table = 'payroll_employeesalary'
         unique_together = ("employee", "component")
 
 class OvertimeEntry(models.Model):
@@ -162,10 +166,13 @@ class OvertimeEntry(models.Model):
     overtime_type = models.CharField(max_length=4, choices=OVERTIME_TYPE_CHOICES)
     hours = models.DecimalField(max_digits=6, decimal_places=2)
     approved = models.BooleanField(default=False)
-    date = models.DateField()
-    created_at = models.DateTimeField(auto_now_add=True)
+    date = models.DateField(null=True, blank=True)
+    # date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    # created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        db_table = 'payroll_overtimeentry'
         ordering = ["-date"]
 
 

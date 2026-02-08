@@ -65,6 +65,7 @@ urlpatterns = [
     path('api/payroll/', include('online_car_market.payroll.api.urls')),
     path('api/notifications/', include("online_car_market.notifications.api.urls")),
     path('api/ratings/', include('online_car_market.rating.api.urls')),
+    path('api/advertisements/', include('online_car_market.advertisement.api.urls')),
 
     path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
