@@ -9,7 +9,7 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework.decorators import action
 from online_car_market.users.permissions.drf_permissions import IsBuyer, IsSuperAdminOrAdmin, IsDealer, IsBroker
 from online_car_market.inventory.models import Car
-from online_car_market.users.api.serializers import UserMiniSerializer
+from online_car_market.bids.api.serializers import ProfileMiniSerializer
 
 
 @extend_schema_view(
@@ -172,7 +172,7 @@ class BidViewSet(ModelViewSet):
                 "id": highest_bid.id,
                 "amount": highest_bid.amount,
                 "user": highest_bid.user.id,
-                "profile": UserMiniSerializer(highest_bid.user.profile).data,
+                "profile": ProfileMiniSerializer(highest_bid.user.profile).data,
                 "created_at": highest_bid.created_at,
             } if highest_bid else None,
             "top_3_bids": top_serializer.data
