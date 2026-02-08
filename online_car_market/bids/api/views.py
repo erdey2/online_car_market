@@ -16,40 +16,65 @@ from online_car_market.users.api.serializers import UserMiniSerializer
     list=extend_schema(
         tags=["Bids"],
         summary="List Bids",
-        description="List all bids made by the authenticated user (Buyers only).",
+        description=(
+            "Retrieve a list of bids.\n\n"
+            "- Admins and Super Admins receive all bids.\n"
+            "- Regular users receive only their own bids."
+        ),
         responses={200: BidSerializer(many=True)},
     ),
     create=extend_schema(
         tags=["Bids"],
         summary="Create a New Bid",
-        description="Create a new bid on a car. Only users with the 'buyer' role can perform this action.",
+        description=(
+            "Create a new bid on a car.\n\n"
+            "- The authenticated user is automatically set as the bid owner.\n"
+            "- The car must be available for bidding.\n"
+            "- Bid amount must be greater than zero."
+        ),
         request=BidSerializer,
         responses={201: BidSerializer},
     ),
     retrieve=extend_schema(
         tags=["Bids"],
         summary="Retrieve a Bid",
-        description="Retrieve a specific bid by its ID. Only the bid owner (Buyer) can access it.",
+        description=(
+            "Retrieve a specific bid by its ID.\n\n"
+            "- Admins and Super Admins can retrieve any bid.\n"
+            "- Regular users can retrieve only their own bids."
+        ),
         responses={200: BidSerializer},
     ),
     update=extend_schema(
         tags=["Bids"],
         summary="Update a Bid",
-        description="Fully update a bid (e.g., change car or amount). Only the bid owner (Buyer) can perform this action.",
+        description=(
+            "Fully update a bid.\n\n"
+            "- Admins and Super Admins can update any bid.\n"
+            "- Regular users can update only their own bids."
+        ),
         request=BidSerializer,
         responses={200: BidSerializer},
     ),
     partial_update=extend_schema(
         tags=["Bids"],
         summary="Partially Update a Bid",
-        description="Partially update a bid (e.g., modify amount). Only the bid owner (Buyer) can do this.",
+        description=(
+            "Partially update a bid (e.g., modify the bid amount).\n\n"
+            "- Admins and Super Admins can update any bid.\n"
+            "- Regular users can update only their own bids."
+        ),
         request=BidSerializer,
         responses={200: BidSerializer},
     ),
     destroy=extend_schema(
         tags=["Bids"],
         summary="Delete a Bid",
-        description="Delete a bid. Only the bid owner (Buyer) can delete their own bid.",
+        description=(
+            "Delete a bid.\n\n"
+            "- Admins and Super Admins can delete any bid.\n"
+            "- Regular users can delete only their own bids."
+        ),
         responses={204: None},
     ),
 )
