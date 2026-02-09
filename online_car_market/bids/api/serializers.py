@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ..models import Bid
+from ..models import Bid, Auction
 from online_car_market.inventory.models import Car
 from online_car_market.users.models import Profile
 from django.contrib.auth import get_user_model
@@ -54,3 +54,9 @@ class BidSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user
         return super().create(validated_data)
+
+class AuctionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Auction
+        fields = ['__all__']
+

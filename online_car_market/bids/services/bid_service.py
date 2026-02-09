@@ -1,43 +1,28 @@
 from django.db import transaction
-from django.db.models import Max
-from rest_framework.exceptions import ValidationError
-
-from online_car_market.bids.models import Bid
+from django.utils import timezone
 from online_car_market.inventory.models import Car
-
+from ..models import Auction, Bid
 
 class BidService:
+
     @staticmethod
-    def place_bid(*, user, car_id, amount):
-        """
-        Place a bid safely with full race-condition protection.
-        """
+    @transaction.atomic
+    def place_bid(user, car_id, amount):
+        car = Car.objects.select_for_update().get(id=car_id)
 
-        with transaction.atomic():
-            # 🔒 Lock the car row (this serializes bids per car)
-            car = (
-                Car.objects
-                .select_for_update()
-                .get(id=car_id)
-            )
+        try:
+            auction = car.auction
+        except Auction.DoesNotExist:
+            raise ValueError("This car has no active auction.")
 
-            # Get current highest bid (locked by transaction)
-            highest_bid = (
-                Bid.objects
-                .filter(car=car)
-                .aggregate(max_amount=Max("amount"))
-                ["max_amount"]
-            ) or 0
+        now = timezone.now()
 
-            if amount <= highest_bid:
-                raise ValidationError(
-                    f"Bid must be higher than current highest bid ({highest_bid})"
-                )
+        if auction.status != "active" or not (auction.start_at <= now <= auction.end_at):
+            raise ValueError("Auction is not active.")
 
-            bid = Bid.objects.create(
-                car=car,
-                user=user,
-                amount=amount
-            )
+        highest_bid = (Bid.objects.filter(car=car).order_by("-amount").first())
 
-            return bid
+        if highest_bid and amount <= highest_bid.amount:
+            raise ValueError("Bid must be higher than current highest bid.")
+
+        return Bid.objects.create(car=car, user=user, amount=amount)

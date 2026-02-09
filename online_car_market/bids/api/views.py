@@ -1,14 +1,14 @@
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from ..models import Bid
-from .serializers import BidSerializer
+from ..models import Bid, Auction
+from .serializers import BidSerializer, AuctionSerializer
 from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.decorators import action
 from online_car_market.users.permissions.drf_permissions import IsBuyer, IsSuperAdminOrAdmin
-from online_car_market.bids.services import bid_service
+from online_car_market.bids.services import bid_service, auction_service
 
 
 @extend_schema_view(
@@ -116,22 +116,54 @@ class BidViewSet(ModelViewSet):
             "top_3_bids": BidSerializer(top_bids, many=True).data,
         })
 
-    # ADMIN MANAGE
-    @action(detail=True, methods=["patch"], permission_classes=[IsSuperAdminOrAdmin])
-    def manage(self, request, pk=None):
-        bid = self.get_object()
-        status_value = request.data.get("status")
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Auctions"],
+        summary="List Auctions",
+        description="Admins can list all auctions."
+    ),
+    retrieve=extend_schema(
+        tags=["Auctions"],
+        summary="Retrieve an Auction",
+        description="Get auction details."
+    )
+)
+class AuctionViewSet(ModelViewSet):
+    serializer_class = AuctionSerializer
+    queryset = Auction.objects.all()
+    permission_classes = [IsAuthenticated, IsSuperAdminOrAdmin]
+    http_method_names = ['get', 'post', 'patch']
 
-        if status_value not in ["approved", "rejected"]:
-            return Response({"error": "Invalid status"}, status=status.HTTP_400_BAD_REQUEST)
+    @extend_schema(
+        tags=["Auctions"],
+        summary="Close Auction",
+        description="Super admin closes the auction and determines the winner."
+    )
+    @action(detail=True, methods=["post"])
+    def close(self, request, pk=None):
+        auction = self.get_object()
+        highest_bid = auction_service.close_auction(auction.id)
 
-        bid.status = status_value
-        bid.save(update_fields=["status"])
+        return Response({
+            "status": "closed",
+            "winner": highest_bid.user.id if highest_bid else None,
+            "amount": highest_bid.amount if highest_bid else None
+        })
 
-        return Response(
-            {"detail": f"Bid {status_value} successfully."},
-            status=status.HTTP_200_OK
-        )
+    @extend_schema(
+        tags=["Auctions"],
+        summary="Cancel Auction",
+        description="Super admin cancels an auction (optional)."
+    )
+    @action(detail=True, methods=["post"])
+    def cancel(self, request, pk=None):
+        auction = self.get_object()
+        auction.status = "cancelled"
+        auction.save(update_fields=["status"])
+        return Response({"detail": "Auction cancelled"}, status=status.HTTP_200_OK)
+
+
+
 
 
 
