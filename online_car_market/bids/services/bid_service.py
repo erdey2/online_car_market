@@ -22,7 +22,7 @@ class BidService:
 
         highest_amount = (
             Bid.objects
-            .filter(auction=auction)
+            .filter(car_id=car_id)
             .aggregate(max=Max("amount"))["max"]
         )
 
@@ -31,6 +31,6 @@ class BidService:
 
         return Bid.objects.create(
             user=user,
-            auction=auction,
+            car_id=car_id,
             amount=amount
         )

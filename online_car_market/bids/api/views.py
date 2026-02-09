@@ -33,7 +33,7 @@ class BidViewSet(ModelViewSet):
     http_method_names = ["get", "post"]
 
     def get_queryset(self):
-        qs = Bid.objects.select_related("user", "auction", "auction__car")
+        qs = Bid.objects.select_related("user", "user__profile", "car")
         if has_role(self.request.user, ["admin", "superadmin"]):
             return qs.order_by("-created_at")
         return qs.filter(user=self.request.user).order_by("-created_at")
@@ -66,8 +66,8 @@ class BidViewSet(ModelViewSet):
     def car_bid_history(self, request, car_id=None):
         bids = (
             Bid.objects
-            .filter(auction__car_id=car_id)
-            .select_related("user", "auction")
+            .filter(car_id=car_id)
+            .select_related("user", "user__profile", "car")
             .order_by("-created_at")
         )
 
