@@ -58,5 +58,5 @@ class BidSerializer(serializers.ModelSerializer):
 class AuctionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Auction
-        fields = ['__all__']
+        fields = '__all__'
 
