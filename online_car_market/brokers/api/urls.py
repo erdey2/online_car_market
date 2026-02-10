@@ -1,19 +1,23 @@
 from django.urls import path, include
 from rest_framework_nested import routers
-from .views import (BrokerProfileViewSet, BrokerRatingViewSet, BrokerVerificationViewSet,
-                    BrokerApplicationView, AdminBrokerActionView)
+from .views import (
+    BrokerProfileViewSet,
+    BrokerRatingViewSet,
+    BrokerVerificationViewSet,
+    BrokerApplicationView,
+    AdminBrokerViewSet,
+)
 
-# Main broker router
 router = routers.SimpleRouter()
 router.register('profiles', BrokerProfileViewSet, basename='broker-profile')
-router.register(r'verifications', BrokerVerificationViewSet, basename='broker-verifications')
-router.register(r'ratings', BrokerRatingViewSet, basename='broker-ratings')
+router.register('verifications', BrokerVerificationViewSet, basename='broker-verifications')
+router.register('ratings', BrokerRatingViewSet, basename='broker-ratings')
+
+admin_router = routers.SimpleRouter()
+admin_router.register('brokers', AdminBrokerViewSet, basename='admin-brokers')
 
 urlpatterns = [
-    # Router URLs
     path('', include(router.urls)),
-    # Broker self-application
     path('application/', BrokerApplicationView.as_view(), name='broker-application'),
-    # Admin workflow actions (lookup by User ID)
-    path('admin/<int:id>/<str:action>/', AdminBrokerActionView.as_view(), name='admin-broker-action'),
+    path('admin/', include(admin_router.urls)),
 ]

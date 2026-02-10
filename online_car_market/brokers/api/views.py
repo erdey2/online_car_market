@@ -117,84 +117,116 @@ class BrokerApplicationView(APIView):
             status=status.HTTP_201_CREATED,
         )
 
-# Admin Broker Actions
-@extend_schema(
-    tags=["Admin - Broker Management"],
-    parameters=[
-        OpenApiParameter(
-            name="id",
-            type=OpenApiTypes.INT,
-            location="path",
-            description="User ID of the broker"
-        ),
-        OpenApiParameter(
-            name="action",
-            type=OpenApiTypes.STR,
-            location="path",
-            enum=["approve", "reject", "suspend", "reactivate"],
-            description="Action to perform on the broker"
-        ),
-        OpenApiParameter(
-            name="rejection_reason",
-            type=OpenApiTypes.STR,
-            location="body",
-            required=False,
-            description="Reason for rejecting a broker (required if action is reject)"
-        )
-    ],
-    description="Perform an admin action on a broker by User ID. Actions: approve, reject, suspend, reactivate."
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Admin - Broker Management"],
+        summary="List broker applications",
+        description="""
+        List broker applications for admin review.
+
+        Query params:
+        - status: PENDING | APPROVED | REJECTED | SUSPENDED
+        """
+    ),
+    retrieve=extend_schema(
+        tags=["Admin - Broker Management"],
+        summary="Retrieve broker application details",
+    ),
 )
-class AdminBrokerActionView(APIView):
-    permission_classes = [IsAuthenticated, IsSuperAdmin | IsAdmin]
+class AdminBrokerViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = BrokerProfileSerializer
+    permission_classes = [IsAuthenticated, IsAdmin | IsSuperAdmin]
 
-    def post(self, request, id, action):
-        """
-        Perform admin action on broker identified by User ID.
-        """
-        # Lookup BrokerProfile by User ID
-        try:
-            broker = BrokerProfile.objects.get(profile__user__id=id)
-        except BrokerProfile.DoesNotExist:
-            return Response(
-                {"detail": "Broker not found for this user"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        # Map actions to service functions
-        actions_map = {
-            "approve": approve_broker,
-            "reject": reject_broker,
-            "suspend": suspend_broker,
-            "reactivate": reactivate_broker,
-        }
-
-        service = actions_map.get(action)
-        if not service:
-            return Response(
-                {"detail": f"Invalid action '{action}'"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            if action == "reject":
-                reason = request.data.get("rejection_reason")
-                if not reason:
-                    return Response(
-                        {"detail": "rejection_reason is required for rejection"},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                service(broker, request.user, reason)
-            else:
-                service(broker, request.user)
-
-        except ValueError as exc:
-            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-
-        logger.info(f"Admin {request.user.email} performed {action} on broker {broker.pk}")
-        return Response(
-            {"detail": f"Broker successfully {action}ed."},
-            status=status.HTTP_200_OK
+    def get_queryset(self):
+        queryset = BrokerProfile.objects.select_related(
+            "profile", "profile__user"
         )
+
+        status_param = self.request.query_params.get("status")
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+
+        return queryset.order_by("-created_at")
+
+    # Admin Actions
+    @extend_schema(
+        tags=["Admin - Broker Management"],
+        summary="Approve broker application",
+        responses={200: OpenApiResponse(description="Broker approved successfully")},
+    )
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        broker = self.get_object()
+        approve_broker(broker, request.user)
+
+        logger.info(f"Admin {request.user.email} approved broker {broker.pk}")
+        return Response(
+            {"detail": "Broker approved successfully."},
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        tags=["Admin - Broker Management"],
+        summary="Reject broker application",
+        request=inline_serializer(
+            name="RejectBrokerRequest",
+            fields={
+                "rejection_reason": serializers.CharField(),
+            },
+        ),
+        responses={200: OpenApiResponse(description="Broker rejected successfully")},
+    )
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        broker = self.get_object()
+
+        reason = request.data.get("rejection_reason")
+        if not reason:
+            return Response(
+                {"detail": "rejection_reason is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reject_broker(broker, request.user, reason)
+
+        logger.info(f"Admin {request.user.email} rejected broker {broker.pk}")
+        return Response(
+            {"detail": "Broker rejected successfully."},
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        tags=["Admin - Broker Management"],
+        summary="Suspend broker",
+        responses={200: OpenApiResponse(description="Broker suspended successfully")},
+    )
+    @action(detail=True, methods=["post"])
+    def suspend(self, request, pk=None):
+        broker = self.get_object()
+        suspend_broker(broker, request.user)
+
+        logger.info(f"Admin {request.user.email} suspended broker {broker.pk}")
+        return Response(
+            {"detail": "Broker suspended successfully."},
+            status=status.HTTP_200_OK,
+        )
+
+    @extend_schema(
+        tags=["Admin - Broker Management"],
+        summary="Reactivate broker",
+        responses={200: OpenApiResponse(description="Broker reactivated successfully")},
+    )
+    @action(detail=True, methods=["post"])
+    def reactivate(self, request, pk=None):
+        broker = self.get_object()
+        reactivate_broker(broker, request.user)
+
+        logger.info(f"Admin {request.user.email} reactivated broker {broker.pk}")
+        return Response(
+            {"detail": "Broker reactivated successfully."},
+            status=status.HTTP_200_OK,
+        )
+
 
 
 # Broker Profile ViewSet
@@ -271,6 +303,8 @@ class BrokerVerificationViewSet(viewsets.ViewSet):
 
         logger.info(f"Broker {broker.pk} verification updated by {request.user.email}")
         return Response(serializer.data)
+
+
 
 # Broker Ratings
 @extend_schema_view(
