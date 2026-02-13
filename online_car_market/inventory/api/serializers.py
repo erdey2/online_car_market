@@ -551,7 +551,7 @@ class CarListSerializer(serializers.ModelSerializer):
             }
 
         return None
-    
+
 
 class CarDetailSerializer(serializers.ModelSerializer):
     images = CarImageSerializer(many=True, read_only=True)
@@ -582,16 +582,18 @@ class CarDetailSerializer(serializers.ModelSerializer):
             return {
                 "type": "dealer",
                 "id": obj.dealer.id,
-                "name": obj.dealer.business_name,
-                "average_rating": obj.dealer_avg,
+                "name": obj.dealer.get_display_name(),
+                "is_verified": obj.dealer.is_verified,
             }
-        elif obj.broker:
+
+        if obj.broker:
             return {
                 "type": "broker",
                 "id": obj.broker.id,
-                "name": obj.broker.business_name,
-                "average_rating": obj.broker_avg,
+                "name": obj.broker.get_display_name(),
+                "is_verified": obj.broker.is_verified,
             }
+
         return None
 
     def get_highest_bid(self, obj):
