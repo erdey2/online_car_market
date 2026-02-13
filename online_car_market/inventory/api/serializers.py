@@ -586,6 +586,7 @@ class CarDetailSerializer(serializers.ModelSerializer):
     bid_count = serializers.IntegerField(source="bids.count", read_only=True)
     highest_bid = serializers.SerializerMethodField()
 
+
     class Meta:
         model = Car
         exclude = ["dealer", "broker"]
@@ -607,6 +608,14 @@ class CarDetailSerializer(serializers.ModelSerializer):
             "contact_number": getattr(profile, 'contact', None),
             "is_verified": getattr(seller_obj, 'is_verified', None),
         }
+
+    def get_seller_average_rating(self, obj):
+        seller_obj = obj.dealer or obj.broker
+        if not seller_obj:
+            return None
+
+        avg = seller_obj.ratings.aggregate(avg=Avg("rating"))["avg"]
+        return round(avg, 1) if avg else None
 
     def get_highest_bid(self, obj):
         return obj.bids.aggregate(max_amount=Max("amount"))["max_amount"]
