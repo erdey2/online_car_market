@@ -552,9 +552,9 @@ class CarListSerializer(serializers.ModelSerializer):
 
         return None
 
-
 class CarDetailSerializer(serializers.ModelSerializer):
     images = CarImageSerializer(many=True, read_only=True)
+    bids = BidSerializer(many=True, read_only=True)
     seller = serializers.SerializerMethodField()
     bid_count = serializers.IntegerField(source="bids.count", read_only=True)
     highest_bid = serializers.SerializerMethodField()
@@ -563,8 +563,7 @@ class CarDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Car
-        # exclude = ["dealer", "broker"]
-        fields = '__all__'
+        exclude = ["dealer", "broker"]
 
     def get_dealer_average_rating(self, obj) -> float | None:
         if obj.dealer:
