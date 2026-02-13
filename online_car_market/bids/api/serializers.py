@@ -16,7 +16,6 @@ class CarMiniSerializer(serializers.ModelSerializer):
         model = Car
         fields = ['id', 'make', 'model']
 
-
 class BidSerializer(serializers.ModelSerializer):
     # WRITE
     car = serializers.PrimaryKeyRelatedField(queryset=Car.objects.all(), write_only=True)

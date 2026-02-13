@@ -560,11 +560,22 @@ class BidNestedSerializer(serializers.ModelSerializer):
         fields = ["id", "bidder", "amount", "created_at"]
 
     def get_bidder(self, obj):
+        user = obj.user
+        profile = getattr(user, 'profile', None)
+
+        if profile:
+            first_name = profile.first_name
+            last_name = profile.last_name
+        else:
+            first_name = None
+            last_name = None
+
         return {
-            "id": obj.profile.id,
-            "first_name": obj.profile.first_name,
-            "last_name": obj.profile.last_name,
+            "id": user.id,
+            "first_name": first_name,
+            "last_name": last_name,
         }
+
 
 class CarDetailSerializer(serializers.ModelSerializer):
     images = CarImageSerializer(many=True, read_only=True)
