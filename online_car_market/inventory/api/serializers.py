@@ -1,5 +1,5 @@
 from django.utils import timezone
-from django.db.models import Avg
+from django.db.models import Avg, Max
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
@@ -7,7 +7,7 @@ from ..models import Car, CarImage, CarMake, CarModel, FavoriteCar, CarView
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.users.models import Profile
-from online_car_market.bids.api.serializers import BidSerializer
+from online_car_market.bids.models import Bid
 from django.contrib.auth import get_user_model
 import re, bleach, logging
 from datetime import datetime
@@ -552,53 +552,58 @@ class CarListSerializer(serializers.ModelSerializer):
 
         return None
 
+class BidNestedSerializer(serializers.ModelSerializer):
+    bidder = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Bid
+        fields = ["id", "user", "amount", "created_at"]
+
+    def get_bidder(self, obj):
+        return {
+            "id": obj.profile.id,
+            "first_name": obj.profile.first_name,
+            "last_name": obj.profile.last_name,
+        }
+
 class CarDetailSerializer(serializers.ModelSerializer):
     images = CarImageSerializer(many=True, read_only=True)
-    bids = BidSerializer(many=True, read_only=True)
+    bids = BidNestedSerializer(many=True, read_only=True)
+
     seller = serializers.SerializerMethodField()
+    seller_average_rating = serializers.SerializerMethodField()
+
     bid_count = serializers.IntegerField(source="bids.count", read_only=True)
     highest_bid = serializers.SerializerMethodField()
-    dealer_average_rating = serializers.FloatField(source="dealer_avg", read_only=True)
-    broker_average_rating = serializers.FloatField(source="broker_avg", read_only=True)
+
 
     class Meta:
         model = Car
         exclude = ["dealer", "broker"]
 
-    def get_dealer_average_rating(self, obj) -> float | None:
-        if obj.dealer:
-            avg_rating = obj.dealer.ratings.aggregate(Avg("rating"))["rating__avg"]
-            return round(avg_rating, 1) if avg_rating else None
-        return None
-
-    def get_broker_average_rating(self, obj) -> float | None:
-        if obj.broker:
-            avg_rating = obj.broker.ratings.aggregate(Avg("rating"))["rating__avg"]
-            return round(avg_rating, 1) if avg_rating else None
-        return None
-
     def get_seller(self, obj):
-        if obj.dealer:
-            return {
-                "type": "dealer",
-                "id": obj.dealer.id,
-                "name": obj.dealer.get_display_name(),
-                "is_verified": obj.dealer.is_verified,
-            }
+        seller_obj = obj.dealer or obj.broker
+        if not seller_obj:
+            return None
 
-        if obj.broker:
-            return {
-                "type": "broker",
-                "id": obj.broker.id,
-                "name": obj.broker.get_display_name(),
-                "is_verified": obj.broker.is_verified,
-            }
+        return {
+            "type": "dealer" if obj.dealer else "broker",
+            "id": seller_obj.id,
+            "name": seller_obj.get_display_name(),
+            "is_verified": seller_obj.is_verified,
+        }
 
-        return None
+    def get_seller_average_rating(self, obj):
+        seller_obj = obj.dealer or obj.broker
+        if not seller_obj:
+            return None
+
+        avg = seller_obj.ratings.aggregate(avg=Avg("rating"))["avg"]
+        return round(avg, 1) if avg else None
 
     def get_highest_bid(self, obj):
-        highest = obj.bids.order_by("-amount").first()
-        return highest.amount if highest else None
+        return obj.bids.aggregate(max_amount=Max("amount"))["max_amount"]
+
 
 class FavoriteCarSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)

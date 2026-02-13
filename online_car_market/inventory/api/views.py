@@ -1,5 +1,5 @@
 import logging
-from django.db.models import Q, Avg
+from django.db.models import Q, Avg, F
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from django.views.decorators.cache import cache_page
@@ -20,15 +20,16 @@ from drf_spectacular.utils import (extend_schema, extend_schema_view, OpenApiPar
                                    OpenApiTypes, OpenApiExample, OpenApiResponse)
 from ..models import Car, CarMake, CarModel, FavoriteCar, CarView
 from .serializers import (
-                          VerifyCarSerializer, BidSerializer, CarMakeSerializer, ContactSerializer,
+                          VerifyCarSerializer, CarMakeSerializer, ContactSerializer,
                           CarModelSerializer, FavoriteCarSerializer, CarViewSerializer,
                           CarWriteSerializer, CarListSerializer, CarDetailSerializer
                           )
-from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, IsSuperAdminOrAdminOrBuyer
+from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, IsSuperAdminOrAdminOrBuyer, IsBuyer
 from online_car_market.users.permissions.business_permissions import CanPostCar
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.users.models import Profile
+from online_car_market.bids.api.serializers import BidSerializer
 from online_car_market.inventory.services.car_service import CarService
 from online_car_market.inventory.services.car_filter_service import CarFilterService
 
@@ -204,6 +205,8 @@ class CarViewSet(viewsets.ModelViewSet):
             return CarWriteSerializer
         if self.action == "verify":
             return VerifyCarSerializer
+        if self.action == "bid":
+            return BidSerializer
         return CarListSerializer
 
     def get_queryset(self):
