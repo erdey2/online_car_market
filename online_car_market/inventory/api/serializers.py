@@ -576,7 +576,6 @@ class BidNestedSerializer(serializers.ModelSerializer):
             "last_name": last_name,
         }
 
-
 class CarDetailSerializer(serializers.ModelSerializer):
     images = CarImageSerializer(many=True, read_only=True)
     bids = BidNestedSerializer(many=True, read_only=True)
@@ -587,7 +586,6 @@ class CarDetailSerializer(serializers.ModelSerializer):
     bid_count = serializers.IntegerField(source="bids.count", read_only=True)
     highest_bid = serializers.SerializerMethodField()
 
-
     class Meta:
         model = Car
         exclude = ["dealer", "broker"]
@@ -597,22 +595,18 @@ class CarDetailSerializer(serializers.ModelSerializer):
         if not seller_obj:
             return None
 
+        seller_type = "dealer" if obj.dealer else "broker"
+        profile = getattr(seller_obj, 'profile', None)
+        user = getattr(profile, 'user', None)
+
         return {
-            "type": "dealer" if obj.dealer else "broker",
+            "type": seller_type,
             "id": seller_obj.id,
-            "name": seller_obj.get_display_name(),
-            "email": seller_obj.email,
-            "contact_number": seller_obj.contact_number,
-            "is_verified": seller_obj.is_verified,
+            "name": getattr(seller_obj, 'get_display_name', lambda: None)(),
+            "email": user.email if user else None,
+            "contact_number": getattr(profile, 'contact', None),
+            "is_verified": getattr(seller_obj, 'is_verified', None),
         }
-
-    def get_seller_average_rating(self, obj):
-        seller_obj = obj.dealer or obj.broker
-        if not seller_obj:
-            return None
-
-        avg = seller_obj.ratings.aggregate(avg=Avg("rating"))["avg"]
-        return round(avg, 1) if avg else None
 
     def get_highest_bid(self, obj):
         return obj.bids.aggregate(max_amount=Max("amount"))["max_amount"]
