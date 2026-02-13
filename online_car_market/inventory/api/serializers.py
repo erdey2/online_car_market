@@ -563,7 +563,8 @@ class CarDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Car
-        exclude = ["dealer", "broker"]
+        # exclude = ["dealer", "broker"]
+        fields = '__all__'
 
     def get_dealer_average_rating(self, obj) -> float | None:
         if obj.dealer:
