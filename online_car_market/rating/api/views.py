@@ -8,7 +8,7 @@ from django.db.models import Avg, Count
 from ..models import CarRating
 from .serializers import CarRatingSerializer, CarRatingReadSerializer
 from online_car_market.inventory.models import Car
-from online_car_market.inventory.api.serializers import CarSerializer
+from online_car_market.inventory.api.serializers import CarListSerializer
 
 
 @extend_schema_view(
@@ -61,7 +61,7 @@ from online_car_market.inventory.api.serializers import CarSerializer
         summary="List cars with aggregated ratings",
         description="Returns each car with average rating and rating count",
         responses=OpenApiResponse(
-            response=CarSerializer(many=True),
+            response=CarListSerializer(many=True),
             description="Car list with avg_rating and rating_count"
         )
     )
@@ -101,5 +101,5 @@ class CarRatingViewSet(ModelViewSet):
             avg_rating=Avg('ratings__rating'),
             rating_count=Count('ratings')
         )
-        serializer = CarSerializer(cars, many=True)
+        serializer = CarListSerializer(cars, many=True)
         return Response(serializer.data)

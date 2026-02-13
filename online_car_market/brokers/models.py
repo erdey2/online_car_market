@@ -35,6 +35,9 @@ class BrokerProfile(models.Model):
             models.UniqueConstraint(fields=["profile", "national_id"], name="unique_broker_national_id_per_profile"),
         ]
 
+    def get_display_name(self):
+        return self.profile.get_full_name()
+
 class BrokerRating(models.Model):
     broker = models.ForeignKey(BrokerProfile, on_delete=models.CASCADE, related_name='ratings')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='broker_ratings')

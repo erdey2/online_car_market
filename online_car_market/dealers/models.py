@@ -23,6 +23,9 @@ class DealerProfile(models.Model):
             models.Index(fields=['profile'], name='idx_dealerprofile_profile'),
         ]
 
+    def get_display_name(self):
+        return self.company_name
+
 class DealerStaff(models.Model):
     dealer = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, related_name='staff_members')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='dealer_staff_assignments')

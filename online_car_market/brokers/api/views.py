@@ -2,7 +2,7 @@ from online_car_market.brokers.services import approve_broker, reject_broker, su
 import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, mixins, viewsets, serializers
+from rest_framework import status, viewsets, serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.decorators import action
@@ -226,8 +226,6 @@ class AdminBrokerViewSet(viewsets.ReadOnlyModelViewSet):
             {"detail": "Broker reactivated successfully."},
             status=status.HTTP_200_OK,
         )
-
-
 
 # Broker Profile ViewSet
 @extend_schema_view(

@@ -1,11 +1,10 @@
-from django.conf import settings
 from django.utils import timezone
 from django.db.models import Avg
 from rest_framework import serializers
-from drf_spectacular.utils import extend_schema_field, extend_schema_serializer, OpenApiExample, OpenApiTypes, OpenApiParameter
+from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
-from ..models import Car, CarImage, CarMake, CarModel, FavoriteCar, CarView, Inspection
-from online_car_market.dealers.models import DealerProfile, DealerStaff
+from ..models import Car, CarImage, CarMake, CarModel, FavoriteCar, CarView
+from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.users.models import Profile
 from online_car_market.bids.api.serializers import BidSerializer
@@ -165,48 +164,41 @@ class CarMiniSerializer(serializers.ModelSerializer):
         model = Car
         fields = ['id', 'make', 'model']
 
-# CarSerializer
-class CarSerializer(serializers.ModelSerializer):
-    dealer = serializers.PrimaryKeyRelatedField(queryset=DealerProfile.objects.all(), required=False, allow_null=True)
-    broker = serializers.PrimaryKeyRelatedField(queryset=BrokerProfile.objects.all(), required=False, allow_null=True)
-    posted_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
-    images = CarImageSerializer(many=True, read_only=True)
-    # uploaded_images = CarImageSerializer(many=True, write_only=True, required=False)
-    bids = BidSerializer(many=True, read_only=True)
-    verification_status = serializers.ChoiceField(choices=Car.VERIFICATION_STATUSES, read_only=True)
-    make_ref = serializers.PrimaryKeyRelatedField(queryset=CarMake.objects.all(), required=False, allow_null=True)
-    model_ref = serializers.PrimaryKeyRelatedField(queryset=CarModel.objects.all(), required=False, allow_null=True)
-    dealer_average_rating = serializers.FloatField(source="dealer_avg", read_only=True)
-    broker_average_rating = serializers.FloatField(source="broker_avg", read_only=True)
+class CarWriteSerializer(serializers.ModelSerializer):
+    dealer = serializers.PrimaryKeyRelatedField(
+        queryset=DealerProfile.objects.all(),
+        required=False,
+        allow_null=True
+    )
+    broker = serializers.PrimaryKeyRelatedField(
+        queryset=BrokerProfile.objects.all(),
+        required=False,
+        allow_null=True
+    )
+    posted_by = serializers.HiddenField(
+        default=serializers.CurrentUserDefault()
+    )
+    make_ref = serializers.PrimaryKeyRelatedField(
+        queryset=CarMake.objects.all(),
+        required=False,
+        allow_null=True
+    )
+    model_ref = serializers.PrimaryKeyRelatedField(
+        queryset=CarModel.objects.all(),
+        required=False,
+        allow_null=True
+    )
 
     class Meta:
         model = Car
-        fields = "__all__"
-        read_only_fields = [
+        exclude = [
             "id",
-            "posted_by",
             "created_at",
             "updated_at",
             "sold_at",
-            "uploaded_images",
             "verification_status",
             "priority",
-            "bids",
-            "dealer_average_rating",
-            "broker_average_rating",
         ]
-
-    def get_dealer_average_rating(self, obj) -> float | None:
-        if obj.dealer:
-            avg_rating = obj.dealer.ratings.aggregate(Avg("rating"))["rating__avg"]
-            return round(avg_rating, 1) if avg_rating else None
-        return None
-
-    def get_broker_average_rating(self, obj) -> float | None:
-        if obj.broker:
-            avg_rating = obj.broker.ratings.aggregate(Avg("rating"))["rating__avg"]
-            return round(avg_rating, 1) if avg_rating else None
-        return None
 
     def validate_make(self, value):
         cleaned = bleach.clean(value.strip(), tags=[], strip=True)
@@ -438,7 +430,10 @@ class CarSerializer(serializers.ModelSerializer):
             data["model"] = model_ref.name
 
         # Dealer/Broker consistency
-        if (dealer and broker) or (not dealer and not broker):
+        final_dealer = dealer if "dealer" in data else getattr(self.instance, "dealer", None)
+        final_broker = broker if "broker" in data else getattr(self.instance, "broker", None)
+
+        if (final_dealer and final_broker) or (not final_dealer and not final_broker):
             raise serializers.ValidationError("Exactly one of 'dealer' or 'broker' must be provided.")
 
         # ---------------- Dealer validation ----------------
@@ -480,12 +475,6 @@ class CarSerializer(serializers.ModelSerializer):
                                                                                                          "admin"]):
             raise serializers.ValidationError("Only the car owner or admins can update this car.")
 
-        # Make/model existence check
-        if make_ref and not CarMake.objects.filter(id=make_ref.id).exists():
-            raise serializers.ValidationError("Selected make does not exist.")
-        if model_ref and not CarModel.objects.filter(id=model_ref.id, make=make_ref).exists():
-            raise serializers.ValidationError("Selected model does not match the selected make.")
-
         # Verification status rules
         if self.instance is None:  # creation case only
             if has_role(user, ["super_admin", "admin"]):
@@ -517,6 +506,97 @@ class CarSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
+
+class CarListSerializer(serializers.ModelSerializer):
+    featured_image = serializers.SerializerMethodField()
+    seller = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Car
+        fields = [
+            "id",
+            "make",
+            "model",
+            "year",
+            "price",
+            "model_ref",
+            "make_ref",
+            "body_type",
+            "sale_type",
+            "status",
+            "featured_image",
+            "seller",
+            "created_at",
+        ]
+
+    def get_featured_image(self, obj):
+        image = obj.images.filter(is_featured=True).first()
+        return image.image.url if image else None
+
+    def get_seller(self, obj):
+        if obj.dealer:
+            return {
+                "type": "dealer",
+                "id": obj.dealer.id,
+                "name": obj.dealer.get_display_name(),
+                "is_verified": obj.dealer.is_verified,
+            }
+
+        if obj.broker:
+            return {
+                "type": "broker",
+                "id": obj.broker.id,
+                "name": obj.broker.get_display_name(),
+                "is_verified": obj.broker.is_verified,
+            }
+
+        return None
+    
+
+class CarDetailSerializer(serializers.ModelSerializer):
+    images = CarImageSerializer(many=True, read_only=True)
+    seller = serializers.SerializerMethodField()
+    bid_count = serializers.IntegerField(source="bids.count", read_only=True)
+    highest_bid = serializers.SerializerMethodField()
+    dealer_average_rating = serializers.FloatField(source="dealer_avg", read_only=True)
+    broker_average_rating = serializers.FloatField(source="broker_avg", read_only=True)
+
+    class Meta:
+        model = Car
+        exclude = ["dealer", "broker"]
+
+    def get_dealer_average_rating(self, obj) -> float | None:
+        if obj.dealer:
+            avg_rating = obj.dealer.ratings.aggregate(Avg("rating"))["rating__avg"]
+            return round(avg_rating, 1) if avg_rating else None
+        return None
+
+    def get_broker_average_rating(self, obj) -> float | None:
+        if obj.broker:
+            avg_rating = obj.broker.ratings.aggregate(Avg("rating"))["rating__avg"]
+            return round(avg_rating, 1) if avg_rating else None
+        return None
+
+    def get_seller(self, obj):
+        if obj.dealer:
+            return {
+                "type": "dealer",
+                "id": obj.dealer.id,
+                "name": obj.dealer.business_name,
+                "average_rating": obj.dealer_avg,
+            }
+        elif obj.broker:
+            return {
+                "type": "broker",
+                "id": obj.broker.id,
+                "name": obj.broker.business_name,
+                "average_rating": obj.broker_avg,
+            }
+        return None
+
+    def get_highest_bid(self, obj):
+        highest = obj.bids.order_by("-amount").first()
+        return highest.amount if highest else None
 
 class FavoriteCarSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
@@ -588,79 +668,3 @@ class ContactSerializer(serializers.ModelSerializer):
         if instance.image and hasattr(instance.image, 'url'):
             representation['image'] = instance.image.url
         return representation
-
-class InspectionSerializer(serializers.ModelSerializer):
-    car_id = serializers.IntegerField(write_only=True, required=True)
-    car_display = serializers.CharField(source='car.title', read_only=True)
-    report_url = serializers.SerializerMethodField(read_only=True)
-    verified_by_email = serializers.EmailField(source="verified_by.email", read_only=True)
-
-    class Meta:
-        model = Inspection
-        fields = [
-            "id",
-            "car_id", "car_display",
-            "inspected_by",
-            "inspection_date",
-            "remarks",
-            "condition_status",
-            "report_document", "report_url",
-            "status",
-            "verified_by_email", "verified_at", "admin_remarks",
-            "uploaded_by", "uploaded_at",
-            "created_at", "updated_at"
-        ]
-        read_only_fields = [
-            "id", "car_display", "report_url",
-            "uploaded_by", "uploaded_at",
-            "verified_by_email", "verified_at",
-            "created_at", "updated_at"
-        ]
-
-    def get_report_url(self, obj):
-        return obj.report_document.build_url() if obj.report_document else None
-
-    def validate_car_id(self, value):
-        try:
-            car = Car.objects.get(id=value)
-        except Car.DoesNotExist:
-            raise serializers.ValidationError("Car with this ID does not exist.")
-        if hasattr(car, "inspection"):
-            raise serializers.ValidationError("This car already has an inspection record.")
-        return value
-
-    def create(self, validated_data):
-        request = self.context.get("request")
-        car = Car.objects.get(id=validated_data.pop("car_id"))
-
-        # Dealer/Broker create — always pending
-        inspection = Inspection.objects.create(
-            car=car,
-            uploaded_by=request.user,
-            uploaded_at=timezone.now(),
-            status="pending",
-            **validated_data
-        )
-        return inspection
-
-    def update(self, instance, validated_data):
-        request = self.context["request"]
-        user = request.user
-
-        # Admin verifies or rejects
-        if "status" in validated_data and validated_data["status"] in ["verified", "rejected"]:
-            if not (user.is_staff or user.role in ["admin", "superadmin"]):
-                raise serializers.ValidationError("Only admin or superadmin can verify inspections.")
-            instance.status = validated_data["status"]
-            instance.verified_by = user
-            instance.verified_at = timezone.now()
-            instance.admin_remarks = validated_data.get("admin_remarks", instance.admin_remarks)
-        else:
-            # Dealers/Brokers can only edit their own pending inspections
-            if instance.status != "pending":
-                raise serializers.ValidationError("Only pending inspections can be modified.")
-            for attr, value in validated_data.items():
-                setattr(instance, attr, value)
-
-        instance.save()
-        return instance
