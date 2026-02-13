@@ -557,7 +557,7 @@ class BidNestedSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Bid
-        fields = ["id", "user", "amount", "created_at"]
+        fields = ["id", "bidder", "amount", "created_at"]
 
     def get_bidder(self, obj):
         return {
@@ -590,6 +590,8 @@ class CarDetailSerializer(serializers.ModelSerializer):
             "type": "dealer" if obj.dealer else "broker",
             "id": seller_obj.id,
             "name": seller_obj.get_display_name(),
+            "email": seller_obj.email,
+            "contact_number": seller_obj.contact_number,
             "is_verified": seller_obj.is_verified,
         }
 
@@ -603,7 +605,6 @@ class CarDetailSerializer(serializers.ModelSerializer):
 
     def get_highest_bid(self, obj):
         return obj.bids.aggregate(max_amount=Max("amount"))["max_amount"]
-
 
 class FavoriteCarSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
