@@ -190,7 +190,6 @@ class CarMiniSerializer(serializers.ModelSerializer):
 
 class CarListSerializer(serializers.ModelSerializer):
     featured_image = serializers.SerializerMethodField()
-    images = serializers.SerializerMethodField()
     seller = serializers.SerializerMethodField()
 
     class Meta:

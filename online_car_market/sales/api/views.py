@@ -1,3 +1,4 @@
+from drf_spectacular.types import OpenApiTypes
 from rest_framework import status, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -186,14 +187,17 @@ class LeadViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.Lis
     @extend_schema(
         tags=["Dealers - Sales"],
         summary="Update Lead Status",
-        description=(
-            "Updates the status of a lead.\n\n"
-            "Only sellers (dealer/broker) or admin can update status.\n\n"
-            "When status is changed to CLOSED:\n"
-            "- Lead is marked as closed\n"
-            "- Car is automatically marked as sold"
-        ),
-        request=LeadStatusUpdateSerializer,
+        description="Updates the status of a lead. Allowed statuses: new, contacted, interested, closed",
+        request={
+            "type": OpenApiTypes.OBJECT,
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": [choice[0] for choice in Lead.LeadStatus.choices],  # all possible statuses
+                }
+            },
+            "required": ["status"],
+        },
         responses={200: LeadSerializer},
         examples=[
             OpenApiExample(
