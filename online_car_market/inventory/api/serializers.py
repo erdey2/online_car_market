@@ -189,7 +189,7 @@ class CarMiniSerializer(serializers.ModelSerializer):
         fields = ['id', 'make', 'model']
 
 class CarListSerializer(serializers.ModelSerializer):
-    # featured_image = serializers.SerializerMethodField()
+    featured_image = serializers.SerializerMethodField()
     images = serializers.SerializerMethodField()
     seller = serializers.SerializerMethodField()
 
@@ -206,12 +206,12 @@ class CarListSerializer(serializers.ModelSerializer):
             "body_type",
             "sale_type",
             "status",
-            "images",
+            "featured_image",
             "seller",
             "created_at",
         ]
 
-    def get_images(self, obj):
+    def get_featured_image(self, obj):
         image = obj.images.filter(is_featured=True).first()
         if not image:
             image = obj.images.first()
