@@ -159,10 +159,125 @@ class CarImageSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+class BidNestedSerializer(serializers.ModelSerializer):
+    bidder = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Bid
+        fields = ["id", "bidder", "amount", "created_at"]
+
+    def get_bidder(self, obj):
+        user = obj.user
+        profile = getattr(user, 'profile', None)
+
+        if profile:
+            first_name = profile.first_name
+            last_name = profile.last_name
+        else:
+            first_name = None
+            last_name = None
+
+        return {
+            "id": user.id,
+            "first_name": first_name,
+            "last_name": last_name,
+        }
+
 class CarMiniSerializer(serializers.ModelSerializer):
     class Meta:
         model = Car
         fields = ['id', 'make', 'model']
+
+class CarListSerializer(serializers.ModelSerializer):
+    featured_image = serializers.SerializerMethodField()
+    seller = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Car
+        fields = [
+            "id",
+            "make",
+            "model",
+            "year",
+            "price",
+            "model_ref",
+            "make_ref",
+            "body_type",
+            "sale_type",
+            "status",
+            "featured_image",
+            "seller",
+            "created_at",
+        ]
+
+    def get_featured_image(self, obj):
+        image = obj.images.filter(is_featured=True).first()
+        if not image:
+            image = obj.images.first()
+        return image.image.url if image else None
+
+    def get_seller(self, obj):
+        if obj.dealer:
+            return {
+                "type": "dealer",
+                "id": obj.dealer.id,
+                "name": obj.dealer.get_display_name(),
+                "is_verified": obj.dealer.is_verified,
+            }
+
+        if obj.broker:
+            return {
+                "type": "broker",
+                "id": obj.broker.id,
+                "name": obj.broker.get_display_name(),
+                "is_verified": obj.broker.is_verified,
+            }
+
+        return None
+
+class CarDetailSerializer(serializers.ModelSerializer):
+    images = CarImageSerializer(many=True, read_only=True)
+    bids = BidNestedSerializer(many=True, read_only=True)
+
+    seller = serializers.SerializerMethodField()
+    seller_average_rating = serializers.SerializerMethodField()
+
+    bid_count = serializers.IntegerField(source="bids.count", read_only=True)
+    highest_bid = serializers.SerializerMethodField()
+
+
+    class Meta:
+        model = Car
+        exclude = ["dealer", "broker"]
+
+    def get_seller(self, obj):
+        seller_obj = obj.dealer or obj.broker
+        if not seller_obj:
+            return None
+
+        seller_type = "dealer" if obj.dealer else "broker"
+        profile = getattr(seller_obj, 'profile', None)
+        user = getattr(profile, 'user', None)
+
+        return {
+            "type": seller_type,
+            "id": seller_obj.id,
+            "name": getattr(seller_obj, 'get_display_name', lambda: None)(),
+            # "email": user.email if user else None,
+            # "contact_number": getattr(profile, 'contact', None),
+            "is_verified": getattr(seller_obj, 'is_verified', None),
+        }
+
+    def get_seller_average_rating(self, obj):
+        seller_obj = obj.dealer or obj.broker
+        if not seller_obj:
+            return None
+
+        avg = seller_obj.ratings.aggregate(avg=Avg("rating"))["avg"]
+        return round(avg, 1) if avg else None
+
+    def get_highest_bid(self, obj):
+        return obj.bids.aggregate(max_amount=Max("amount"))["max_amount"]
 
 class CarWriteSerializer(serializers.ModelSerializer):
     dealer = serializers.PrimaryKeyRelatedField(
@@ -506,119 +621,6 @@ class CarWriteSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
         return instance
-
-class CarListSerializer(serializers.ModelSerializer):
-    featured_image = serializers.SerializerMethodField()
-    seller = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Car
-        fields = [
-            "id",
-            "make",
-            "model",
-            "year",
-            "price",
-            "model_ref",
-            "make_ref",
-            "body_type",
-            "sale_type",
-            "status",
-            "featured_image",
-            "seller",
-            "created_at",
-        ]
-
-    def get_featured_image(self, obj):
-        image = obj.images.filter(is_featured=True).first()
-        return image.image.url if image else None
-
-    def get_seller(self, obj):
-        if obj.dealer:
-            return {
-                "type": "dealer",
-                "id": obj.dealer.id,
-                "name": obj.dealer.get_display_name(),
-                "is_verified": obj.dealer.is_verified,
-            }
-
-        if obj.broker:
-            return {
-                "type": "broker",
-                "id": obj.broker.id,
-                "name": obj.broker.get_display_name(),
-                "is_verified": obj.broker.is_verified,
-            }
-
-        return None
-
-class BidNestedSerializer(serializers.ModelSerializer):
-    bidder = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Bid
-        fields = ["id", "bidder", "amount", "created_at"]
-
-    def get_bidder(self, obj):
-        user = obj.user
-        profile = getattr(user, 'profile', None)
-
-        if profile:
-            first_name = profile.first_name
-            last_name = profile.last_name
-        else:
-            first_name = None
-            last_name = None
-
-        return {
-            "id": user.id,
-            "first_name": first_name,
-            "last_name": last_name,
-        }
-
-class CarDetailSerializer(serializers.ModelSerializer):
-    images = CarImageSerializer(many=True, read_only=True)
-    bids = BidNestedSerializer(many=True, read_only=True)
-
-    seller = serializers.SerializerMethodField()
-    seller_average_rating = serializers.SerializerMethodField()
-
-    bid_count = serializers.IntegerField(source="bids.count", read_only=True)
-    highest_bid = serializers.SerializerMethodField()
-
-
-    class Meta:
-        model = Car
-        exclude = ["dealer", "broker"]
-
-    def get_seller(self, obj):
-        seller_obj = obj.dealer or obj.broker
-        if not seller_obj:
-            return None
-
-        seller_type = "dealer" if obj.dealer else "broker"
-        profile = getattr(seller_obj, 'profile', None)
-        user = getattr(profile, 'user', None)
-
-        return {
-            "type": seller_type,
-            "id": seller_obj.id,
-            "name": getattr(seller_obj, 'get_display_name', lambda: None)(),
-            # "email": user.email if user else None,
-            # "contact_number": getattr(profile, 'contact', None),
-            "is_verified": getattr(seller_obj, 'is_verified', None),
-        }
-
-    def get_seller_average_rating(self, obj):
-        seller_obj = obj.dealer or obj.broker
-        if not seller_obj:
-            return None
-
-        avg = seller_obj.ratings.aggregate(avg=Avg("rating"))["avg"]
-        return round(avg, 1) if avg else None
-
-    def get_highest_bid(self, obj):
-        return obj.bids.aggregate(max_amount=Max("amount"))["max_amount"]
 
 class FavoriteCarSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)

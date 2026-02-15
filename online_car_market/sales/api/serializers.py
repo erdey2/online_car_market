@@ -161,16 +161,35 @@ class LeadSerializer(serializers.ModelSerializer):
         return None
 
 class LeadCreateSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = Lead
         fields = ["name", "contact"]
 
-    def create(self, validated_data):
-        request = self.context["request"]
-        car = self.context["car"]
+    def validate_contact(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Contact cannot be empty.")
+        return value
 
-        buyer = request.user if request.user.is_authenticated else None
+    def validate(self, attrs):
+        """
+        Ensure a lead with the same contact for this car does not exist.
+        """
+        car = self.context.get("car")
+        contact = attrs["contact"]
+
+        if not car:
+            raise serializers.ValidationError("Car must be specified to create a lead.")
+
+        if Lead.objects.filter(contact__iexact=contact, car=car).exists():
+            raise serializers.ValidationError(
+                "A lead with this contact already exists for this car."
+            )
+        return attrs
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        car = self.context.get("car")
+        buyer = request.user if request and request.user.is_authenticated else None
 
         return LeadService.create_lead(
             car=car,
@@ -182,13 +201,23 @@ class LeadCreateSerializer(serializers.ModelSerializer):
 class LeadStatusUpdateSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=Lead.LeadStatus.choices)
 
-    def update(self, instance, validated_data):
-        request = self.context["request"]
+    def validate_status(self, value):
+        request = self.context.get("request")
+        user = request.user if request else None
 
+        if value == Lead.LeadStatus.CLOSED and not (
+            user and (user.is_superuser or hasattr(user, "dealer") or hasattr(user, "broker"))
+        ):
+            raise serializers.ValidationError("Only sellers or admin can close a lead.")
+        return value
+
+    def update(self, instance, validated_data):
+        request = self.context.get("request")
         return LeadService.update_status(
             lead=instance,
             new_status=validated_data["status"],
             user=request.user
         )
+
 
 
