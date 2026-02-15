@@ -18,7 +18,6 @@ from online_car_market.accounting.utils import generate_financial_report
 from online_car_market.dealers.models import DealerStaff
 from online_car_market.users.permissions.business_permissions import CanManageAccounting
 
-
 # Exchange rate
 @extend_schema_view(
     list=extend_schema(

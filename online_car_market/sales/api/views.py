@@ -1,9 +1,12 @@
-from rest_framework.viewsets import ModelViewSet
+from rest_framework import status, mixins
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.viewsets import GenericViewSet, ModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rolepermissions.checkers import has_role
 from online_car_market.sales.models import Sale, Lead
 from online_car_market.dealers.models import DealerStaff
-from .serializers import SaleSerializer, LeadSerializer
+from .serializers import SaleSerializer, LeadSerializer, LeadCreateSerializer, LeadStatusUpdateSerializer
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.buyers.models import BuyerProfile
@@ -121,117 +124,107 @@ class SaleViewSet(ModelViewSet):
 @extend_schema_view(
     list=extend_schema(
         tags=["Dealers - Sales"],
-        description="List leads based on user role: brokers/dealers see leads for their cars, sellers see leads for their dealer, admins see all.",
-        responses={
-            200: LeadSerializer(many=True),
-            403: OpenApiResponse(
-                description="User lacks permission.",
-                examples=[OpenApiExample("Forbidden", value={"detail": "You do not have permission."})]
-            )
-        }
+        summary="List Leads",
+        description=(
+            "Returns leads based on user role:\n"
+            "- Admin → All leads\n"
+            "- Dealer/Broker/Seller → Leads for their cars\n"
+            "- Buyer → Their own leads"
+        ),
+        responses=LeadSerializer(many=True),
     ),
     retrieve=extend_schema(
         tags=["Dealers - Sales"],
-        description="Retrieve a specific lead if the user has permission.",
-        responses={
-            200: LeadSerializer,
-            404: OpenApiResponse(
-                description="Lead not found.",
-                examples=[OpenApiExample("Not Found", value={"detail": "Not found."})]
-            ),
-            403: OpenApiResponse(
-                description="Forbidden.",
-                examples=[OpenApiExample("Forbidden", value={"detail": "You do not have permission."})]
-            )
-        }
+        summary="Retrieve Lead",
+        description="Retrieve detailed information about a specific lead.",
+        responses=LeadSerializer,
     ),
     create=extend_schema(
         tags=["Dealers - Sales"],
-        description="Create a lead. Allowed for brokers, dealers, sellers, and admins.",
-        request=LeadSerializer,
-        responses={
-            201: LeadSerializer,
-            400: OpenApiResponse(
-                description="Invalid input.",
-                examples=[OpenApiExample("Invalid input", value={"detail": "Invalid data."})]
-            ),
-            403: OpenApiResponse(
-                description="Forbidden.",
-                examples=[OpenApiExample("Forbidden", value={"detail": "Permission denied."})]
+        summary="Create Lead (Buyer Inquiry)",
+        description="Creates a new lead for a specific car.",
+        request=LeadCreateSerializer,
+        responses={201: LeadSerializer},
+        examples=[
+            OpenApiExample(
+                "Create Lead Example",
+                value={
+                    "car_id": 15,
+                    "name": "John Doe",
+                    "contact": "john@email.com"
+                },
+                request_only=True,
             )
-        }
-    ),
-    update=extend_schema(
-        tags=["Dealers - Sales"],
-        description="Update a lead.",
-        request=LeadSerializer,
-        responses={
-            200: LeadSerializer,
-            403: OpenApiResponse(description="Forbidden.")
-        }
-    ),
-    partial_update=extend_schema(
-        tags=["Dealers - Sales"],
-        description="Partially update a lead.",
-        request=LeadSerializer,
-        responses={
-            200: LeadSerializer,
-            403: OpenApiResponse(description="Forbidden.")
-        }
-    ),
-    destroy=extend_schema(
-        tags=["Dealers - Sales"],
-        description="Delete a lead.",
-        responses={
-            204: None,
-            403: OpenApiResponse(description="Forbidden.")
-        }
+        ],
     ),
 )
-class LeadViewSet(ModelViewSet):
-    queryset = Lead.objects.all().order_by('-created_at')
+class LeadViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.ListModelMixin, GenericViewSet):
+    queryset = Lead.objects.select_related("car", "buyer")
     serializer_class = LeadSerializer
-    permission_classes = [IsAuthenticated]
 
-    def get_permissions(self):
-        # Only write operations require CanManageSales
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [IsAuthenticated(), CanManageSales()]
-        return [IsAuthenticated()]
+    def get_serializer_class(self):
+        if self.action == "create":
+            return LeadCreateSerializer
+        if self.action == "update_status":
+            return LeadStatusUpdateSerializer
+        return LeadSerializer
 
     def get_queryset(self):
         user = self.request.user
 
-        # Admins see everything
-        if has_role(user, ['super_admin', 'admin']):
+        if user.is_superuser:
             return self.queryset
 
-        # Broker: cars assigned to this broker
-        if has_role(user, 'broker'):
-            broker = BrokerProfile.objects.filter(profile__user=user).first()
-            if broker:
-                return self.queryset.filter(car__broker=broker)
-            return self.queryset.none()
+        if hasattr(user, "dealer"):
+            return self.queryset.filter(car__dealer=user.dealer)
 
-        # Dealer: all cars of dealer
-        if has_role(user, 'dealer'):
-            dealer = DealerProfile.objects.filter(profile__user=user).first()
-            if dealer:
-                return self.queryset.filter(car__dealer=dealer)
-            return self.queryset.none()
+        if hasattr(user, "broker"):
+            return self.queryset.filter(car__broker=user.broker)
 
-        # Seller: leads for cars of their dealer
-        if has_role(user, 'seller'):
-            staff = DealerStaff.objects.filter(user=user).first()
-            if staff:
-                return self.queryset.filter(car__dealer=staff.dealer)
-            return self.queryset.none()
+        return self.queryset.filter(buyer=user)
 
-        # Buyer: their own leads
-        if has_role(user, 'buyer'):
-            buyer = BuyerProfile.objects.filter(profile__user=user).first()
-            if buyer:
-                return self.queryset.filter(buyer=user)
-            return self.queryset.none()
+    @extend_schema(
+        tags=["Dealers - Sales"],
+        summary="Update Lead Status",
+        description=(
+            "Updates the status of a lead.\n\n"
+            "Only sellers (dealer/broker) or admin can update status.\n\n"
+            "When status is changed to CLOSED:\n"
+            "- Lead is marked as closed\n"
+            "- Car is automatically marked as sold"
+        ),
+        request=LeadStatusUpdateSerializer,
+        responses={200: LeadSerializer},
+        examples=[
+            OpenApiExample(
+                "Update Status Example",
+                value={"status": "closed"},
+                request_only=True,
+            )
+        ],
+    )
+    @action(
+        detail=True,
+        methods=["patch"],
+        permission_classes=[IsAuthenticated],
+    )
+    def update_status(self, request, pk=None):
+        lead = self.get_object()
 
-        return self.queryset.none()
+        serializer = self.get_serializer(
+            lead,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(
+            LeadSerializer(lead).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+
+

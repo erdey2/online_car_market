@@ -84,7 +84,6 @@ class BrokerApplicationView(APIView):
         if rejected:
             rejected.national_id = request.data.get("national_id")
             rejected.telebirr_account = request.data.get("telebirr_account", rejected.telebirr_account)
-            # Reset review metadata for audit clarity
             rejected.status = BrokerProfile.Status.PENDING
             rejected.reviewed_at = None
             rejected.reviewed_by = None
@@ -227,16 +226,53 @@ class AdminBrokerViewSet(viewsets.ReadOnlyModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @extend_schema(
+        tags=["Admin - Broker Management"],
+        summary="Verify broker profile",
+        description="Verify an approved broker profile (Admin/Super Admin only).",
+        request=VerifyBrokerSerializer,
+        responses={
+            200: VerifyBrokerSerializer,
+            400: OpenApiResponse(description="Only approved brokers can be verified."),
+            404: OpenApiResponse(description="Broker not found."),
+        },
+    )
+    @action(detail=True, methods=["patch"])
+    def verify(self, request, pk=None):
+        broker = self.get_object()
+
+        if broker.status != BrokerProfile.Status.APPROVED:
+            return Response(
+                {"detail": "Only approved brokers can be verified."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = VerifyBrokerSerializer(
+            broker,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        logger.info(
+            f"Admin {request.user.email} verified broker {broker.pk}"
+        )
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 # Broker Profile ViewSet
 @extend_schema_view(
     me=extend_schema(
         tags=["Brokers"],
-        summary="Get my broker profile",
+        summary="Get my profile",
         description="Returns the authenticated broker's own profile.",
     ),
     update_me=extend_schema(
         tags=["Brokers"],
-        summary="Update my broker profile",
+        summary="Update my profile",
         description="Partially update the authenticated broker's profile.",
     ),
 )
@@ -268,41 +304,6 @@ class BrokerProfileViewSet(viewsets.GenericViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
-
-# Broker Verification
-@extend_schema_view(
-    verify=extend_schema(
-        tags=["Admin - Broker Management"],
-        request=VerifyBrokerSerializer,
-        responses={
-            200: VerifyBrokerSerializer,
-            404: OpenApiResponse(description="Broker not found."),
-            403: OpenApiResponse(description="Permission denied."),
-        },
-        description="Verify a broker profile (admin/super_admin only).",
-    )
-)
-class BrokerVerificationViewSet(viewsets.ViewSet):
-    permission_classes = [IsAuthenticated, IsSuperAdmin | IsAdmin]
-
-    @action(detail=True, methods=["patch"])
-    def verify(self, request, pk=None):
-        try:
-            broker = BrokerProfile.objects.get(pk=pk)
-        except BrokerProfile.DoesNotExist:
-            return Response({"error": "Broker not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        if broker.status != BrokerProfile.Status.APPROVED:
-            return Response({"error": "Only approved brokers can be verified."}, status=status.HTTP_400_BAD_REQUEST)
-
-        serializer = VerifyBrokerSerializer(broker, data=request.data, partial=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-
-        logger.info(f"Broker {broker.pk} verification updated by {request.user.email}")
-        return Response(serializer.data)
-
-
 
 # Broker Ratings
 @extend_schema_view(

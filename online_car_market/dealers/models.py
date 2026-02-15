@@ -1,16 +1,29 @@
 from django.db import models
-from django.db.models.signals import post_save
-from django.dispatch import receiver
 from online_car_market.users.models import User, Profile
-from rolepermissions.checkers import has_role
+
 
 class DealerProfile(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+        SUSPENDED = "SUSPENDED", "Suspended"
+
     profile = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name='dealer_profile', db_index=True)
+
     company_name = models.CharField(max_length=255)
     license_number = models.CharField(max_length=50)
     tax_id = models.CharField(max_length=100, null=True, blank=True)
     telebirr_account = models.CharField(max_length=100, null=True)
-    is_verified = models.BooleanField(default=True)
+
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    is_verified = models.BooleanField(default=False)
+
+    reviewed_by = models.ForeignKey("users.User", null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name="reviewed_dealers")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -49,7 +62,6 @@ class DealerStaff(models.Model):
     def __str__(self):
         return f"{self.user.email} - {self.role} for {self.dealer.company_name}"
 
-
 class DealerRating(models.Model):
     dealer = models.ForeignKey(DealerProfile, on_delete=models.CASCADE, related_name='ratings')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='dealer_ratings')
@@ -71,11 +83,3 @@ class DealerRating(models.Model):
             models.UniqueConstraint(fields=['dealer', 'user'], name='unique_dealer_user_rating'),
             models.CheckConstraint(check=models.Q(rating__gte=1, rating__lte=5), name='dealerrating_valid_range'),
         ]
-
-@receiver(post_save, sender=Profile)
-def create_dealer_profile(sender, instance, created, **kwargs):
-    if has_role(instance.user, 'dealer'):
-        DealerProfile.objects.get_or_create(
-            profile=instance,
-            defaults={'company_name': instance.user.email, 'license_number': '', 'telebirr_account': ''}
-        )

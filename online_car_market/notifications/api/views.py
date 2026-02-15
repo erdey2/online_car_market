@@ -1,4 +1,5 @@
-from rest_framework import viewsets, permissions
+from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
@@ -22,9 +23,9 @@ from .serializers import NotificationSerializer, DeviceSerializer
     mark_read=extend_schema(summary="Mark one or all notifications as read"),
     unread_count=extend_schema(summary="Get unread notification count"),
 )
-class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
+class NotificationViewSet(ReadOnlyModelViewSet):
     serializer_class = NotificationSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         qs = Notification.objects.filter(recipient=self.request.user).order_by("-created_at")
@@ -58,9 +59,9 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     create=extend_schema(summary="Register a device for FCM push notifications"),
     destroy=extend_schema(summary="Delete a registered device"),
 )
-class DeviceViewSet(viewsets.ModelViewSet):
+class DeviceViewSet(ModelViewSet):
     serializer_class = DeviceSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return Device.objects.filter(user=self.request.user)

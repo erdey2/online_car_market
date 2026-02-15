@@ -604,8 +604,8 @@ class CarDetailSerializer(serializers.ModelSerializer):
             "type": seller_type,
             "id": seller_obj.id,
             "name": getattr(seller_obj, 'get_display_name', lambda: None)(),
-            "email": user.email if user else None,
-            "contact_number": getattr(profile, 'contact', None),
+            # "email": user.email if user else None,
+            # "contact_number": getattr(profile, 'contact', None),
             "is_verified": getattr(seller_obj, 'is_verified', None),
         }
 
