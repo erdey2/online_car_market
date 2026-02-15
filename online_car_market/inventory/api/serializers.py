@@ -189,7 +189,8 @@ class CarMiniSerializer(serializers.ModelSerializer):
         fields = ['id', 'make', 'model']
 
 class CarListSerializer(serializers.ModelSerializer):
-    featured_image = serializers.SerializerMethodField()
+    # featured_image = serializers.SerializerMethodField()
+    images = serializers.SerializerMethodField()
     seller = serializers.SerializerMethodField()
 
     class Meta:
@@ -205,7 +206,7 @@ class CarListSerializer(serializers.ModelSerializer):
             "body_type",
             "sale_type",
             "status",
-            "featured_image",
+            "images",
             "seller",
             "created_at",
         ]
