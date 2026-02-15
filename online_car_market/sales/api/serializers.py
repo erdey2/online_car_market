@@ -200,7 +200,10 @@ class LeadCreateSerializer(serializers.ModelSerializer):
         )
 
 class LeadStatusUpdateSerializer(serializers.Serializer):
-    status = serializers.ChoiceField(choices=Lead.LeadStatus.choices)
+    status = serializers.ChoiceField(
+        choices=Lead.LeadStatus.choices,
+        help_text="Allowed values: inquiry, contacted, negotiation, closed, lost, cancelled"
+    )
 
     def validate_status(self, value):
         request = self.context.get("request")
@@ -219,6 +222,13 @@ class LeadStatusUpdateSerializer(serializers.Serializer):
             new_status=validated_data["status"],
             user=request.user
         )
+
+class LeadAnalyticsSerializer(serializers.Serializer):
+    total_leads = serializers.IntegerField()
+    conversion_rate = serializers.FloatField()
+    leads_by_status = serializers.ListField()
+    avg_time_to_close = serializers.DurationField(allow_null=True)
+
 
 
 

@@ -1,4 +1,3 @@
-from drf_spectacular.types import OpenApiTypes
 from rest_framework import status, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -7,12 +6,13 @@ from rest_framework.permissions import IsAuthenticated
 from rolepermissions.checkers import has_role
 from online_car_market.sales.models import Sale, Lead
 from online_car_market.dealers.models import DealerStaff
-from .serializers import SaleSerializer, LeadSerializer, LeadCreateSerializer, LeadStatusUpdateSerializer
+from .serializers import SaleSerializer, LeadSerializer, LeadCreateSerializer, LeadStatusUpdateSerializer, LeadAnalyticsSerializer
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.buyers.models import BuyerProfile
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, OpenApiExample
 from online_car_market.users.permissions.business_permissions import CanViewSalesData, CanManageSales
+from ..service.lead_service import LeadService
 
 @extend_schema_view(
     list=extend_schema(
@@ -151,12 +151,28 @@ class SaleViewSet(ModelViewSet):
                 "Create Lead Example",
                 value={
                     "car_id": 15,
-                    "name": "John Doe",
-                    "contact": "john@email.com"
+                    "name": "Abebe Alemu",
+                    "contact": "abebe@email.com"
                 },
                 request_only=True,
             )
         ],
+    ),
+    update_status=extend_schema(
+        tags=["Dealers - Sales"],
+        summary="Update Lead Status",
+        description=(
+        "Updates the status of a specific lead.\n\n"
+        "Allowed statuses:\n"
+        "- inquiry\n"
+        "- contacted\n"
+        "- negotiation\n"
+        "- closed\n"
+        "- lost\n"
+        "- cancelled\n\n"
+    ),
+        request=LeadStatusUpdateSerializer,
+        responses={200: LeadSerializer},
     ),
 )
 class LeadViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.ListModelMixin, GenericViewSet):
@@ -184,34 +200,7 @@ class LeadViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.Lis
 
         return self.queryset.filter(buyer=user)
 
-    @extend_schema(
-        tags=["Dealers - Sales"],
-        summary="Update Lead Status",
-        description="Updates the status of a lead. Allowed statuses: new, contacted, interested, closed",
-        request={
-            "type": OpenApiTypes.OBJECT,
-            "properties": {
-                "status": {
-                    "type": "string",
-                    "enum": [choice[0] for choice in Lead.LeadStatus.choices],  # all possible statuses
-                }
-            },
-            "required": ["status"],
-        },
-        responses={200: LeadSerializer},
-        examples=[
-            OpenApiExample(
-                "Update Status Example",
-                value={"status": "closed"},
-                request_only=True,
-            )
-        ],
-    )
-    @action(
-        detail=True,
-        methods=["patch"],
-        permission_classes=[IsAuthenticated],
-    )
+    @action(detail=True, methods=["patch"], permission_classes=[IsAuthenticated])
     def update_status(self, request, pk=None):
         lead = self.get_object()
 
@@ -228,6 +217,29 @@ class LeadViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.Lis
             LeadSerializer(lead).data,
             status=status.HTTP_200_OK,
         )
+
+    @extend_schema(
+        tags=["Dealers - Sales"],
+        summary="Leads Analytics",
+        description=(
+            "Returns analytics about leads:\n"
+            "- Total leads\n"
+            "- Leads per status\n"
+            "- Conversion rate\n"
+            "- Average time to close"
+        ),
+        responses=LeadAnalyticsSerializer,
+    )
+    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
+    def analytics(self, request):
+        user = request.user
+        data = {
+            "total_leads": LeadService.total_leads(user),
+            "conversion_rate": LeadService.conversion_rate(user),
+            "leads_by_status": LeadService.leads_by_status(user),
+            "avg_time_to_close": LeadService.avg_time_to_close(user),
+        }
+        return Response(data)
 
 
 

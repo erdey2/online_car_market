@@ -285,7 +285,7 @@ REST_AUTH_REGISTER_PERMISSION_CLASSES = [
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Online Car Market API',
-    'DESCRIPTION': 'API for car sales, accounting, brokers, and buyers',
+    'DESCRIPTION': 'API for car inventory, sales, accounting, dealer, brokers, and buyers',
     "TAGS": [
         {"name": "Authentication & Users", "description": "Login, registration, user profiles, roles"},
 
