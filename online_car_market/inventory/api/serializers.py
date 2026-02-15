@@ -211,7 +211,7 @@ class CarListSerializer(serializers.ModelSerializer):
             "created_at",
         ]
 
-    def get_featured_image(self, obj):
+    def get_images(self, obj):
         image = obj.images.filter(is_featured=True).first()
         if not image:
             image = obj.images.first()
