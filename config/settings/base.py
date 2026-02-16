@@ -293,7 +293,6 @@ SPECTACULAR_SETTINGS = {
         {"name": "Dealers - Sales", "description": "Orders, invoices, and sales management"},
         {"name": "Dealers - Accounting", "description": "Payments, transactions, and dealer reports"},
         {"name": "Dealers - Ratings", "description": "Manage Dealers ratings"},
-        # {"name": "Dealers - Verification", "description": "Dealer verifications"},
 
         {"name": "Brokers - Ratings", "description": "Manage Brokers ratings"},
         {"name": "Brokers - Orders", "description": "Broker' orders and order details"},

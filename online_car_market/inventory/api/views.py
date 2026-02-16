@@ -1,17 +1,15 @@
 import logging
-from django.db.models import Q, Avg, F
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
 from rest_framework.exceptions import ValidationError
 
-from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status, viewsets, mixins
-from rest_framework.viewsets import ReadOnlyModelViewSet
+from rest_framework.viewsets import ReadOnlyModelViewSet, ModelViewSet
 from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
 from rest_framework.filters import SearchFilter, OrderingFilter
 
@@ -24,14 +22,18 @@ from .serializers import (
                           CarModelSerializer, FavoriteCarSerializer, CarViewSerializer,
                           CarWriteSerializer, CarListSerializer, CarDetailSerializer
                           )
-from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, IsSuperAdminOrAdminOrBuyer, IsBuyer
+from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, IsSuperAdminOrAdminOrBuyer
 from online_car_market.users.permissions.business_permissions import CanPostCar
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.users.models import Profile
 from online_car_market.bids.api.serializers import BidSerializer
-from online_car_market.inventory.services.car_service import CarService
-from online_car_market.inventory.services.car_filter_service import CarFilterService
+from ..services.car_service import CarService
+from ..services.car_filter_service import CarFilterService
+from ..services.car_query_service import CarQueryService
+from ..services.car_verification_service import CarVerificationService
+from ..services.car_bid_service import CarBidService
+from ..services.popular_car_service import PopularCarService
 
 logger = logging.getLogger(__name__)
 
@@ -210,50 +212,10 @@ class CarViewSet(viewsets.ModelViewSet):
         return CarListSerializer
 
     def get_queryset(self):
-        user = self.request.user
-
-        qs = (
-            Car.objects.select_related(
-                "dealer",
-                "dealer__profile",
-                "dealer__profile__user",
-                "broker",
-                "broker__profile",
-                "broker__profile__user",
-                "posted_by",
-            )
-            .prefetch_related("images", "bids", "ratings")
-        )
-        # Annotate averages only for list/retrieve
+        queryset = CarQueryService.get_visible_cars_for_user(self.request.user )
         if self.action in ["list", "retrieve"]:
-            qs = qs.annotate(
-                dealer_avg=Avg("dealer__ratings__rating"),
-                broker_avg=Avg("broker__ratings__rating"),
-            ).order_by("-priority", "-created_at")
-
-        # Role filters
-        if not user.is_authenticated:
-            return qs.filter(verification_status="verified")
-
-        if has_role(user, ["super_admin", "admin"]):
-            return qs
-
-        if has_role(user, "dealer"):
-            return qs.filter(
-                Q(dealer__profile__user=user) |
-                Q(verification_status="verified")
-            )
-
-        if has_role(user, "seller"):
-            return qs.filter(dealer__dealerstaff__user=user)
-
-        if has_role(user, "broker"):
-            return qs.filter(
-                Q(broker__profile__user=user) |
-                Q(verification_status="verified")
-            )
-            # Default public
-        return qs.filter(verification_status="verified")
+            queryset = CarQueryService.annotate_for_listing(queryset)
+        return queryset
 
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy"]:
@@ -280,25 +242,22 @@ class CarViewSet(viewsets.ModelViewSet):
         request=VerifyCarSerializer,
         responses={200: VerifyCarSerializer}
     )
-    @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated, IsSuperAdminOrAdmin],
-            serializer_class=VerifyCarSerializer, parser_classes=[JSONParser, FormParser, MultiPartParser] )
+    @action(detail=True, methods=["patch"], permission_classes=[IsAuthenticated, IsSuperAdminOrAdmin],
+        serializer_class=VerifyCarSerializer,
+        parser_classes=[JSONParser, FormParser, MultiPartParser],
+    )
     def verify(self, request, pk=None):
         car = self.get_object()
-        serializer = self.get_serializer(car, data=request.data, partial=True)
+
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        verification_status = serializer.validated_data.get('verification_status')
-        if verification_status is None:
-            return Response(
-                {"error": "verification_status is required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        car = CarVerificationService.verify_car(
+            car=car,
+            verification_status=serializer.validated_data.get("verification_status"),
+        )
 
-        car.verification_status = verification_status
-        car.priority = (car.verification_status == 'verified')
-        car.save(update_fields=["verification_status", "priority"])
-
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(self.get_serializer(car).data, status=status.HTTP_200_OK)
 
     @extend_schema(
         tags=["Dealers - Inventory"],
@@ -343,20 +302,21 @@ class CarViewSet(viewsets.ModelViewSet):
     def bid(self, request, pk=None):
         car = self.get_object()
 
-        if car.sale_type != "auction":
-            return Response(
-                {"detail": "Bids can only be placed on auction cars."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        serializer = self.get_serializer(
+        serializer = BidSerializer(
             data=request.data,
             context={"request": request}
         )
         serializer.is_valid(raise_exception=True)
-        bid = serializer.save(car=car)
 
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        bid = CarBidService.place_bid(
+            car=car,
+            serializer=serializer
+        )
+
+        return Response(
+            BidSerializer(bid, context={"request": request}).data,
+            status=status.HTTP_201_CREATED
+        )
 
 @extend_schema_view(
     list=extend_schema(
@@ -803,10 +763,9 @@ class CarViewViewSet(viewsets.ModelViewSet):
         }
     )
 )
-class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
-    permission_classes = [AllowAny]  # Public access
+class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet ):
+    permission_classes = [AllowAny]
     serializer_class = CarListSerializer
-    queryset = Car.objects.filter(verification_status='verified')  # Only verified cars
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ['status', 'sale_type', 'make_ref']
     search_fields = ['make', 'model', 'description']
@@ -814,40 +773,20 @@ class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
     ordering = ['-views']
 
     def get_queryset(self):
-        """
-        Return verified cars ordered by view count, with optional filtering.
-        """
-        queryset = self.queryset
+        min_price = self.request.query_params.get("min_price")
+        max_price = self.request.query_params.get("max_price")
 
-        # Apply additional filters
-        min_price = self.request.query_params.get('min_price')
-        max_price = self.request.query_params.get('max_price')
-        if min_price:
-            queryset = queryset.filter(price__gte=min_price)
-        if max_price:
-            queryset = queryset.filter(price__lte=max_price)
-
-        return queryset.order_by('-views')
-
-    def list(self, request, *args, **kwargs):
-        """
-        List popular cars based on view count with pagination and filtering.
-        """
-        return super().list(request, *args, **kwargs)
+        return PopularCarService.get_popular_cars(
+            min_price=min_price,
+            max_price=max_price,
+        )
 
     def retrieve(self, request, *args, **kwargs):
-        """
-        Retrieve a specific car and increment its view count.
-        """
-        try:
-            instance = self.get_object()
-            instance.views = F('views') + 1
-            instance.save(update_fields=['views'])
-            instance.refresh_from_db()
-            serializer = self.get_serializer(instance)
-            return Response(serializer.data)
-        except Car.DoesNotExist:
-            return Response({"detail": "Car not found."}, status=status.HTTP_404_NOT_FOUND)
+        instance = self.get_object()
+        instance = PopularCarService.increment_views(instance)
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
 @extend_schema_view(
     list=extend_schema(

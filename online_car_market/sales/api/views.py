@@ -3,16 +3,12 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet, ModelViewSet
 from rest_framework.permissions import IsAuthenticated
-from rolepermissions.checkers import has_role
-from online_car_market.sales.models import Sale, Lead
-from online_car_market.dealers.models import DealerStaff
+from online_car_market.sales.models import Lead
 from .serializers import SaleSerializer, LeadSerializer, LeadCreateSerializer, LeadStatusUpdateSerializer, LeadAnalyticsSerializer
-from online_car_market.brokers.models import BrokerProfile
-from online_car_market.dealers.models import DealerProfile
-from online_car_market.buyers.models import BuyerProfile
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, OpenApiExample
 from online_car_market.users.permissions.business_permissions import CanViewSalesData, CanManageSales
 from ..service.lead_service import LeadService
+from ..service.sale_service import SaleService
 
 @extend_schema_view(
     list=extend_schema(
@@ -76,7 +72,6 @@ from ..service.lead_service import LeadService
     ),
 )
 class SaleViewSet(ModelViewSet):
-    queryset = Sale.objects.all()
     serializer_class = SaleSerializer
     permission_classes = [IsAuthenticated & CanViewSalesData]
 
@@ -86,40 +81,7 @@ class SaleViewSet(ModelViewSet):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        user = self.request.user
-
-        if has_role(user, ['super_admin', 'admin']):
-            return self.queryset
-
-        elif has_role(user, 'broker'):
-            try:
-                broker_profile = BrokerProfile.objects.get(profile__user=user)
-                return self.queryset.filter(broker=broker_profile)
-            except BrokerProfile.DoesNotExist:
-                return self.queryset.none()
-
-        elif has_role(user, 'dealer'):
-            try:
-                dealer_profile = DealerProfile.objects.get(profile__user=user)
-                return self.queryset.filter(car__dealer=dealer_profile)
-            except DealerProfile.DoesNotExist:
-                return self.queryset.none()
-
-        elif has_role(user, 'seller'):
-            try:
-                dealer_staff = DealerStaff.objects.get(user=user)
-                return self.queryset.filter(car__dealer=dealer_staff.dealer)
-            except DealerStaff.DoesNotExist:
-                return self.queryset.none()
-
-        elif has_role(user, 'buyer'):
-            try:
-                buyer_profile = BuyerProfile.objects.get(profile__user=user)
-                return self.queryset.filter(buyer=buyer_profile.profile.user)
-            except BuyerProfile.DoesNotExist:
-                return self.queryset.none()
-
-        return self.queryset.none()
+        return SaleService.get_sales_for_user(self.request.user)
 
 
 @extend_schema_view(
