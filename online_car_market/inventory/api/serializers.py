@@ -200,6 +200,7 @@ class CarListSerializer(serializers.ModelSerializer):
             "model",
             "year",
             "price",
+            "mileage",
             "model_ref",
             "make_ref",
             "body_type",
