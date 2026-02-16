@@ -2,13 +2,10 @@ from django.contrib.auth import get_user_model
 from rest_framework.viewsets import ModelViewSet, ViewSet, ReadOnlyModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.views import APIView
-from rolepermissions.roles import assign_role
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
-from .serializers import UserRoleSerializer, ProfileSerializer, UserSerializer, UserRegistrationSerializer
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from .serializers import UserRoleSerializer, ProfileSerializer, UserSerializer
 from online_car_market.users.models import Profile
-from online_car_market.users.permissions.drf_permissions import IsSuperAdmin, IsAdmin, IsSuperAdminOrAdmin
+from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin
 from rolepermissions.checkers import has_role
 from rest_framework.decorators import action
 import logging
@@ -29,8 +26,12 @@ class ProfileViewSet(ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+
         if has_role(user, ['super_admin', 'admin']):
-            return Profile.objects.all()
+            return Profile.objects.exclude(
+                user__dealer_staff_assignments__isnull=False
+            )
+        # Normal users can only see themselves
         return Profile.objects.filter(user=user)
 
     def retrieve(self, request, *args, **kwargs):

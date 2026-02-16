@@ -6,7 +6,6 @@ from django.utils.translation import gettext_lazy as _
 from django.views.generic import DetailView
 from django.views.generic import RedirectView
 from django.views.generic import UpdateView
-
 from online_car_market.users.models import User
 
 
