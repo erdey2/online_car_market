@@ -1,5 +1,6 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 from rolepermissions.checkers import has_role, has_permission
+from online_car_market.dealers.models import DealerStaff
 
 class IsAdminOrReadOnly(BasePermission):
     """Admins can verify/edit; others can only read their own."""
@@ -183,5 +184,27 @@ class IsFinanceOrAdmin(BasePermission):
                 has_role(request.user, "super_admin")
             )
         )
+
+class IsDealerOrStaff(BasePermission):
+
+    def has_permission(self, request, view):
+        user = request.user
+
+        if not user.is_authenticated:
+            return False
+
+        profile = getattr(user, "profile", None)
+        if not profile:
+            return False
+
+        # Dealer Owner
+        if hasattr(profile, "dealer_profile"):
+            return True
+
+        # Dealer Staff
+        if DealerStaff.objects.filter(user=user).exists():
+            return True
+
+        return False
 
 

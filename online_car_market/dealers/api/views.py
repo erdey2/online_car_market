@@ -1,4 +1,4 @@
-from rest_framework import serializers
+from rest_framework import serializers, status
 from rest_framework.views import APIView
 from rest_framework.viewsets import (ModelViewSet, ViewSet, ReadOnlyModelViewSet)
 from rest_framework.permissions import IsAuthenticated
@@ -13,7 +13,8 @@ from ..models import DealerStaff
 from online_car_market.dealers.models import DealerProfile, DealerRating
 
 from online_car_market.users.permissions.drf_permissions import IsSuperAdmin
-from online_car_market.users.permissions.business_permissions import ( IsRatingOwnerOrAdmin, IsDealerWithManageStaff)
+from online_car_market.users.permissions.business_permissions import ( IsRatingOwnerOrAdmin,
+                                                                       IsDealerWithManageStaff, IsDealerOrStaff)
 from ..services import approve_dealer, reactivate_dealer, suspend_dealer, reject_dealer
 
 import logging
@@ -294,16 +295,44 @@ class ProfileViewSet(ViewSet):
 )
 class DealerStaffViewSet(ModelViewSet):
     serializer_class = DealerStaffSerializer
-    permission_classes = [IsDealerWithManageStaff]
+    permission_classes = [IsDealerOrStaff]
 
     def get_queryset(self):
-        profile = getattr(self.request.user, "profile", None)
-        if not profile or not hasattr(profile, "dealer_profile"):
+        user = self.request.user
+        profile = getattr(user, "profile", None)
+
+        if not profile:
             return DealerStaff.objects.none()
 
-        return DealerStaff.objects.filter(
-            dealer=profile.dealer_profile
-        )
+        # Case 1: Dealer Owner
+        if hasattr(profile, "dealer_profile"):
+            return DealerStaff.objects.filter(
+                dealer=profile.dealer_profile
+            )
+
+        # Case 2: Dealer Staff
+        return DealerStaff.objects.filter(user=user)
+
+    @extend_schema(
+        tags=["Dealers - Staff Management"],
+        summary="Retrieve current staff profile",
+        description="Returns the dealer staff profile of the currently authenticated user. "
+                    "This endpoint allows individual staff members (Seller, HR, Accountant, Finance) "
+                    "to retrieve their own staff information.",
+        responses={200: DealerStaffSerializer}
+    )
+    @action(detail=False, methods=["get"], url_path="me")
+    def me(self, request):
+        try:
+            staff = DealerStaff.objects.get(user=request.user)
+        except DealerStaff.DoesNotExist:
+            return Response(
+                {"detail": "You are not registered as dealer staff."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = self.get_serializer(staff)
+        return Response(serializer.data)
 
 # DEALER RATINGS
 @extend_schema_view(
