@@ -1,59 +1,273 @@
-# online-car-market
+🚗 Car Market & ERP System
 
-Online-car-market is a digital platform designed to bridge the gap between car owners, brokers, and potential buyers in a seamless, transparent, and commission-based environment. The platform enables car owners to host and list their vehicles for sale, brokers to promote these cars and earn commissions, and customers to browse and purchase vehicles efficiently. The goal is to simplify the vehicle selling and buying process by eliminating traditional barriers, providing a trusted online marketplace where all parties benefit through secure listings, verified transactions, and a performance-based incentive model for brokers.
+A full-featured Online Car Marketplace + Enterprise Resource Planning (ERP) system built with Django & Django REST Framework, designed to manage vehicle sales, dealership operations, accounting, HR, and business workflows in one unified platform.
 
-[![Built with Cookiecutter Django](https://img.shields.io/badge/built%20with-Cookiecutter%20Django-ff69b4.svg?logo=cookiecutter)](https://github.com/cookiecutter/cookiecutter-django/)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+📌 Overview
 
-License: MIT
+This system combines:
 
-## Settings
+🛒 Online Car Marketplace
 
-Moved to [settings](https://cookiecutter-django.readthedocs.io/en/latest/1-getting-started/settings.html).
+🏢 Dealer & Broker Management
 
-## Basic Commands
+💼 ERP Modules (HR, Payroll, Accounting, Sales)
 
-### Setting Up Your Users
+🔔 Real-time Notifications
 
-- To create a **normal user account**, just go to Sign Up and fill out the form. Once you submit it, you'll see a "Verify Your E-mail Address" page. Go to your console to see a simulated email verification message. Copy the link into your browser. Now the user's email should be verified and ready to go.
+📊 Analytics & Reporting
 
-- To create a **superuser account**, use this command:
+🔐 Role-Based Access Control (RBAC)
 
-      $ python manage.py createsuperuser
+It enables car dealers to manage inventory and sales, brokers to handle leads, buyers to purchase vehicles, and admins to oversee the entire system.
 
-For convenience, you can keep your normal user logged in on Chrome and your superuser logged in on Firefox (or similar), so that you can see how the site behaves for both kinds of users.
+🏗️ System Architecture
+Client (React / Browser / Mobile)
+        ↓
+Django REST API
+        ↓
+Business Logic Layer (Services)
+        ↓
+PostgreSQL Database
+        ↓
+Real-time Layer (Django Channels - WebSockets)
 
-### Type checks
+🚀 Core Features
+🛒 Marketplace Module
 
-Running type checks with mypy:
+Car listing (make, model, year, price, body type, sale type)
 
-    $ mypy online_car_market
+Multiple car images
 
-### Test coverage
+Featured vehicles
 
-To run the tests, check your test coverage, and generate an HTML coverage report:
+Car verification workflow
 
-    $ coverage run -m pytest
-    $ coverage html
-    $ open htmlcov/index.html
+Lead management
 
-#### Running tests with pytest
+Car analytics
 
-    $ pytest
+Saved cars
 
-### Live reloading and Sass CSS compilation
+Ad interaction tracking (View, Like, Click, Save)
 
-Moved to [Live reloading and SASS compilation](https://cookiecutter-django.readthedocs.io/en/latest/2-local-development/developing-locally.html#using-webpack-or-gulp).
+👥 User Roles
 
-## Deployment
+Admin
 
-The following details how to deploy this application.
+Dealer
 
-### Custom Bootstrap Compilation
+Dealer Staff
 
-The generated CSS is set up with automatic Bootstrap recompilation with variables of your choice.
-Bootstrap v5 is installed using npm and customised by tweaking your variables in `static/sass/custom_bootstrap_vars`.
+Broker
 
-You can find a list of available variables [in the bootstrap source](https://github.com/twbs/bootstrap/blob/v5.1.3/scss/_variables.scss), or get explanations on them in the [Bootstrap docs](https://getbootstrap.com/docs/5.1/customize/sass/).
+Sales Agent
 
-Bootstrap's javascript as well as its dependencies are concatenated into a single file: `static/js/vendors.js`.
+Buyer
+
+Accountant
+
+HR
+
+Role-based permissions ensure proper system access.
+
+📈 Sales & Lead Management
+
+Lead creation & assignment
+
+Lead status tracking
+
+Sales closing workflow
+
+Commission tracking
+
+Dealer dashboard analytics
+
+Broker performance tracking
+
+🏢 ERP Modules
+💰 Accounting
+
+Income & expense tracking
+
+Employee salary management
+
+Payroll processing
+
+Financial reports
+
+👨‍💼 HR
+
+Employee management
+
+Payroll
+
+Salary records
+
+Role assignment
+
+🔔 Notifications
+
+Real-time notifications using Django Channels
+
+Car posted alerts
+
+Lead updates
+
+Status change alerts
+
+Unread notification filtering
+
+📊 Analytics & Reporting
+
+Leads analytics
+
+Sales performance
+
+Car performance metrics
+
+Revenue reports
+
+Broker activity reports
+
+🛠️ Tech Stack
+Backend
+
+Django
+
+Django REST Framework
+
+PostgreSQL
+
+Django Channels
+
+JWT Authentication
+
+Deployment
+
+Render
+
+Neon
+
+API Testing
+
+Insomnia
+
+📂 Project Structure (Simplified)
+api/
+accounts/
+cars/
+leads/
+sales/
+hr/
+accounting/
+notifications/
+analytics/
+
+
+Each module follows clean architecture principles:
+
+Models
+
+Serializers
+
+Views / ViewSets
+
+Services (Business Logic Layer)
+
+Permissions
+
+Signals (where needed)
+
+🔐 Authentication
+
+JWT-based authentication
+
+Role-based permission system
+
+Secure endpoints per user type
+
+Example:
+
+POST /api/accounts/login/
+GET  /api/cars/
+POST /api/dealers/cars/
+PATCH /api/sales/leads/{id}/update_status/
+
+📦 Installation
+1️⃣ Clone Repository
+git clone https://github.com/your-username/car-market-erp.git
+cd car-market-erp
+
+2️⃣ Create Virtual Environment
+python -m venv myenv
+source myenv/bin/activate  # Linux
+
+3️⃣ Install Dependencies
+pip install -r requirements.txt
+
+4️⃣ Configure Environment Variables
+
+Create .env file:
+
+DEBUG=True
+SECRET_KEY=your_secret_key
+DATABASE_URL=your_database_url
+
+5️⃣ Run Migrations
+python manage.py migrate
+
+6️⃣ Run Server
+python manage.py runserver
+
+🌐 Deployment
+
+The system is deployed on:
+
+Backend: Render
+
+Database: Neon PostgreSQL
+
+Production configuration includes:
+
+Environment variables
+
+Static file handling
+
+Database connection pooling
+
+Secure secret management
+
+📊 API Documentation
+
+API documentation is generated using:
+
+drf-spectacular (OpenAPI / Swagger)
+
+Access:
+
+/api/schema/
+/api/docs/
+
+🧠 Business Logic Design
+
+The system follows:
+
+Service-layer architecture
+
+Atomic transactions for financial operations
+
+Row-level locking for sensitive workflows
+
+Idempotent verification logic
+
+Soft deletes where required
+
+👨‍💻 Author
+
+Erdey Syoum
+Senior Backend Developer
+Python | Django | ERP Systems | Marketplace Systems
+
+📄 License
+
+This project is licensed under the MIT License.

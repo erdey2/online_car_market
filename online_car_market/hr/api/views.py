@@ -453,7 +453,7 @@ class LeaveViewSet(viewsets.ModelViewSet):
 class SalaryComponentViewSet(viewsets.ModelViewSet):
     queryset = SalaryComponent.objects.all()
     serializer_class = SalaryComponentSerializer
-    permission_classes = [IsAuthenticated, IsDealer]
+    permission_classes = [IsAuthenticated, IsDealerOrHR]
 
 @extend_schema(
     tags=["Payroll – Employee Salary"],
