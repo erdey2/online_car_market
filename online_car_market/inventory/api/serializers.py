@@ -209,6 +209,7 @@ class CarListSerializer(serializers.ModelSerializer):
             "body_type",
             "sale_type",
             "status",
+            "verification_status",
             "featured_image",
             "seller",
             "created_at",
