@@ -20,7 +20,8 @@ from ..models import Car, CarMake, CarModel, FavoriteCar, CarView
 from .serializers import (
                           VerifyCarSerializer, CarMakeSerializer, ContactSerializer,
                           CarModelSerializer, FavoriteCarSerializer, CarViewSerializer,
-                          CarWriteSerializer, CarListSerializer, CarDetailSerializer
+                          CarWriteSerializer, CarListSerializer, CarDetailSerializer,
+                          CarVerificationListSerializer
                           )
 from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, IsSuperAdminOrAdminOrBuyer
 from online_car_market.users.permissions.business_permissions import CanPostCar
@@ -238,29 +239,6 @@ class CarViewSet(viewsets.ModelViewSet):
 
     @extend_schema(
         tags=["Dealers - Inventory"],
-        description="Verify a car listing and set priority (admin/super_admin only).",
-        request=VerifyCarSerializer,
-        responses={200: VerifyCarSerializer}
-    )
-    @action(detail=True, methods=["patch"], permission_classes=[IsAuthenticated, IsSuperAdminOrAdmin],
-        serializer_class=VerifyCarSerializer,
-        parser_classes=[JSONParser, FormParser, MultiPartParser],
-    )
-    def verify(self, request, pk=None):
-        car = self.get_object()
-
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        car = CarVerificationService.verify_car(
-            car=car,
-            verification_status=serializer.validated_data.get("verification_status"),
-        )
-
-        return Response(self.get_serializer(car).data, status=status.HTTP_200_OK)
-
-    @extend_schema(
-        tags=["Dealers - Inventory"],
         parameters=[
             OpenApiParameter(name="fuel_type", type=OpenApiTypes.STR, location="query", description="Fuel type (electric, hybrid, petrol, diesel)"),
             OpenApiParameter(name="price_min", type=OpenApiTypes.FLOAT, location="query", description="Minimum price"),
@@ -316,6 +294,80 @@ class CarViewSet(viewsets.ModelViewSet):
         return Response(
             BidSerializer(bid, context={"request": request}).data,
             status=status.HTTP_201_CREATED
+        )
+
+@extend_schema_view(
+list=extend_schema(
+    tags=["Admin - Car Verification"],
+    summary="List Car Verification Records",
+    description=(
+        "Retrieve car verification records.\n\n"
+        "### Role-based visibility:\n"
+        "- Super Admin/Admin: Can view all records\n"
+        "- Dealer: Can view only their own records\n"
+        "- Broker: Can view only their own records\n\n"
+        "Optional filtering by verification status."
+    ),
+    parameters=[
+        OpenApiParameter(
+            name="verification_status",
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description="Filter by status: pending, verified, rejected",
+            required=False,
+        ),
+    ],
+    responses={200: CarVerificationListSerializer(many=True)},
+)
+)
+class CarVerificationViewSet(viewsets.GenericViewSet):
+
+    permission_classes = [IsAuthenticated]
+    queryset = Car.objects.all()
+    serializer_class = CarVerificationListSerializer
+
+    def list(self, request):
+        verification_status = request.query_params.get("verification_status")
+
+        queryset = CarQueryService.get_verification_cars_for_user(
+            user=request.user,
+            verification_status=verification_status
+        )
+
+        serializer = self.get_serializer(
+            queryset,
+            many=True,
+            context={"request": request}
+        )
+
+        return Response(serializer.data)
+
+    @extend_schema(
+        tags=["Admin - Car Verification"],
+        summary="Verify or Reject Car",
+        description="Approve or reject a car listing (admin/super_admin only).",
+        request=VerifyCarSerializer,
+        responses={200: VerifyCarSerializer},
+    )
+    @action(
+        detail=True,
+        methods=["patch"],
+        permission_classes=[IsAuthenticated, IsSuperAdminOrAdmin],
+    )
+    def verify(self, request, pk=None):
+        car = self.get_object()
+
+        serializer = VerifyCarSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        car = CarVerificationService.verify_car(
+            car=car,
+            verification_status=serializer.validated_data["verification_status"],
+        )
+
+        return Response(
+            VerifyCarSerializer(car).data,
+            status=status.HTTP_200_OK,
         )
 
 @extend_schema_view(

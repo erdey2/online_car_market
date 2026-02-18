@@ -81,7 +81,6 @@ class Car(models.Model):
         ('new', 'New'),
         ('used', 'Used'),
     ]
-
     # core fields
     vin = models.CharField(max_length=17, unique=True, null=True, blank=True, db_index=True)
     origin = models.CharField(max_length=100, null=True, blank=True)

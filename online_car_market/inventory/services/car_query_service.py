@@ -1,3 +1,5 @@
+from rest_framework.exceptions import PermissionDenied
+
 from online_car_market.inventory.models import Car
 from django.db.models import Avg, Q
 from rolepermissions.checkers import has_role
@@ -51,3 +53,28 @@ class CarQueryService:
             )
 
         return qs.filter(verification_status="verified")
+
+    @staticmethod
+    def get_verification_cars_for_user(user, verification_status=None):
+        qs = CarQueryService.base_queryset()
+
+        # Role-based visibility
+        if has_role(user, ["super_admin", "admin"]):
+            pass
+
+        elif has_role(user, "dealer"):
+            qs = qs.filter(dealer__profile__user=user)
+
+        elif has_role(user, "broker"):
+            qs = qs.filter(broker__profile__user=user)
+
+        else:
+            raise PermissionDenied(
+                "You are not allowed to view verification records."
+            )
+
+        # Optional status filtering
+        if verification_status:
+            qs = qs.filter(verification_status=verification_status)
+
+        return qs.order_by("-created_at")

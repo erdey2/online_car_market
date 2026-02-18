@@ -665,7 +665,29 @@ class CarViewSerializer(serializers.ModelSerializer):
         fields = ['id', 'car_id', 'car', 'user_id', 'ip_address', 'viewed_at']
         read_only_fields = ['viewed_at', 'ip_address']
 
-# ---------------- Verify Car Serializer ----------------
+class CarVerificationListSerializer(serializers.ModelSerializer):
+    dealer_name = serializers.CharField(source="dealer.profile.business_name", read_only=True)
+    broker_name = serializers.CharField(source="broker.profile.business_name", read_only=True)
+    posted_by = serializers.CharField(source="posted_by.email", read_only=True)
+
+    class Meta:
+        model = Car
+        fields = [
+            "id",
+            "make",
+            "model",
+            "year",
+            "price",
+            "sale_type",
+            "dealer_name",
+            "broker_name",
+            "posted_by",
+            "verification_status",
+            "priority",
+            "created_at",
+        ]
+
+# Verify Car Serializer
 class VerifyCarSerializer(serializers.ModelSerializer):
     class Meta:
         model = Car
