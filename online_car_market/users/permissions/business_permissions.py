@@ -149,7 +149,7 @@ class CanViewSalesData(BasePermission):
             )
         )
 
-class IsERPUser(BasePermission):
+class IsHrAccountantSeller(BasePermission):
     """
     Allow HR, Accountant, and Seller to manage contracts.
     HR has full access, others limited to draft creation.
@@ -206,5 +206,20 @@ class IsDealerOrStaff(BasePermission):
             return True
 
         return False
+
+class IsERPUsers(BasePermission):
+
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+
+        return has_role(request.user, [
+            'dealer',
+            'seller',
+            'hr',
+            'accountant',
+            'admin',
+            'super_admin'
+        ])
 
 

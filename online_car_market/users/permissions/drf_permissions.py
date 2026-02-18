@@ -1,6 +1,5 @@
 from rest_framework.permissions import BasePermission
-from rolepermissions.checkers import has_role, has_permission
-from rest_framework.permissions import SAFE_METHODS
+from rolepermissions.checkers import has_role
 
 class IsSuperAdmin(BasePermission):
     def has_permission(self, request, view):

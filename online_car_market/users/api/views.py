@@ -9,6 +9,8 @@ from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAd
 from rolepermissions.checkers import has_role
 from rest_framework.decorators import action
 import logging
+from dj_rest_auth.views import LoginView
+from .serializers import ERPLoginSerializer
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -114,4 +116,9 @@ class BuyerUserViewSet(ReadOnlyModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         logger.info(f"{request.user.email} retrieved the list of buyers (user-level).")
         return Response(serializer.data)
+
+
+class ERPLoginView(LoginView):
+    serializer_class = ERPLoginSerializer
+
 

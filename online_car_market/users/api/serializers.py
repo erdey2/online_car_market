@@ -352,3 +352,25 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'email', 'date_joined', 'is_active']
 
+
+class ERPLoginSerializer(LoginSerializer):
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        user = data.get("user")
+
+        if not user:
+            raise serializers.ValidationError("Authentication failed.")
+
+        # Block Buyers and Brokers
+        if has_role(user, ["buyer", "broker"]):
+            raise serializers.ValidationError(
+                "You are not allowed to access the ERP system."
+            )
+
+        return data
+
+
+
+
