@@ -688,6 +688,12 @@ class CarVerificationListSerializer(serializers.ModelSerializer):
             "created_at",
         ]
 
+class CarVerificationAnalyticsSerializer(serializers.Serializer):
+    total = serializers.IntegerField()
+    pending = serializers.IntegerField()
+    verified = serializers.IntegerField()
+    rejected = serializers.IntegerField()
+
 # Verify Car Serializer
 class VerifyCarSerializer(serializers.ModelSerializer):
     class Meta:

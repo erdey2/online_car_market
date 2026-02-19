@@ -21,7 +21,7 @@ from .serializers import (
                           VerifyCarSerializer, CarMakeSerializer, ContactSerializer,
                           CarModelSerializer, FavoriteCarSerializer, CarViewSerializer,
                           CarWriteSerializer, CarListSerializer, CarDetailSerializer,
-                          CarVerificationListSerializer
+                          CarVerificationListSerializer, CarVerificationAnalyticsSerializer
                           )
 from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, IsSuperAdminOrAdminOrBuyer
 from online_car_market.users.permissions.business_permissions import CanPostCar
@@ -350,9 +350,7 @@ class CarVerificationViewSet(viewsets.GenericViewSet):
         responses={200: VerifyCarSerializer},
     )
     @action(
-        detail=True,
-        methods=["patch"],
-        permission_classes=[IsAuthenticated, IsSuperAdminOrAdmin],
+        detail=True, methods=["patch"], permission_classes=[IsAuthenticated, IsSuperAdminOrAdmin],
     )
     def verify(self, request, pk=None):
         car = self.get_object()
@@ -369,6 +367,29 @@ class CarVerificationViewSet(viewsets.GenericViewSet):
             VerifyCarSerializer(car).data,
             status=status.HTTP_200_OK,
         )
+
+    @extend_schema(
+        tags=["Admin - Car Verification"],
+        summary="Verification Analytics",
+        description=(
+            "Returns aggregated verification statistics.\n\n"
+            "- Total cars\n"
+            "- Pending\n"
+            "- Verified\n"
+            "- Rejected\n\n"
+            "Admin/Super Admin only."
+        ),
+        responses={200: CarVerificationAnalyticsSerializer},
+    )
+    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated, IsSuperAdminOrAdmin], url_path="analytics")
+    def analytics(self, request):
+        data = CarVerificationService.get_verification_analytics(
+            request.user
+        )
+
+        serializer = CarVerificationAnalyticsSerializer(data)
+        return Response(serializer.data)
+
 
 @extend_schema_view(
     list=extend_schema(
