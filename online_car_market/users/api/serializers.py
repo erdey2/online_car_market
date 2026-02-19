@@ -365,7 +365,12 @@ class ERPLoginSerializer(LoginSerializer):
             raise serializers.ValidationError("Authentication failed.")
 
         # Allow only dealers
-        if not has_role(user, "dealer"):
+        if (not has_role(user, "dealer")
+            or not has_role(user, "hr")
+            or not has_role(user, "seller")
+            or not has_role(user, "accountant")
+            or not has_role(user, "finance")
+        ):
             raise serializers.ValidationError(
                 "Only dealers can access this system."
             )
