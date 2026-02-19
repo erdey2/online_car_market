@@ -1,16 +1,15 @@
+import logging
 from django.contrib.auth import get_user_model
 from rest_framework.viewsets import ModelViewSet, ViewSet, ReadOnlyModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from .serializers import UserRoleSerializer, ProfileSerializer, UserSerializer
-from online_car_market.users.models import Profile
+from .serializers import UserRoleSerializer, ProfileSerializer, UserSerializer, ERPLoginSerializer, AdminLoginSerializer
 from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin
-from rolepermissions.checkers import has_role
 from rest_framework.decorators import action
-import logging
 from dj_rest_auth.views import LoginView
-from .serializers import ERPLoginSerializer, AdminLoginSerializer
+from ..services.profile_service import ProfileService
+from ..services.user_service import UserService
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -27,14 +26,7 @@ class ProfileViewSet(ModelViewSet):
     http_method_names = ['get', 'patch']
 
     def get_queryset(self):
-        user = self.request.user
-
-        if has_role(user, ['super_admin', 'admin']):
-            return Profile.objects.exclude(
-                user__dealer_staff_assignments__isnull=False
-            )
-        # Normal users can only see themselves
-        return Profile.objects.filter(user=user)
+        return ProfileService.get_visible_profiles(self.request.user)
 
     def retrieve(self, request, *args, **kwargs):
         profile = self.get_object()
@@ -47,7 +39,6 @@ class ProfileViewSet(ModelViewSet):
         serializer = self.get_serializer(profile, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        logger.info(f"Profile updated for {request.user.email}")
         return Response(serializer.data)
 
     @action(detail=False, methods=["get", "patch"], url_path="me")
@@ -56,21 +47,21 @@ class ProfileViewSet(ModelViewSet):
         responses=ProfileSerializer,
     )
     def me(self, request):
-        profile = self.get_queryset().first()
+        profile = ProfileService.get_my_profile(request.user)
         if not profile:
             return Response({"detail": "Profile not found."}, status=404)
 
         if request.method == "GET":
-            serializer = self.get_serializer(profile)
-            return Response(serializer.data)
-        elif request.method == "PATCH":
-            serializer = self.get_serializer(profile, data=request.data, partial=True)
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-            logger.info(f"Profile (me) updated for {request.user.email}")
-            return Response(serializer.data)
+            return Response(self.get_serializer(profile).data)
+        serializer = self.get_serializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
 
-        return Response({"detail": "Method not allowed."}, status=405)
+        updated_profile = ProfileService.update_profile(
+            profile, serializer.validated_data
+        )
+
+        logger.info(f"Profile (me) updated for {request.user.email}")
+        return Response(self.get_serializer(updated_profile).data)
 
 @extend_schema_view(
     create=extend_schema(
@@ -109,14 +100,13 @@ class BuyerUserViewSet(ReadOnlyModelViewSet):
 
     def get_queryset(self):
         """Return all users with the 'buyer' role"""
-        return [user for user in User.objects.all() if has_role(user, 'buyer')]
+        return UserService.get_buyers()
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
         logger.info(f"{request.user.email} retrieved the list of buyers (user-level).")
         return Response(serializer.data)
-
 
 class ERPLoginView(LoginView):
     serializer_class = ERPLoginSerializer

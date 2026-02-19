@@ -1,22 +1,19 @@
+import re, bleach, logging, cloudinary, cloudinary.uploader
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from dj_rest_auth.registration.serializers import RegisterSerializer
 from dj_rest_auth.serializers import LoginSerializer
 from rolepermissions.checkers import has_role
-from rolepermissions.roles import get_user_roles, assign_role, remove_role
+from rolepermissions.roles import get_user_roles, assign_role
 from rolepermissions.exceptions import RoleDoesNotExist
 from django.contrib.auth import get_user_model
 from online_car_market.users.models import Profile
 from online_car_market.buyers.models import BuyerProfile
-from online_car_market.dealers.models import DealerProfile
-from online_car_market.brokers.models import BrokerProfile
 from online_car_market.brokers.api.serializers import BrokerProfileSerializer
 from online_car_market.dealers.api.serializers import DealerProfileSerializer
 from online_car_market.buyers.api.serializers import BuyerProfileSerializer
-import cloudinary.uploader
-import re
-import bleach
-import logging
+from ..services.user_service import UserService
+from ..services.profile_service import ProfileService
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -63,30 +60,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        # Extract names before creating the user
-        first_name = validated_data.pop('first_name', '')
-        last_name = validated_data.pop('last_name', '')
-        validated_data.pop('confirm_password')
-
-        user = User.objects.create_user(**validated_data)
-
-        # Create or update profile with names
-        profile, _ = Profile.objects.get_or_create(user=user)
-        profile.first_name = first_name
-        profile.last_name = last_name
-        profile.save()
-
-        # Assign default buyer role
-        try:
-            if not has_role(user, ['dealer', 'broker', 'admin', 'super_admin']):
-                assign_role(user, 'buyer')
-                BuyerProfile.objects.get_or_create(profile=profile)
-            logger.info(f"User created: {user.email}")
-        except RoleDoesNotExist:
-            logger.error(f"Role buyer does not exist for {user.email}")
-            raise serializers.ValidationError("Role buyer does not exist.")
-
-        return user
+        return UserService.register_user(validated_data)
 
 class UserMiniSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source='profile.get_full_name', read_only=True)
@@ -102,7 +76,7 @@ class UserRoleSerializer(serializers.Serializer):
         ('dealer', 'Dealer'),
         ('broker', 'Broker'),
         ('admin', 'Admin'),
-        ('superadmin', 'SuperAdmin'),
+        ('super_admin', 'SuperAdmin'),
     ])
 
     def validate(self, data):
@@ -112,45 +86,19 @@ class UserRoleSerializer(serializers.Serializer):
 
         if not has_role(user, ['super_admin', 'admin']) and not user.is_superuser:
             raise serializers.ValidationError("Only super admins or admins can assign roles.")
+
         if target_user == user and role != 'admin':
             raise serializers.ValidationError("You cannot change your own role unless assigning Admin.")
+
         if not target_user.is_active:
             raise serializers.ValidationError("Cannot assign role to inactive user.")
+
         return data
 
-    def save(self):
-        user = self.validated_data['user_id']
-        role = self.validated_data['role']
-        current_roles = [role.get_name() for role in get_user_roles(user)]
-
-        for current_role in current_roles:
-            try:
-                remove_role(user, current_role)
-                logger.info(f"Removed role {current_role} from user {user.email}")
-            except RoleDoesNotExist:
-                logger.warning(f"Role {current_role} does not exist for {user.email}")
-
-        try:
-            assign_role(user, role)
-        except RoleDoesNotExist:
-            logger.error(f"Role {role} does not exist for {user.email}")
-            raise serializers.ValidationError(f"Role {role} does not exist.")
-
-        Profile.objects.get_or_create(user=user)
-        if role == 'buyer':
-            BuyerProfile.objects.get_or_create(profile=Profile.objects.get(user=user))
-        elif role == 'dealer':
-            DealerProfile.objects.get_or_create(
-                profile=Profile.objects.get(user=user),
-                defaults={'company_name': user.email, 'license_number': '', 'telebirr_account': ''}
-            )
-        elif role == 'broker':
-            BrokerProfile.objects.get_or_create(
-                profile=Profile.objects.get(user=user),
-                defaults={'national_id': f"ID_{user.id}", 'telebirr_account': ''}
-            )
-        logger.info(f"Assigned role {role} to user {user.email}")
-        return user
+    def create(self, validated_data):
+        user = validated_data['user_id']
+        role = validated_data['role']
+        return UserService.assign_role_to_user(user, role)
 
 class CustomLoginSerializer(LoginSerializer):
     username = None
@@ -313,8 +261,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         request = self.context.get("request")
-        user_id = request.user.id  # ID from token
-        logger.info(f"Updating profile for user_id={user_id}")
+        logger.info(f"Updating profile for user_id={request.user.id}")
 
         dealer_profile_data = validated_data.pop('dealer_profile', None)
         broker_profile_data = validated_data.pop('broker_profile', None)
@@ -323,27 +270,14 @@ class ProfileSerializer(serializers.ModelSerializer):
         instance = super().update(instance, validated_data)
 
         if image:
-            try:
-                upload_result = cloudinary.uploader.upload(
-                    image,
-                    folder='profiles',
-                    resource_type='image',
-                    overwrite=True
-                )
-                instance.image = upload_result['public_id']
-                instance.save()
-                logger.info(f"Profile image uploaded for user_id={user_id}: {upload_result['public_id']}")
-            except Exception as e:
-                logger.error(f"Failed to upload profile image for user_id={user_id}: {str(e)}")
-                raise serializers.ValidationError({"image": "Failed to upload image to Cloudinary."})
+            instance.image = ProfileService.upload_profile_image(image)
+            instance.save()
 
-        if dealer_profile_data and has_role(instance.user, 'dealer'):
-            dealer_profile, _ = DealerProfile.objects.get_or_create(profile=instance)
-            DealerProfileSerializer().update(dealer_profile, dealer_profile_data)
-
-        if broker_profile_data and has_role(instance.user, 'broker'):
-            broker_profile, _ = BrokerProfile.objects.get_or_create(profile=instance)
-            BrokerProfileSerializer().update(broker_profile, broker_profile_data)
+        ProfileService.update_related_profiles(
+            instance,
+            dealer_profile_data,
+            broker_profile_data
+        )
 
         return instance
 
@@ -359,7 +293,7 @@ class ERPLoginSerializer(LoginSerializer):
         user = data.get("user")
 
         roles = get_user_roles(user)
-        print("USER ROLES:", roles)
+        logger.info(f"User roles: {roles}")
 
         if not user:
             raise serializers.ValidationError("Authentication failed.")
@@ -375,13 +309,12 @@ class ERPLoginSerializer(LoginSerializer):
         return data
 
 class AdminLoginSerializer(LoginSerializer):
-
     def validate(self, attrs):
         data = super().validate(attrs)
         user = data.get("user")
 
         # Allow admin OR superadmin
-        if not has_role(user, ["admin", "superadmin"]):
+        if not has_role(user, ["admin", "super_admin"]):
             raise serializers.ValidationError(
                 "You are not allowed to access the Admin system."
             )
