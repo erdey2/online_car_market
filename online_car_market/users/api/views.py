@@ -10,7 +10,7 @@ from rolepermissions.checkers import has_role
 from rest_framework.decorators import action
 import logging
 from dj_rest_auth.views import LoginView
-from .serializers import ERPLoginSerializer
+from .serializers import ERPLoginSerializer, AdminLoginSerializer
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -120,5 +120,9 @@ class BuyerUserViewSet(ReadOnlyModelViewSet):
 
 class ERPLoginView(LoginView):
     serializer_class = ERPLoginSerializer
+
+class AdminLoginView(LoginView):
+    serializer_class = AdminLoginSerializer
+
 
 

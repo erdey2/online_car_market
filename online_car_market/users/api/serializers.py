@@ -358,8 +358,8 @@ class ERPLoginSerializer(LoginSerializer):
         data = super().validate(attrs)
         user = data.get("user")
 
-        # roles = get_user_roles(user)
-        # print("USER ROLES:", roles)
+        roles = get_user_roles(user)
+        print("USER ROLES:", roles)
 
         if not user:
             raise serializers.ValidationError("Authentication failed.")
@@ -371,6 +371,21 @@ class ERPLoginSerializer(LoginSerializer):
             )
 
         return data
+
+class AdminLoginSerializer(LoginSerializer):
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        user = data.get("user")
+
+        # Allow admin OR superadmin
+        if not has_role(user, ["admin", "superadmin"]):
+            raise serializers.ValidationError(
+                "You are not allowed to access the Admin system."
+            )
+
+        return data
+
 
 
 
