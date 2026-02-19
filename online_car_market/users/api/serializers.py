@@ -364,15 +364,12 @@ class ERPLoginSerializer(LoginSerializer):
         if not user:
             raise serializers.ValidationError("Authentication failed.")
 
-        # Allow only dealers
-        if (not has_role(user, "dealer")
-            or not has_role(user, "hr")
-            or not has_role(user, "seller")
-            or not has_role(user, "accountant")
-            or not has_role(user, "finance")
-        ):
+        # Allow only ERP roles
+        allowed_roles = ["dealer", "hr", "seller", "accountant", "finance"]
+
+        if not any(has_role(user, role) for role in allowed_roles):
             raise serializers.ValidationError(
-                "Only dealers can access this system."
+                "You are not allowed to access the ERP system."
             )
 
         return data
