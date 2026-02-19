@@ -9,6 +9,6 @@ router.register(r'list', BuyerUserViewSet, basename='users-list')
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('api/erp/login/', ERPLoginView.as_view(), name='erp-login'),
+    path('erp/login/', ERPLoginView.as_view(), name='erp-login'),
 ]
 
