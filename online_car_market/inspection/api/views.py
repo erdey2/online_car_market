@@ -2,14 +2,13 @@ from .serializers import InspectionSerializer
 from ..models import Inspection
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse, OpenApiExample
 from rest_framework.viewsets import ModelViewSet
-from online_car_market.users.permissions.drf_permissions import IsBrokerOrSeller, IsSuperAdminOrAdmin
-from django.utils import timezone
 from rest_framework.response import Response
-from rest_framework import status, permissions
+from rest_framework import permissions
 from rest_framework.decorators import action
 from rolepermissions.checkers import has_role
 from online_car_market.users.permissions.business_permissions import IsAdminOrReadOnly
-from online_car_market.inspection.services.inspection_service import InspectionService
+from online_car_market.users.permissions.drf_permissions import IsDealerBrokerOrSeller, IsSuperAdminOrAdmin
+from ..services.inspection_service import InspectionService
 
 
 @extend_schema_view(
@@ -73,19 +72,19 @@ class InspectionViewSet(ModelViewSet):
     serializer_class = InspectionSerializer
 
     def get_permissions(self):
+        if self.action == "verify":
+            return [IsSuperAdminOrAdmin()]
+
         if self.action in ["create", "update", "partial_update"]:
-            return [IsBrokerOrSeller()]
-        elif self.action in ["verify", "destroy"]:
+            return [IsDealerBrokerOrSeller()]
+
+        elif self.action == "destroy":
             return [permissions.IsAdminUser()]
-        else:
-            return [IsAdminOrReadOnly()]
+
+        return [IsAdminOrReadOnly()]
 
     def get_queryset(self):
-        user = self.request.user
-
-        if has_role(user, ["admin", "superadmin"]):
-            return Inspection.objects.all()
-        return Inspection.objects.filter(uploaded_by=user)
+        return InspectionService.get_user_inspections(self.request.user)
 
     @extend_schema(
         description="Verify or reject an inspection."

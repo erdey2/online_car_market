@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from ..models import Inspection
-from django.utils import timezone
 from online_car_market.inventory.models import Car
+from ..services.inspection_service import InspectionService
 
 class InspectionSerializer(serializers.ModelSerializer):
     car_id = serializers.IntegerField(write_only=True, required=True)
@@ -44,37 +44,14 @@ class InspectionSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        request = self.context.get("request")
-        car = Car.objects.get(id=validated_data.pop("car_id"))
-
-        # Dealer/Broker create — always pending
-        inspection = Inspection.objects.create(
-            car=car,
-            uploaded_by=request.user,
-            uploaded_at=timezone.now(),
-            status="pending",
-            **validated_data
+        return InspectionService.create_inspection(
+            user=self.context["request"].user,
+            validated_data=validated_data
         )
-        return inspection
 
     def update(self, instance, validated_data):
-        request = self.context["request"]
-        user = request.user
-
-        # Admin verifies or rejects
-        if "status" in validated_data and validated_data["status"] in ["verified", "rejected"]:
-            if not (user.is_staff or user.role in ["admin", "superadmin"]):
-                raise serializers.ValidationError("Only admin or superadmin can verify inspections.")
-            instance.status = validated_data["status"]
-            instance.verified_by = user
-            instance.verified_at = timezone.now()
-            instance.admin_remarks = validated_data.get("admin_remarks", instance.admin_remarks)
-        else:
-            # Dealers/Brokers can only edit their own pending inspections
-            if instance.status != "pending":
-                raise serializers.ValidationError("Only pending inspections can be modified.")
-            for attr, value in validated_data.items():
-                setattr(instance, attr, value)
-
-        instance.save()
-        return instance
+        return InspectionService.update_inspection(
+            instance=instance,
+            user=self.context["request"].user,
+            validated_data=validated_data
+        )
