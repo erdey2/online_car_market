@@ -356,19 +356,18 @@ class ERPLoginSerializer(LoginSerializer):
 
     def validate(self, attrs):
         data = super().validate(attrs)
-
         user = data.get("user")
 
-        roles = get_user_roles(user)
-        print("USER ROLES:", roles)
+        # roles = get_user_roles(user)
+        # print("USER ROLES:", roles)
 
         if not user:
             raise serializers.ValidationError("Authentication failed.")
 
-        # Block Buyers and Brokers
-        if has_role(user, ["buyer", "broker"]):
+        # Allow only dealers
+        if not has_role(user, "dealer"):
             raise serializers.ValidationError(
-                "You are not allowed to access the ERP system."
+                "Only dealers can access this system."
             )
 
         return data
