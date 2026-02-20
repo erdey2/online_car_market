@@ -234,7 +234,7 @@ class CarViewSet(viewsets.ModelViewSet):
             CarDetailSerializer(car, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
-    
+
     @extend_schema(
         tags=["Dealers - Inventory"],
         parameters=[

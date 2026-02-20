@@ -83,27 +83,30 @@ class CarQueryService:
     @staticmethod
     def get_visible_cars_for_user(user, queryset):
         if not user.is_authenticated:
-            return queryset.filter(verification_status="verified")
-
-        if has_role(user, ["super_admin", "admin"]):
-            return queryset
-
-        if has_role(user, "dealer"):
-            return queryset.filter(
+            qs = queryset.filter(verification_status="verified")
+        elif has_role(user, ["super_admin", "admin"]):
+            qs = queryset
+        elif has_role(user, "dealer"):
+            qs = queryset.filter(
                 Q(dealer__profile__user=user) |
                 Q(verification_status="verified")
             )
-
-        if has_role(user, "seller"):
-            return queryset.filter(dealer__dealerstaff__user=user)
-
-        if has_role(user, "broker"):
-            return queryset.filter(
+        elif has_role(user, "seller"):
+            qs = queryset.filter(dealer__dealerstaff__user=user)
+        elif has_role(user, "broker"):
+            qs = queryset.filter(
                 Q(broker__profile__user=user) |
                 Q(verification_status="verified")
             )
+        else:
+            qs = queryset.filter(verification_status="verified")
 
-        return queryset.filter(verification_status="verified")
+        # Always prefetch images for any user
+        images_qs = CarImage.objects.only("id", "image", "is_featured")
+        prefetch_images = Prefetch("images", queryset=images_qs, to_attr="featured_images")
+        qs = qs.prefetch_related(prefetch_images)
+
+        return qs
 
     @staticmethod
     def get_verification_cars_for_user(user, verification_status=None):
