@@ -9,92 +9,68 @@ class CarQueryService:
 
     @staticmethod
     def base_queryset():
-        """Return base queryset for Car."""
         return Car.objects.all()
 
     @staticmethod
     def _prefetch_featured_image(queryset):
-        """
-        Prefetch only the featured image for list view.
-        Stored in `featured_images` attribute.
-        """
+        """Prefetch only the featured image for list view."""
         featured_qs = CarImage.objects.filter(is_featured=True).only("id", "image", "is_featured")
         return queryset.prefetch_related(Prefetch("images", queryset=featured_qs, to_attr="featured_images"))
 
     @staticmethod
-    def _prefetch_all_images(queryset):
-        """
-        Prefetch all images for detail view.
-        Stored in `images` attribute.
-        """
-        all_images_qs = CarImage.objects.all().only("id", "image", "is_featured")
-        return queryset.prefetch_related(Prefetch("images", queryset=all_images_qs))
-
-    @staticmethod
     def for_list():
-        """
-        List view optimized:
-        - Only featured image
-        - Annotate dealer average rating
-        - Order by priority and creation date
-        """
-        qs = Car.objects.select_related(
-            "dealer", "dealer__profile", "make_ref", "model_ref"
-        )
-        qs = CarQueryService._prefetch_featured_image(qs)
-        qs = qs.annotate(
-            dealer_avg=Coalesce(
-                Avg("dealer__ratings__rating"),
-                0.0,
-                output_field=FloatField()
+        """List view: only one featured image."""
+        featured_qs = CarImage.objects.filter(is_featured=True).only("id", "image", "is_featured")
+        prefetch_images = Prefetch("images", queryset=featured_qs, to_attr="featured_images")
+
+        return (
+            Car.objects
+            .select_related("dealer", "dealer__profile", "make_ref", "model_ref")
+            .prefetch_related(prefetch_images)
+            .annotate(
+                dealer_avg=Coalesce(
+                    Avg("dealer__ratings__rating"),
+                    0.0,
+                    output_field=FloatField()
+                )
             )
-        ).order_by("-priority", "-created_at")
-        return qs
+            .order_by("-priority", "-created_at")
+        )
 
     @staticmethod
     def for_detail():
-        """
-        Detail view optimized:
-        - Prefetch top 10 bids
-        - Prefetch all images
-        - Annotate bid count, highest bid, dealer average
-        """
-        # Prefetch top 10 bids per car
-        top_bids_qs = (
-            Bid.objects.select_related("user")
-            .only("id", "amount", "user_id", "created_at")
-            .order_by("-amount")[:10]
-        )
+        """Detail view: prefetch all images and top 10 bids."""
+        all_images_qs = CarImage.objects.all().only("id", "image", "is_featured")
+        top_bids_qs = Bid.objects.select_related("user").only(
+            "id", "amount", "user_id", "created_at"
+        ).order_by("-amount")[:10]
 
-        qs = Car.objects.select_related(
-            "dealer",
-            "dealer__profile",
-            "broker",
-            "broker__profile",
-            "posted_by",
-            "make_ref",
-            "model_ref",
-        )
-        qs = CarQueryService._prefetch_all_images(qs)
-        qs = qs.prefetch_related(
-            Prefetch("bids", queryset=top_bids_qs, to_attr="top_bids")
-        )
-        qs = qs.annotate(
-            bid_count=Count("bids", distinct=True),
-            highest_bid=Max("bids__amount"),
-            dealer_avg=Coalesce(
-                Avg("dealer__ratings__rating"),
-                0.0,
-                output_field=FloatField()
+        return (
+            Car.objects
+            .select_related(
+                "dealer", "dealer__profile", "broker", "broker__profile",
+                "posted_by", "make_ref", "model_ref"
+            )
+            .prefetch_related(
+                Prefetch("images", queryset=all_images_qs),  # normal prefetch
+                Prefetch("bids", queryset=top_bids_qs, to_attr="top_bids")
+            )
+            .annotate(
+                bid_count=Count("bids", distinct=True),
+                highest_bid=Max("bids__amount"),
+                dealer_avg=Coalesce(
+                    Avg("dealer__ratings__rating"),
+                    0.0,
+                    output_field=FloatField()
+                ),
             )
         )
-        return qs
 
     @staticmethod
     def get_visible_cars_for_user(user, queryset):
         """
-        Apply role-based visibility for any user.
-        Dealers, brokers, sellers, admins, and buyers handled.
+        Role-based filtering. Do NOT touch prefetching here to avoid conflicts.
+        Only filter the queryset; prefetch is handled in for_list / for_detail.
         """
         if not user.is_authenticated:
             qs = queryset.filter(verification_status="verified")
@@ -120,17 +96,10 @@ class CarQueryService:
         else:
             qs = queryset.filter(verification_status="verified")
 
-        # Ensure featured images are always prefetched for list/detail
-        if hasattr(queryset, "model") and queryset.model == Car:
-            qs = CarQueryService._prefetch_featured_image(qs)
-
         return qs
 
     @staticmethod
     def get_verification_cars_for_user(user, verification_status=None):
-        """
-        Returns cars for verification screens depending on user role.
-        """
         qs = CarQueryService.base_queryset()
 
         if has_role(user, ["super_admin", "admin"]):
@@ -145,6 +114,4 @@ class CarQueryService:
         if verification_status:
             qs = qs.filter(verification_status=verification_status)
 
-        # Prefetch featured images for verification lists too
-        qs = CarQueryService._prefetch_featured_image(qs)
-        return qs.order_by("-created_at")
+        return CarQueryService._prefetch_featured_image(qs).order_by("-created_at")

@@ -202,12 +202,9 @@ class CarListSerializer(serializers.ModelSerializer):
         ]
 
     def get_featured_image(self, obj):
-        # Use the prefetch attribute from queryset
         images = getattr(obj, "featured_images", [])
-        if images:
-            # Always take the first one (featured)
-            return images[0].image.url
-        return None
+        featured = images[0] if images else None
+        return featured.image.url if featured else None
 
     def get_seller(self, obj):
         seller_obj = obj.dealer or obj.broker

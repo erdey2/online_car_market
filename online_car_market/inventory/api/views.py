@@ -213,15 +213,13 @@ class CarViewSet(viewsets.ModelViewSet):
         return CarListSerializer
 
     def get_queryset(self):
-        # Select appropriate optimized queryset
         if self.action == "list":
-            qs = CarQueryService.for_list()
+            qs = CarQueryService.for_list()  # list view: featured_images
         elif self.action == "retrieve":
-            qs = CarQueryService.for_detail()
+            qs = CarQueryService.for_detail()  # detail view: all images + top_bids
         else:
             qs = CarQueryService.base_queryset()
 
-        # Apply role-based visibility
         return CarQueryService.get_visible_cars_for_user(self.request.user, qs)
 
     def get_permissions(self):
@@ -278,7 +276,10 @@ class CarViewSet(viewsets.ModelViewSet):
         serializer = BidSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         bid = CarBidService.place_bid(car=car, serializer=serializer)
-        return Response(BidSerializer(bid, context={"request": request}).data, status=status.HTTP_201_CREATED)
+        return Response(
+            BidSerializer(bid, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 @extend_schema_view(
 list=extend_schema(
@@ -373,7 +374,6 @@ class CarVerificationViewSet(viewsets.GenericViewSet):
 
         serializer = CarVerificationAnalyticsSerializer(data)
         return Response(serializer.data)
-
 
 @extend_schema_view(
     list=extend_schema(
