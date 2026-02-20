@@ -1,4 +1,4 @@
-from django.db.models import Prefetch, Max, Count, OuterRef, Subquery
+from django.db.models import Prefetch, Max, Count, OuterRef, Subquery, FloatField
 from django.db.models import Q, Avg
 from django.db.models.functions import Coalesce
 from rolepermissions.checkers import has_role
@@ -34,7 +34,11 @@ class CarQueryService:
                 )
             )
             .annotate(
-                dealer_avg=Coalesce("dealer__cached_avg_rating", 0),
+                dealer_avg=Coalesce(
+                    Avg("dealer__ratings__rating"),
+                    0.0,
+                    output_field=FloatField()
+                ),
             )
             .only("id", "title", "price", "priority", "verification_status", "dealer_id", "make_ref_id", "model_ref_id")
             .order_by("-priority", "-created_at")
@@ -62,7 +66,7 @@ class CarQueryService:
             .prefetch_related("images").annotate(
                 bid_count=Count("bids", distinct=True),
                 highest_bid=Max("bids__amount"),
-                dealer_avg=Coalesce(Avg("dealer__ratings__rating"), 0),
+                dealer_avg=Coalesce(Avg("dealer__ratings__rating"), 0.0, output_field=FloatField()),
                 top_bid_id=Subquery(top_bids_subquery)
             )
         )
