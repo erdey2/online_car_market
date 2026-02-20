@@ -181,6 +181,12 @@ class Car(models.Model):
         return f"{self.make} {self.model} ({self.year}) - {self.BODY_TYPES}"
 
     class Meta:
+        indexes = [
+            models.Index(fields=["verification_status"]),
+            models.Index(fields=["created_at"]),
+            models.Index(fields=["dealer"]),
+            models.Index(fields=["broker"]),
+        ]
         constraints = [
             models.CheckConstraint(
                 check=(

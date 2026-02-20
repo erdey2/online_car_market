@@ -216,7 +216,7 @@ class CarListSerializer(serializers.ModelSerializer):
         ]
 
     def get_featured_image(self, obj):
-        images = getattr(obj, "images", [])
+        images = list(obj.images.all()) if hasattr(obj, "images") else []
 
         featured = next((img for img in images if img.is_featured), None)
         if not featured and images:
@@ -242,8 +242,6 @@ class CarListSerializer(serializers.ModelSerializer):
             }
 
         return None
-
-from rest_framework import serializers
 
 class CarDetailSerializer(serializers.ModelSerializer):
     images = CarImageSerializer(many=True, read_only=True)

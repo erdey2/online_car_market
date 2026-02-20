@@ -261,8 +261,11 @@ class CarViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['get'])
     def filter(self, request):
-        queryset = self.get_queryset()
+        queryset = CarQueryService.for_list()
 
+        queryset = CarQueryService.get_visible_cars_for_user(
+            request.user, queryset
+        )
         try:
             filtered_queryset = CarFilterService.filter_cars(
                 queryset=queryset,
@@ -271,7 +274,9 @@ class CarViewSet(viewsets.ModelViewSet):
         except ValidationError as e:
             return Response({"error": str(e.detail)}, status=400)
 
-        serializer = CarListSerializer(filtered_queryset, many=True, context={"request": request})
+        serializer = CarListSerializer(
+            filtered_queryset, many=True, context={"request": request}
+        )
         return Response(serializer.data)
 
     @extend_schema(
