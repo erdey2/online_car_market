@@ -16,41 +16,37 @@ class CarQueryService:
     @staticmethod
     def for_list():
         """
-        Optimized list view: fetch cars with dealer info and featured images.
+        Optimized list view:
         """
+        images_qs = CarImage.objects.only("id", "image", "is_featured")
+        prefetch_images = Prefetch("images", queryset=images_qs, to_attr="featured_images")
+
         return (
             Car.objects
-            .select_related(
-                "dealer",
-                "dealer__profile",
-                "make_ref",
-                "model_ref",
-            )
-            .prefetch_related(
-                Prefetch(
-                    "images",
-                    queryset=CarImage.objects.only("id", "image", "is_featured").filter(is_featured=True),
-                    to_attr="featured_images"  # avoids repeated access hits
-                )
-            )
+            .select_related("dealer", "dealer__profile", "make_ref", "model_ref")
+            .prefetch_related(prefetch_images)
             .annotate(
                 dealer_avg=Coalesce(
                     Avg("dealer__ratings__rating"),
                     0.0,
                     output_field=FloatField()
-                ),
+                )
             )
-            .only("id", "title", "price", "priority", "verification_status", "dealer_id", "make_ref_id", "model_ref_id")
             .order_by("-priority", "-created_at")
         )
 
     @staticmethod
     def for_detail():
         """
-        Optimized detail view: fetch top 10 bids per car using Subquery.
+        Optimized detail view:
         """
-        # Subquery for top 10 bid IDs per car
-        top_bids_subquery = Bid.objects.filter(car=OuterRef("pk")).order_by("-amount").values("pk")[:10]
+        # Prefetch top 10 bids per car
+        top_bids_qs = (
+            Bid.objects
+            .select_related("user")
+            .only("id", "amount", "user_id", "created_at")
+            .order_by("-amount")[:10]  # top 10 bids
+        )
 
         return (
             Car.objects
@@ -63,11 +59,18 @@ class CarQueryService:
                 "make_ref",
                 "model_ref",
             )
-            .prefetch_related("images").annotate(
+            .prefetch_related(
+                "images",
+                Prefetch("bids", queryset=top_bids_qs, to_attr="top_bids")  # top 10 bids stored in `car.top_bids`
+            )
+            .annotate(
                 bid_count=Count("bids", distinct=True),
                 highest_bid=Max("bids__amount"),
-                dealer_avg=Coalesce(Avg("dealer__ratings__rating"), 0.0, output_field=FloatField()),
-                top_bid_id=Subquery(top_bids_subquery)
+                dealer_avg=Coalesce(
+                    Avg("dealer__ratings__rating"),
+                    0.0,
+                    output_field=FloatField()
+                ),
             )
         )
 

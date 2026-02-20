@@ -216,8 +216,12 @@ class CarListSerializer(serializers.ModelSerializer):
         ]
 
     def get_featured_image(self, obj):
-        images = list(obj.images.all()) if hasattr(obj, "images") else []
+        """
+        Uses prefetch 'featured_images' to avoid extra queries.
+        """
+        images = getattr(obj, "featured_images", [])
 
+        # Pick first featured image if exists, else first image
         featured = next((img for img in images if img.is_featured), None)
         if not featured and images:
             featured = images[0]
@@ -245,7 +249,7 @@ class CarListSerializer(serializers.ModelSerializer):
 
 class CarDetailSerializer(serializers.ModelSerializer):
     images = CarImageSerializer(many=True, read_only=True)
-    bids = BidNestedSerializer(many=True, read_only=True)
+    bids = serializers.SerializerMethodField()  # changed from BidNestedSerializer
     seller = serializers.SerializerMethodField()
     bid_count = serializers.IntegerField(read_only=True)
     highest_bid = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
@@ -254,6 +258,22 @@ class CarDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Car
         exclude = ["dealer", "broker"]
+
+    def get_bids(self, obj):
+        """
+        Return only top 10 bids fetched in 'top_bids' prefetch.
+        """
+        top_bids = getattr(obj, "top_bids", [])
+        return [
+            {
+                "id": bid.id,
+                "amount": bid.amount,
+                "user_id": bid.user_id,
+                "created_at": bid.created_at,
+                "user_name": getattr(getattr(bid, "user", None), "username", None),
+            }
+            for bid in top_bids
+        ]
 
     def get_seller(self, obj):
         seller_obj = obj.dealer or obj.broker
@@ -268,8 +288,6 @@ class CarDetailSerializer(serializers.ModelSerializer):
             "type": seller_type,
             "id": seller_obj.id,
             "name": getattr(seller_obj, "get_display_name", lambda: None)(),
-            # "email": user.email if user else None,
-            # "contact_number": getattr(profile, "contact", None),
             "is_verified": getattr(seller_obj, "is_verified", None),
         }
 

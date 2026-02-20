@@ -220,6 +220,7 @@ class CarViewSet(viewsets.ModelViewSet):
         else:
             qs = CarQueryService.base_queryset()
 
+        # Apply role-based visibility
         return CarQueryService.get_visible_cars_for_user(self.request.user, qs)
 
     def get_permissions(self):
@@ -231,16 +232,14 @@ class CarViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        car = CarService.create_car_with_images(
-            serializer=serializer,
-            request=request
-        )
+        car = CarService.create_car_with_images(serializer=serializer, request=request)
 
         return Response(
             CarDetailSerializer(car, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
 
+    # Filtering endpoint
     @extend_schema(
         tags=["Dealers - Inventory"],
         parameters=[
@@ -262,10 +261,8 @@ class CarViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def filter(self, request):
         queryset = CarQueryService.for_list()
+        queryset = CarQueryService.get_visible_cars_for_user(request.user, queryset)
 
-        queryset = CarQueryService.get_visible_cars_for_user(
-            request.user, queryset
-        )
         try:
             filtered_queryset = CarFilterService.filter_cars(
                 queryset=queryset,
@@ -274,11 +271,10 @@ class CarViewSet(viewsets.ModelViewSet):
         except ValidationError as e:
             return Response({"error": str(e.detail)}, status=400)
 
-        serializer = CarListSerializer(
-            filtered_queryset, many=True, context={"request": request}
-        )
+        serializer = CarListSerializer(filtered_queryset, many=True, context={"request": request})
         return Response(serializer.data)
 
+    # Place bid endpoint
     @extend_schema(
         tags=["Dealers - Inventory"],
         description="Place a bid on an auction car.",
@@ -289,16 +285,10 @@ class CarViewSet(viewsets.ModelViewSet):
     def bid(self, request, pk=None):
         car = self.get_object()
 
-        serializer = BidSerializer(
-            data=request.data,
-            context={"request": request}
-        )
+        serializer = BidSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
 
-        bid = CarBidService.place_bid(
-            car=car,
-            serializer=serializer
-        )
+        bid = CarBidService.place_bid(car=car, serializer=serializer)
 
         return Response(
             BidSerializer(bid, context={"request": request}).data,
