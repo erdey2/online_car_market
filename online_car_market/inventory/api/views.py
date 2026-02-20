@@ -213,12 +213,15 @@ class CarViewSet(viewsets.ModelViewSet):
         return CarListSerializer
 
     def get_queryset(self):
+        # Select appropriate optimized queryset
         if self.action == "list":
             qs = CarQueryService.for_list()
         elif self.action == "retrieve":
             qs = CarQueryService.for_detail()
         else:
             qs = CarQueryService.base_queryset()
+
+        # Apply role-based visibility
         return CarQueryService.get_visible_cars_for_user(self.request.user, qs)
 
     def get_permissions(self):
@@ -254,10 +257,12 @@ class CarViewSet(viewsets.ModelViewSet):
     def filter(self, request):
         queryset = CarQueryService.for_list()
         queryset = CarQueryService.get_visible_cars_for_user(request.user, queryset)
+
         try:
             filtered_queryset = CarFilterService.filter_cars(queryset=queryset, query_params=request.query_params)
         except ValidationError as e:
-            return Response({"error": str(e.detail)}, status=400)
+            return Response({"error": str(e)}, status=400)
+
         serializer = CarListSerializer(filtered_queryset, many=True, context={"request": request})
         return Response(serializer.data)
 
