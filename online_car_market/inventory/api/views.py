@@ -219,8 +219,6 @@ class CarViewSet(viewsets.ModelViewSet):
             qs = CarQueryService.for_detail()
         else:
             qs = CarQueryService.base_queryset()
-
-        # Apply role-based visibility
         return CarQueryService.get_visible_cars_for_user(self.request.user, qs)
 
     def get_permissions(self):
@@ -231,50 +229,38 @@ class CarViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-
         car = CarService.create_car_with_images(serializer=serializer, request=request)
-
         return Response(
             CarDetailSerializer(car, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
         )
-
-    # Filtering endpoint
+    
     @extend_schema(
         tags=["Dealers - Inventory"],
         parameters=[
-            OpenApiParameter(name="fuel_type", type=OpenApiTypes.STR, location="query", description="Fuel type (electric, hybrid, petrol, diesel)"),
-            OpenApiParameter(name="price_min", type=OpenApiTypes.FLOAT, location="query", description="Minimum price"),
-            OpenApiParameter(name="price_max", type=OpenApiTypes.FLOAT, location="query", description="Maximum price"),
-            OpenApiParameter(name="sale_type", type=OpenApiTypes.STR, location="query", description="Sale type (fixed_price, auction)"),
-            OpenApiParameter(name="make_ref", type=OpenApiTypes.INT, location="query", description="Car make ID"),
-            OpenApiParameter(name="model_ref", type=OpenApiTypes.INT, location="query", description="Car model ID"),
-            OpenApiParameter(name="make", type=OpenApiTypes.STR, location="query", description="Car make name"),
-            OpenApiParameter(name="model", type=OpenApiTypes.STR, location="query", description="Car model name"),
+            OpenApiParameter(name="fuel_type", type=OpenApiTypes.STR, location="query"),
+            OpenApiParameter(name="price_min", type=OpenApiTypes.FLOAT, location="query"),
+            OpenApiParameter(name="price_max", type=OpenApiTypes.FLOAT, location="query"),
+            OpenApiParameter(name="sale_type", type=OpenApiTypes.STR, location="query"),
+            OpenApiParameter(name="make_ref", type=OpenApiTypes.INT, location="query"),
+            OpenApiParameter(name="model_ref", type=OpenApiTypes.INT, location="query"),
+            OpenApiParameter(name="make", type=OpenApiTypes.STR, location="query"),
+            OpenApiParameter(name="model", type=OpenApiTypes.STR, location="query"),
         ],
-        description="Filter verified cars by fuel type, price range, sale type, make, or model, with verified cars prioritized.",
-        responses={
-            200: CarListSerializer(many=True),
-            400: OpenApiResponse(description="Invalid filter parameters."),
-        },
+        description="Filter verified cars by fuel type, price range, sale type, make, or model.",
+        responses={200: CarListSerializer(many=True), 400: OpenApiResponse(description="Invalid filter parameters.")}
     )
     @action(detail=False, methods=['get'])
     def filter(self, request):
         queryset = CarQueryService.for_list()
         queryset = CarQueryService.get_visible_cars_for_user(request.user, queryset)
-
         try:
-            filtered_queryset = CarFilterService.filter_cars(
-                queryset=queryset,
-                query_params=request.query_params
-            )
+            filtered_queryset = CarFilterService.filter_cars(queryset=queryset, query_params=request.query_params)
         except ValidationError as e:
             return Response({"error": str(e.detail)}, status=400)
-
         serializer = CarListSerializer(filtered_queryset, many=True, context={"request": request})
         return Response(serializer.data)
 
-    # Place bid endpoint
     @extend_schema(
         tags=["Dealers - Inventory"],
         description="Place a bid on an auction car.",
@@ -284,16 +270,10 @@ class CarViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def bid(self, request, pk=None):
         car = self.get_object()
-
         serializer = BidSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
-
         bid = CarBidService.place_bid(car=car, serializer=serializer)
-
-        return Response(
-            BidSerializer(bid, context={"request": request}).data,
-            status=status.HTTP_201_CREATED
-        )
+        return Response(BidSerializer(bid, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
 @extend_schema_view(
 list=extend_schema(

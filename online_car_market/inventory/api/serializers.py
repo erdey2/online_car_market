@@ -195,61 +195,34 @@ class CarListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Car
         fields = [
-            "id",
-            "make",
-            "model",
-            "year",
-            "price",
-            "mileage",
-            "fuel_type",
-            "drivetrain",
-            "interior_color",
-            "model_ref",
-            "make_ref",
-            "body_type",
-            "sale_type",
-            "status",
-            "verification_status",
-            "featured_image",
-            "seller",
-            "created_at",
+            "id", "make", "model", "year", "price", "mileage", "fuel_type",
+            "drivetrain", "interior_color", "model_ref", "make_ref",
+            "body_type", "sale_type", "status", "verification_status",
+            "featured_image", "seller", "created_at",
         ]
 
     def get_featured_image(self, obj):
-        """
-        Uses prefetch 'featured_images' to avoid extra queries.
-        """
         images = getattr(obj, "featured_images", [])
-
-        # Pick first featured image if exists, else first image
         featured = next((img for img in images if img.is_featured), None)
         if not featured and images:
             featured = images[0]
-
         return featured.image.url if featured else None
 
     def get_seller(self, obj):
-        if obj.dealer:
-            return {
-                "type": "dealer",
-                "id": obj.dealer.id,
-                "name": obj.dealer.get_display_name(),
-                "is_verified": obj.dealer.is_verified,
-            }
-
-        if obj.broker:
-            return {
-                "type": "broker",
-                "id": obj.broker.id,
-                "name": obj.broker.get_display_name(),
-                "is_verified": obj.broker.is_verified,
-            }
-
-        return None
+        seller_obj = obj.dealer or obj.broker
+        if not seller_obj:
+            return None
+        seller_type = "dealer" if obj.dealer else "broker"
+        return {
+            "type": seller_type,
+            "id": seller_obj.id,
+            "name": getattr(seller_obj, "get_display_name", lambda: None)(),
+            "is_verified": getattr(seller_obj, "is_verified", None),
+        }
 
 class CarDetailSerializer(serializers.ModelSerializer):
     images = CarImageSerializer(many=True, read_only=True)
-    bids = serializers.SerializerMethodField()  # changed from BidNestedSerializer
+    bids = serializers.SerializerMethodField()  # uses top_bids prefetch
     seller = serializers.SerializerMethodField()
     bid_count = serializers.IntegerField(read_only=True)
     highest_bid = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
@@ -260,9 +233,6 @@ class CarDetailSerializer(serializers.ModelSerializer):
         exclude = ["dealer", "broker"]
 
     def get_bids(self, obj):
-        """
-        Return only top 10 bids fetched in 'top_bids' prefetch.
-        """
         top_bids = getattr(obj, "top_bids", [])
         return [
             {
@@ -279,11 +249,9 @@ class CarDetailSerializer(serializers.ModelSerializer):
         seller_obj = obj.dealer or obj.broker
         if not seller_obj:
             return None
-
         seller_type = "dealer" if obj.dealer else "broker"
         profile = getattr(seller_obj, "profile", None)
         user = getattr(profile, "user", None)
-
         return {
             "type": seller_type,
             "id": seller_obj.id,

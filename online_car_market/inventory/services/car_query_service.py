@@ -1,11 +1,10 @@
-from django.db.models import Prefetch, Max, Count, OuterRef, Subquery, FloatField
-from django.db.models import Q, Avg
+from django.db.models import Avg, Max, Count, FloatField, Prefetch
 from django.db.models.functions import Coalesce
+from online_car_market.inventory.models import Car, CarImage
+from online_car_market.bids.models import Bid
 from rolepermissions.checkers import has_role
 from rest_framework.exceptions import PermissionDenied
-from online_car_market.inventory.models import Car
-from ..models import CarImage
-from online_car_market.bids.models import Bid
+from django.db.models import Q
 
 class CarQueryService:
 
@@ -17,6 +16,10 @@ class CarQueryService:
     def for_list():
         """
         Optimized list view:
+        - Select related dealer/profile, make/model
+        - Prefetch images into `featured_images`
+        - Annotate dealer_avg
+        - Order by priority and created_at
         """
         images_qs = CarImage.objects.only("id", "image", "is_featured")
         prefetch_images = Prefetch("images", queryset=images_qs, to_attr="featured_images")
@@ -39,13 +42,16 @@ class CarQueryService:
     def for_detail():
         """
         Optimized detail view:
+        - Select related dealer/broker/make/model
+        - Prefetch top 10 bids into `top_bids`
+        - Prefetch all images
+        - Annotate bid_count, highest_bid, dealer_avg
         """
-        # Prefetch top 10 bids per car
         top_bids_qs = (
             Bid.objects
             .select_related("user")
             .only("id", "amount", "user_id", "created_at")
-            .order_by("-amount")[:10]  # top 10 bids
+            .order_by("-amount")[:10]
         )
 
         return (
@@ -61,7 +67,7 @@ class CarQueryService:
             )
             .prefetch_related(
                 "images",
-                Prefetch("bids", queryset=top_bids_qs, to_attr="top_bids")  # top 10 bids stored in `car.top_bids`
+                Prefetch("bids", queryset=top_bids_qs, to_attr="top_bids")
             )
             .annotate(
                 bid_count=Count("bids", distinct=True),
@@ -83,19 +89,17 @@ class CarQueryService:
             return queryset
 
         if has_role(user, "dealer"):
-            dealer_profile_id = getattr(user, "dealer_profile_id", None)
             return queryset.filter(
-                Q(dealer__profile_id=dealer_profile_id) |
+                Q(dealer__profile__user=user) |
                 Q(verification_status="verified")
             )
 
         if has_role(user, "seller"):
-            return queryset.filter(dealer__dealerstaff__user_id=user.id)
+            return queryset.filter(dealer__dealerstaff__user=user)
 
         if has_role(user, "broker"):
-            broker_profile_id = getattr(user, "broker_profile_id", None)
             return queryset.filter(
-                Q(broker__profile_id=broker_profile_id) |
+                Q(broker__profile__user=user) |
                 Q(verification_status="verified")
             )
 
