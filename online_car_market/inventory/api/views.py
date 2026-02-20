@@ -1,5 +1,4 @@
 import logging
-from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
@@ -10,7 +9,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status, viewsets, mixins
 from rest_framework.viewsets import ReadOnlyModelViewSet, ModelViewSet
-from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.filters import SearchFilter, OrderingFilter
 
 from rolepermissions.checkers import has_role
@@ -25,8 +24,6 @@ from .serializers import (
                           )
 from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, IsSuperAdminOrAdminOrBuyer
 from online_car_market.users.permissions.business_permissions import CanPostCar
-from online_car_market.dealers.models import DealerProfile
-from online_car_market.brokers.models import BrokerProfile
 from online_car_market.users.models import Profile
 from online_car_market.bids.api.serializers import BidSerializer
 from ..services.car_service import CarService
@@ -35,6 +32,9 @@ from ..services.car_query_service import CarQueryService
 from ..services.car_verification_service import CarVerificationService
 from ..services.car_bid_service import CarBidService
 from ..services.popular_car_service import PopularCarService
+from ..services.user_car_service import UserCarService
+from ..services.favorite_car_service import FavoriteCarService
+from ..services.contact_service import ContactService
 
 logger = logging.getLogger(__name__)
 
@@ -461,37 +461,8 @@ class UserCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
             return CarDetailSerializer
         return CarListSerializer
 
-    # Role-based filtering
     def get_queryset(self):
-        user = self.request.user
-        qs = Car.objects.select_related(
-            "dealer",
-            "broker",
-            "posted_by"
-        ).prefetch_related("images", "bids")
-
-        # Admin / Super Admin -> full access
-        if has_role(user, ["super_admin", "admin"]):
-            return qs
-
-        # Dealer -> all cars under dealership
-        if hasattr(user, "profile") and hasattr(user.profile, "dealer_profile"):
-            return qs.filter(dealer=user.profile.dealer_profile)
-
-        # Broker -> their own cars
-        if hasattr(user, "profile") and hasattr(user.profile, "broker_profile"):
-            return qs.filter(broker=user.profile.broker_profile)
-
-        # Seller -> only cars they posted under assigned dealer
-        seller_record = user.dealer_staff_assignments.filter(role="seller").first()
-        if seller_record:
-            return qs.filter(
-                dealer=seller_record.dealer,
-                posted_by=user
-            )
-
-        # No valid role -> empty queryset
-        return qs.none()
+        return UserCarService.get_user_visible_cars(self.request.user)
 
     # Extra permission guard (cleaned)
     def _has_inventory_access(self, user):
@@ -596,66 +567,45 @@ class UserCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
         }
     )
 )
-class FavoriteCarViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.DestroyModelMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
+class FavoriteCarViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.DestroyModelMixin,
+                         mixins.ListModelMixin, viewsets.GenericViewSet
+):
     permission_classes = [IsAuthenticated]
     serializer_class = FavoriteCarSerializer
     queryset = FavoriteCar.objects.all()
 
     def get_queryset(self):
-        # Restrict to favorites by the authenticated user
         return self.queryset.filter(user=self.request.user)
 
     def list(self, request, *args, **kwargs):
-        if not has_role(request.user, 'buyer'):
-            return Response(
-                {"detail": "User does not have buyer role."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        return super().list(request, *args, **kwargs)
+        favorites = FavoriteCarService.list_favorites(request.user, self.queryset)
+        serializer = self.get_serializer(favorites, many=True)
+        return Response(serializer.data)
 
     def create(self, request, *args, **kwargs):
-        if not has_role(request.user, 'buyer'):
-            return Response(
-                {"detail": "User does not have buyer role."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        serializer = self.get_serializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        data = FavoriteCarService.create_favorite(
+            user=request.user,
+            data=request.data,
+            serializer_class=self.get_serializer_class()
+        )
+        return Response(data, status=status.HTTP_201_CREATED)
 
     def retrieve(self, request, *args, **kwargs):
-        if not has_role(request.user, 'buyer'):
-            return Response(
-                {"detail": "User does not have buyer role."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        try:
-            favorite = self.get_queryset().get(pk=kwargs['pk'])
-            serializer = self.get_serializer(favorite)
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        except FavoriteCar.DoesNotExist:
-            return Response(
-                {"detail": "Favorite car not found or you do not have permission to view it."},
-                status=status.HTTP_404_NOT_FOUND
-            )
+        data = FavoriteCarService.retrieve_favorite(
+            user=request.user,
+            pk=kwargs['pk'],
+            queryset=self.get_queryset(),
+            serializer_class=self.get_serializer_class()
+        )
+        return Response(data, status=status.HTTP_200_OK)
 
     def destroy(self, request, *args, **kwargs):
-        if not has_role(request.user, 'buyer'):
-            return Response(
-                {"detail": "User does not have buyer role."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        try:
-            favorite = self.get_queryset().get(pk=kwargs['pk'])
-            favorite.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        except FavoriteCar.DoesNotExist:
-            return Response(
-                {"detail": "Favorite car not found or you do not have permission to delete it."},
-                status=status.HTTP_404_NOT_FOUND
-            )
+        FavoriteCarService.destroy_favorite(
+            user=request.user,
+            pk=kwargs['pk'],
+            queryset=self.get_queryset()
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 @extend_schema_view(
     create=extend_schema(
@@ -919,9 +869,7 @@ class ContactViewSet(ReadOnlyModelViewSet):
 
     def list(self, request, *args, **kwargs):
         """Admin-only list of all contacts."""
-        user = request.user
-        if not (user.is_staff or getattr(user, "is_super_admin", False)):
-            return Response({"detail": "Only admins can list all contacts"}, status=status.HTTP_403_FORBIDDEN,)
+        ContactService.check_admin(request.user)
         return super().list(request, *args, **kwargs)
 
     def retrieve(self, request, *args, **kwargs):
@@ -929,26 +877,6 @@ class ContactViewSet(ReadOnlyModelViewSet):
         dealer_id = request.query_params.get("dealer_id")
         broker_id = request.query_params.get("broker_id")
 
-        # Validate input
-        if not any([car_id, dealer_id, broker_id]):
-            return Response(
-                {"detail": "Please provide car_id, dealer_id, or broker_id"}, status=status.HTTP_400_BAD_REQUEST,)
-        if sum(bool(x) for x in [car_id, dealer_id, broker_id]) > 1:
-            return Response({"detail": "Please provide only one of car_id, dealer_id, or broker_id"},
-                            status=status.HTTP_400_BAD_REQUEST,
-            )
-        # Retrieve profile
-        if car_id:
-            car = get_object_or_404(Car, id=car_id)
-            profile = car.posted_by.profile
-        elif dealer_id:
-            dealer = get_object_or_404(DealerProfile, id=dealer_id)
-            profile = dealer.profile
-        elif broker_id:
-            broker = get_object_or_404(BrokerProfile, id=broker_id)
-            profile = broker.profile
-        else:
-            return Response({"detail": "Invalid request"}, status=status.HTTP_400_BAD_REQUEST)
-
+        profile = ContactService.get_profile(car_id=car_id, dealer_id=dealer_id, broker_id=broker_id)
         serializer = self.get_serializer(profile)
-        return Response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)

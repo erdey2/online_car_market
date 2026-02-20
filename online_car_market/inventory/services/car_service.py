@@ -2,7 +2,6 @@ from online_car_market.inventory.models import CarImage
 from online_car_market.brokers.models import BrokerProfile
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
-
 class CarService:
 
     @staticmethod

@@ -2,7 +2,6 @@ from django.db.models import Q
 from rest_framework.exceptions import ValidationError
 from ..models import Car, CarMake, CarModel
 
-
 class CarFilterService:
 
     @staticmethod

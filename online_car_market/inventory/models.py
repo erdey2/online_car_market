@@ -166,19 +166,19 @@ class Car(models.Model):
     n2o_system = models.BooleanField(default=False)
     anti_lock_brakes = models.BooleanField(default=False)
 
+    def __str__(self):
+        return f"{self.make} {self.model} ({self.year})"
+
     def save(self, *args, **kwargs):
         if self.make_ref and not self.make:
             self.make = self.make_ref.name
         if self.model_ref and not self.model:
             self.model = self.model_ref.name
 
-        if self.status == 'sold':
-            if not self.sold_at:  # First time becoming sold
-                self.sold_at = timezone.now()
-        super().save(*args, **kwargs)
+        if self.status == 'sold' and not self.sold_at:
+            self.sold_at = timezone.now()
 
-    def __str__(self):
-        return f"{self.make} {self.model} ({self.year}) - {self.BODY_TYPES}"
+        super().save(*args, **kwargs)
 
     class Meta:
         indexes = [
