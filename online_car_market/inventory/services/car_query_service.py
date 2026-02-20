@@ -1,5 +1,5 @@
 from django.db.models import Prefetch, Max, Count, OuterRef, Subquery
-from django.db.models import Q
+from django.db.models import Q, Avg
 from django.db.models.functions import Coalesce
 from rolepermissions.checkers import has_role
 from rest_framework.exceptions import PermissionDenied
@@ -59,13 +59,10 @@ class CarQueryService:
                 "make_ref",
                 "model_ref",
             )
-            .prefetch_related(
-                "images",
-            )
-            .annotate(
+            .prefetch_related("images").annotate(
                 bid_count=Count("bids", distinct=True),
                 highest_bid=Max("bids__amount"),
-                dealer_avg=Coalesce("dealer__cached_avg_rating", 0),
+                dealer_avg=Coalesce(Avg("dealer__ratings__rating"), 0),
                 top_bid_id=Subquery(top_bids_subquery)
             )
         )
