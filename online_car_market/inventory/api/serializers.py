@@ -1,5 +1,5 @@
 from django.utils import timezone
-from django.db.models import Avg, Max
+from django.db.models import Avg, Max, Count
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
@@ -216,10 +216,13 @@ class CarListSerializer(serializers.ModelSerializer):
         ]
 
     def get_featured_image(self, obj):
-        image = obj.images.filter(is_featured=True).first()
-        if not image:
-            image = obj.images.first()
-        return image.image.url if image else None
+        images = getattr(obj, "images", [])
+
+        featured = next((img for img in images if img.is_featured), None)
+        if not featured and images:
+            featured = images[0]
+
+        return featured.image.url if featured else None
 
     def get_seller(self, obj):
         if obj.dealer:
@@ -240,16 +243,15 @@ class CarListSerializer(serializers.ModelSerializer):
 
         return None
 
+from rest_framework import serializers
+
 class CarDetailSerializer(serializers.ModelSerializer):
     images = CarImageSerializer(many=True, read_only=True)
     bids = BidNestedSerializer(many=True, read_only=True)
-
     seller = serializers.SerializerMethodField()
-    seller_average_rating = serializers.SerializerMethodField()
-
-    bid_count = serializers.IntegerField(source="bids.count", read_only=True)
-    highest_bid = serializers.SerializerMethodField()
-
+    bid_count = serializers.IntegerField(read_only=True)
+    highest_bid = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    seller_average_rating = serializers.FloatField(source="dealer_avg", read_only=True)
 
     class Meta:
         model = Car
@@ -261,28 +263,17 @@ class CarDetailSerializer(serializers.ModelSerializer):
             return None
 
         seller_type = "dealer" if obj.dealer else "broker"
-        profile = getattr(seller_obj, 'profile', None)
-        user = getattr(profile, 'user', None)
+        profile = getattr(seller_obj, "profile", None)
+        user = getattr(profile, "user", None)
 
         return {
             "type": seller_type,
             "id": seller_obj.id,
-            "name": getattr(seller_obj, 'get_display_name', lambda: None)(),
+            "name": getattr(seller_obj, "get_display_name", lambda: None)(),
             # "email": user.email if user else None,
-            # "contact_number": getattr(profile, 'contact', None),
-            "is_verified": getattr(seller_obj, 'is_verified', None),
+            # "contact_number": getattr(profile, "contact", None),
+            "is_verified": getattr(seller_obj, "is_verified", None),
         }
-
-    def get_seller_average_rating(self, obj):
-        seller_obj = obj.dealer or obj.broker
-        if not seller_obj:
-            return None
-
-        avg = seller_obj.ratings.aggregate(avg=Avg("rating"))["avg"]
-        return round(avg, 1) if avg else None
-
-    def get_highest_bid(self, obj):
-        return obj.bids.aggregate(max_amount=Max("amount"))["max_amount"]
 
 class CarWriteSerializer(serializers.ModelSerializer):
     dealer = serializers.PrimaryKeyRelatedField(

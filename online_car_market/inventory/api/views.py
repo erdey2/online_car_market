@@ -213,10 +213,14 @@ class CarViewSet(viewsets.ModelViewSet):
         return CarListSerializer
 
     def get_queryset(self):
-        queryset = CarQueryService.get_visible_cars_for_user(self.request.user )
-        if self.action in ["list", "retrieve"]:
-            queryset = CarQueryService.annotate_for_listing(queryset)
-        return queryset
+        if self.action == "list":
+            qs = CarQueryService.for_list()
+        elif self.action == "retrieve":
+            qs = CarQueryService.for_detail()
+        else:
+            qs = CarQueryService.base_queryset()
+
+        return CarQueryService.get_visible_cars_for_user(self.request.user, qs)
 
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy"]:
