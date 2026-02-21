@@ -202,9 +202,19 @@ class CarListSerializer(serializers.ModelSerializer):
         ]
 
     def get_featured_image(self, obj):
-        images = getattr(obj, "featured_images", [])
-        featured = images[0] if images else None
-        return featured.image.url if featured else None
+        images = list(obj.images.all())
+
+        if not images:
+            return None
+
+        # Try to find featured image
+        featured = next((img for img in images if img.is_featured), None)
+
+        # If none marked as featured, use first image
+        if not featured:
+            featured = images[0]
+
+        return featured.image.url
 
     def get_seller(self, obj):
         seller_obj = obj.dealer or obj.broker
