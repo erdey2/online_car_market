@@ -443,24 +443,21 @@ class AnalyticsViewSet(ViewSet):
             403: OpenApiResponse(description="Forbidden — Only dealers may access this endpoint"),
         }
     )
-    @action(detail=False, methods=["get"], url_path="financial-analytics", permission_classes=[IsDealer])
+    @action(detail=False, methods=['get'], url_path='financial-analytics', permission_classes=[IsDealer])
     def financial_analytics(self, request):
+        user = request.user
+
+        # Ensure user has a profile
+        if not hasattr(user, "profile"):
+            return Response({"error": "User has no profile."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            dealer = DealerProfile.objects.get(profile=request.user.profile)
+            dealer = DealerProfile.objects.get(profile=user.profile)
         except DealerProfile.DoesNotExist:
-            return Response({"error": "Dealer profile not found."}, status=404)
+            return Response({"error": "Dealer profile not found."}, status=status.HTTP_404_NOT_FOUND)
 
         period = request.GET.get("range", "month")
-
-        try:
-            data = FinancialAnalyticsService.get_financial_analytics(
-                dealer=dealer,
-                period=period,
-            )
-        except ValueError as e:
-            return Response({"error": str(e)}, status=400)
-
+        data = FinancialAnalyticsService.get_financial_analytics(dealer=dealer, period=period)
         return Response(data)
 
 
