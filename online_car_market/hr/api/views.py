@@ -6,7 +6,6 @@ from ..models import Employee, Contract, Attendance, Leave, SalaryComponent, Emp
 from .serializers import (EmployeeSerializer, ContractSerializer, AttendanceSerializer,
                           LeaveSerializer, SignedUploadSerializer, FinalUploadSerializer,
                           SalaryComponentSerializer, OvertimeSerializer, EmployeeSalarySerializer
-
                           )
 from cloudinary.uploader import upload
 from rest_framework import viewsets, status

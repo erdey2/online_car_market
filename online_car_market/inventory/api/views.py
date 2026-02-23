@@ -2,13 +2,12 @@ import logging
 from django_filters.rest_framework import DjangoFilterBackend
 from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
-from rest_framework.exceptions import ValidationError
 
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework import status, viewsets, mixins
-from rest_framework.viewsets import ReadOnlyModelViewSet, ModelViewSet
+from rest_framework import status, mixins
+from rest_framework.viewsets import ReadOnlyModelViewSet, ModelViewSet, GenericViewSet
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.filters import SearchFilter, OrderingFilter
 
@@ -121,106 +120,43 @@ class CarModelViewSet(ModelViewSet):
 @extend_schema_view(
     list=extend_schema(
         tags=["Dealers - Inventory"],
-        description=(
-            "List cars. "
-            "Unauthenticated users see only verified cars. "
-            "Authenticated users (broker, seller, dealer, admin) "
-            "may see additional cars depending on their role."
-        ),
+        description="List cars with role-based visibility and optional filters.",
         parameters=[
-            OpenApiParameter(
-                name="broker_email",
-                type=str,
-                location=OpenApiParameter.QUERY,
-                description="Filter cars by broker email address.",
-                required=False,
-            ),
+            OpenApiParameter(name="broker_email", type=str, location="query")
         ],
-        responses={
-            200: CarListSerializer(many=True),
-        },
+        responses={200: CarListSerializer(many=True)},
     ),
     retrieve=extend_schema(
         tags=["Dealers - Inventory"],
-        description=(
-            "Retrieve a specific car. "
-            "Public users can only access verified cars. "
-            "Authenticated users may access additional cars based on role."
-        ),
-        responses={
-            200: CarDetailSerializer,
-            404: OpenApiResponse(
-                response={"type": "object", "properties": {"detail": {"type": "string"}}},
-                description="Car not found or not accessible.",
-                examples=[
-                    OpenApiExample(
-                        "Not Found",
-                        value={"detail": "Not found."},
-                    )
-                ],
-            ),
-        },
+        description="Retrieve a specific car with role-based visibility.",
+        responses={200: CarDetailSerializer, 404: OpenApiResponse(description="Not found")},
     ),
-    create=extend_schema(
-        tags=["Dealers - Inventory"],
-        description=(
-            "Create a car listing. "
-            "Allowed for dealers, sellers, brokers, and admins. "
-            "Brokers must have `can_post=True`."
-        ),
-        request=CarWriteSerializer,
-        responses={
-            201: CarDetailSerializer,
-            403: OpenApiResponse(description="Permission denied."),
-        },
-    ),
-
-    update=extend_schema(
-        tags=["Dealers - Inventory"],
-        description="Fully update a car listing.",
-        request=CarWriteSerializer,
-        responses={200: CarDetailSerializer},
-    ),
-
-    partial_update=extend_schema(
-        tags=["Dealers - Inventory"],
-        description="Partially update a car listing.",
-        request=CarWriteSerializer,
-        responses={200: CarDetailSerializer},
-    ),
-
-    destroy=extend_schema(
-        tags=["Dealers - Inventory"],
-        description="Delete a car listing (dealers, brokers, admins only).",
-        responses={204: None},
-    ),
+    create=extend_schema(tags=["Dealers - Inventory"], request=CarWriteSerializer, responses={201: CarDetailSerializer}),
+    update=extend_schema(tags=["Dealers - Inventory"], request=CarWriteSerializer, responses={200: CarDetailSerializer}),
+    partial_update=extend_schema(tags=["Dealers - Inventory"], request=CarWriteSerializer, responses={200: CarDetailSerializer}),
+    destroy=extend_schema(tags=["Dealers - Inventory"], responses={204: None}),
 )
-class CarViewSet(viewsets.ModelViewSet):
+class CarViewSet(ModelViewSet):
     permission_classes = [IsAuthenticatedOrReadOnly]
     parser_classes = [MultiPartParser, FormParser]
 
     def get_serializer_class(self):
-        if self.action == "list":
-            return CarListSerializer
-        if self.action == "retrieve":
-            return CarDetailSerializer
-        if self.action in ["create", "update", "partial_update"]:
-            return CarWriteSerializer
-        if self.action == "verify":
-            return VerifyCarSerializer
-        if self.action == "bid":
-            return BidSerializer
-        return CarListSerializer
+        mapping = {
+            "list": CarListSerializer,
+            "retrieve": CarDetailSerializer,
+            "create": CarWriteSerializer,
+            "update": CarWriteSerializer,
+            "partial_update": CarWriteSerializer,
+            "verify": VerifyCarSerializer,
+            "bid": BidSerializer,
+        }
+        return mapping.get(self.action, CarListSerializer)
 
     def get_queryset(self):
-        if self.action == "list":
-            qs = CarQueryService.for_list()  # list view: featured_images
-        elif self.action == "retrieve":
-            qs = CarQueryService.for_detail()  # detail view: all images + top_bids
-        else:
-            qs = CarQueryService.base_queryset()
-
-        return CarQueryService.get_visible_cars_for_user(self.request.user, qs)
+        base_qs = CarQueryService.for_list() if self.action == "list" else \
+                  CarQueryService.for_detail() if self.action == "retrieve" else \
+                  CarQueryService.base_queryset()
+        return CarQueryService.get_visible_cars_for_user(self.request.user, base_qs)
 
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy"]:
@@ -228,58 +164,28 @@ class CarViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        car = CarService.create_car_with_images(serializer=serializer, request=request)
-        return Response(
-            CarDetailSerializer(car, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
+        car = CarService.create_car_with_images(
+            serializer=self.get_serializer(data=request.data).is_valid(raise_exception=True),
+            request=request
         )
+        return Response(CarDetailSerializer(car, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
-    @extend_schema(
-        tags=["Dealers - Inventory"],
-        parameters=[
-            OpenApiParameter(name="fuel_type", type=OpenApiTypes.STR, location="query"),
-            OpenApiParameter(name="price_min", type=OpenApiTypes.FLOAT, location="query"),
-            OpenApiParameter(name="price_max", type=OpenApiTypes.FLOAT, location="query"),
-            OpenApiParameter(name="sale_type", type=OpenApiTypes.STR, location="query"),
-            OpenApiParameter(name="make_ref", type=OpenApiTypes.INT, location="query"),
-            OpenApiParameter(name="model_ref", type=OpenApiTypes.INT, location="query"),
-            OpenApiParameter(name="make", type=OpenApiTypes.STR, location="query"),
-            OpenApiParameter(name="model", type=OpenApiTypes.STR, location="query"),
-        ],
-        description="Filter verified cars by fuel type, price range, sale type, make, or model.",
-        responses={200: CarListSerializer(many=True), 400: OpenApiResponse(description="Invalid filter parameters.")}
-    )
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"], url_path="filter")
     def filter(self, request):
-        queryset = CarQueryService.for_list()
-        queryset = CarQueryService.get_visible_cars_for_user(request.user, queryset)
+        qs = CarFilterService.filter_cars(
+            CarQueryService.get_visible_cars_for_user(request.user, CarQueryService.for_list()),
+            request.query_params
+        )
+        return Response(CarListSerializer(qs, many=True, context={"request": request}).data)
 
-        try:
-            filtered_queryset = CarFilterService.filter_cars(queryset=queryset, query_params=request.query_params)
-        except ValidationError as e:
-            return Response({"error": str(e)}, status=400)
-
-        serializer = CarListSerializer(filtered_queryset, many=True, context={"request": request})
-        return Response(serializer.data)
-
-    @extend_schema(
-        tags=["Dealers - Inventory"],
-        description="Place a bid on an auction car.",
-        request=BidSerializer,
-        responses={201: BidSerializer}
-    )
     @action(detail=True, methods=["post"])
     def bid(self, request, pk=None):
         car = self.get_object()
-        serializer = BidSerializer(data=request.data, context={"request": request})
-        serializer.is_valid(raise_exception=True)
-        bid = CarBidService.place_bid(car=car, serializer=serializer)
-        return Response(
-            BidSerializer(bid, context={"request": request}).data,
-            status=status.HTTP_201_CREATED,
+        bid = CarBidService.place_bid(
+            car=car,
+            serializer=BidSerializer(data=request.data, context={"request": request}).is_valid(raise_exception=True)
         )
+        return Response(BidSerializer(bid, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
 @extend_schema_view(
 list=extend_schema(
@@ -297,7 +203,7 @@ list=extend_schema(
         OpenApiParameter(
             name="verification_status",
             type=OpenApiTypes.STR,
-            location=OpenApiParameter.QUERY,
+            location="query",
             description="Filter by status: pending, verified, rejected",
             required=False,
         ),
@@ -305,7 +211,7 @@ list=extend_schema(
     responses={200: CarVerificationListSerializer(many=True)},
 )
 )
-class CarVerificationViewSet(viewsets.GenericViewSet):
+class CarVerificationViewSet(GenericViewSet):
 
     permission_classes = [IsAuthenticated]
     queryset = Car.objects.all()
@@ -424,11 +330,10 @@ class CarVerificationViewSet(viewsets.GenericViewSet):
         },
     ),
 )
-class UserCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+class UserCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewSet):
     permission_classes = [IsAuthenticated]
     queryset = Car.objects.all()
 
-    # Serializer selection
     def get_serializer_class(self):
         if self.action == "list":
             return CarListSerializer
@@ -542,8 +447,8 @@ class UserCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
         }
     )
 )
-class FavoriteCarViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.DestroyModelMixin,
-                         mixins.ListModelMixin, viewsets.GenericViewSet
+class FavoriteCarViewSet(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.RetrieveModelMixin,
+                         mixins.DestroyModelMixin, GenericViewSet,
 ):
     permission_classes = [IsAuthenticated]
     serializer_class = FavoriteCarSerializer
@@ -553,9 +458,8 @@ class FavoriteCarViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, mix
         return self.queryset.filter(user=self.request.user)
 
     def list(self, request, *args, **kwargs):
-        favorites = FavoriteCarService.list_favorites(request.user, self.queryset)
-        serializer = self.get_serializer(favorites, many=True)
-        return Response(serializer.data)
+        favorites = FavoriteCarService.list_favorites(request.user, self.get_queryset())
+        return Response(self.get_serializer(favorites, many=True).data)
 
     def create(self, request, *args, **kwargs):
         data = FavoriteCarService.create_favorite(
@@ -673,7 +577,7 @@ class FavoriteCarViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, mix
         }
     ),
 )
-class CarViewViewSet(viewsets.ModelViewSet):
+class CarViewViewSet(ModelViewSet):
     queryset = CarView.objects.all()
     serializer_class = CarViewSerializer
     permission_classes = [IsAuthenticatedOrReadOnly]
@@ -708,45 +612,45 @@ class CarViewViewSet(viewsets.ModelViewSet):
             OpenApiParameter(
                 name='status',
                 type=str,
-                location=OpenApiParameter.QUERY,
+                location="query",
                 description='Filter by car status (pending, verified, rejected)',
                 enum=['pending', 'verified', 'rejected']
             ),
             OpenApiParameter(
                 name='sale_type',
                 type=str,
-                location=OpenApiParameter.QUERY,
+                location="query",
                 description='Filter by sale type (direct, auction)',
                 enum=['direct', 'auction']
             ),
             OpenApiParameter(
                 name='make_ref',
                 type=int,
-                location=OpenApiParameter.QUERY,
+                location="query",
                 description='Filter by car make ID'
             ),
             OpenApiParameter(
                 name='min_price',
                 type=float,
-                location=OpenApiParameter.QUERY,
+                location="query",
                 description='Filter by minimum price'
             ),
             OpenApiParameter(
                 name='max_price',
                 type=float,
-                location=OpenApiParameter.QUERY,
+                location="query",
                 description='Filter by maximum price'
             ),
             OpenApiParameter(
                 name='search',
                 type=str,
-                location=OpenApiParameter.QUERY,
+                location="query",
                 description='Search by make, model, or description'
             ),
             OpenApiParameter(
                 name='ordering',
                 type=str,
-                location=OpenApiParameter.QUERY,
+                location="query",
                 description='Order by views, price, or created_at (prefix with - for descending)',
                 enum=['views', '-views', 'price', '-price', 'created_at', '-created_at']
             )
@@ -770,7 +674,7 @@ class CarViewViewSet(viewsets.ModelViewSet):
         }
     )
 )
-class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet ):
+class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewSet ):
     permission_classes = [AllowAny]
     serializer_class = CarListSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]

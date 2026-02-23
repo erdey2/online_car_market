@@ -19,14 +19,15 @@ class CarQueryService:
 
     @staticmethod
     def for_list():
-        """List view: only one featured image."""
-        featured_qs = CarImage.objects.filter(is_featured=True).only("id", "image", "is_featured")
-        prefetch_images = Prefetch("images", queryset=featured_qs, to_attr="featured_images")
-
         return (
             Car.objects
             .select_related("dealer", "dealer__profile", "make_ref", "model_ref")
-            .prefetch_related(prefetch_images)
+            .prefetch_related(
+                Prefetch(
+                    "images",
+                    queryset=CarImage.objects.only("id", "image", "is_featured")
+                )
+            )
             .annotate(
                 dealer_avg=Coalesce(
                     Avg("dealer__ratings__rating"),

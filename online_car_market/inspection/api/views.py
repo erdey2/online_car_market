@@ -5,7 +5,6 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework.response import Response
 from rest_framework import permissions
 from rest_framework.decorators import action
-from rolepermissions.checkers import has_role
 from online_car_market.users.permissions.business_permissions import IsAdminOrReadOnly
 from online_car_market.users.permissions.drf_permissions import IsDealerBrokerOrSeller, IsSuperAdminOrAdmin
 from ..services.inspection_service import InspectionService
