@@ -12,7 +12,6 @@ class AttendanceService:
         """
         Calculate total worked hours for a given month.
         - Excludes Sundays
-        - Caps daily hours at STANDARD_DAILY_HOURS
         - Uses Decimal for payroll safety
         """
 
@@ -21,6 +20,7 @@ class AttendanceService:
             date__month=month,
             entry_time__isnull=False,
             exit_time__isnull=False,
+            status="present"
         )
 
         if employee:
@@ -31,27 +31,31 @@ class AttendanceService:
 
         for record in queryset:
 
-            # Skip Sundays (weekday() == 6)
+            # Exclude Sundays using the official date field
             if record.date.weekday() == 6:
                 continue
 
-            entry_dt = datetime.combine(record.date, record.entry_time)
-            exit_dt = datetime.combine(record.date, record.exit_time)
+            entry_dt = record.entry_time
+            exit_dt = record.exit_time
 
-            # Ignore invalid or reversed entries
+            # Ignore invalid records
             if exit_dt <= entry_dt:
                 continue
 
             seconds = Decimal(str((exit_dt - entry_dt).total_seconds()))
             actual_hours = seconds / Decimal("3600")
 
-            # Cap at standard daily hours
-            counted_hours = min(actual_hours, AttendanceService.STANDARD_DAILY_HOURS)
+            counted_hours = min(
+                actual_hours,
+                AttendanceService.STANDARD_DAILY_HOURS
+            )
 
             total_hours += counted_hours
             total_working_days += 1
 
         return {
+            "year": year,
+            "month": month,
             "total_worked_hours": total_hours,
             "total_working_days": total_working_days,
             "standard_daily_hours": AttendanceService.STANDARD_DAILY_HOURS,
