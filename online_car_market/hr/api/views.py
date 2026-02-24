@@ -1,5 +1,5 @@
 import logging
-
+from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 
 from ..models import Employee, Contract, Attendance, Leave, SalaryComponent, EmployeeSalary, OvertimeEntry
@@ -242,12 +242,11 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         },
         description="Get monthly working hours analytics for all employees"
     )
-    @action(detail=False, methods=['get'], url_path='analytics', permission_classes=[IsHR])
-    def analytics(self, request):
+    @action(detail=False, methods=['get'], permission_classes=[IsHR], url_path='payroll-analytics')
+    def payroll_analytics(self, request):
         year = request.query_params.get('year')
         month = request.query_params.get('month')
 
-        # Optional: use current year/month if not provided
         from django.utils import timezone
         now = timezone.now()
 
@@ -257,8 +256,13 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         except ValueError:
             return Response({"detail": "Invalid year or month"}, status=400)
 
-        # Call service method
-        result = AttendanceService.monthly_working_hours(year=year, month=month)
+        # Get employee instance correctly
+        try:
+            employee = request.user.employee_profile
+        except Employee.DoesNotExist:
+            return Response({"detail": "Employee profile not found."}, status=404)
+
+        result = AttendanceService.monthly_employee_summary(year=year, month=month, employee=employee)
         return Response(result)
 
 # leave viewset
