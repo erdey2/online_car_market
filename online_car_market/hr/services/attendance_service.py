@@ -1,6 +1,12 @@
 from decimal import Decimal
 from datetime import date, timedelta
+import calendar
+
+from django.db.models import F, Sum, ExpressionWrapper, DurationField
+from django.db.models.functions import ExtractWeekDay
+
 from ..models import Attendance, Leave
+
 
 class AttendanceService:
 
@@ -8,91 +14,104 @@ class AttendanceService:
 
     @staticmethod
     def monthly_employee_summary(year, month, employee):
-        """
-        Payroll-ready monthly analytics for a single employee.
-        - Missing Attendance on working days counts as absent
-        - Approved leaves are not counted as absent
-        - Sundays are skipped
-        """
-        # All attendance records for the month
-        records = Attendance.objects.filter(
-            employee=employee,
-            date__year=year,
-            date__month=month,
-            status="present"
+
+        first_day = date(year, month, 1)
+        last_day = date(year, month, calendar.monthrange(year, month)[1])
+
+        # -------------------------------------------------
+        # 1️⃣ Aggregate attendance hours in DB
+        # -------------------------------------------------
+
+        duration_expression = ExpressionWrapper(
+            F("exit_time") - F("entry_time"),
+            output_field=DurationField()
         )
 
-        # Map date -> attendance record
-        attendance_map = {rec.date: rec for rec in records}
+        attendance_qs = (
+            Attendance.objects
+            .filter(
+                employee=employee,
+                date__range=(first_day, last_day),
+                status="present",
+                entry_time__isnull=False,
+                exit_time__isnull=False
+            )
+            .annotate(work_duration=duration_expression)
+            .exclude(work_duration__lte=timedelta(0))
+        )
 
-        # Approved leaves in the month
+        aggregated = attendance_qs.aggregate(
+            total_duration=Sum("work_duration")
+        )
+
+        total_duration = aggregated["total_duration"] or timedelta(0)
+
+        total_actual_hours = Decimal(
+            str(total_duration.total_seconds())
+        ) / Decimal("3600")
+
+        # Cap per day at STANDARD_DAILY_HOURS
+        present_days = attendance_qs.count()
+
+        total_capped_hours = min(
+            total_actual_hours,
+            present_days * AttendanceService.STANDARD_DAILY_HOURS
+        )
+
+        # -------------------------------------------------
+        # 2️⃣ Leave Days (efficient overlap query)
+        # -------------------------------------------------
+
         leaves = Leave.objects.filter(
             employee=employee,
             status="approved",
-            start_date__lte=date(year, month, 31),
-            end_date__gte=date(year, month, 1)
+            start_date__lte=last_day,
+            end_date__gte=first_day
         )
 
-        # Map all leave dates to True
-        leave_days = set()
+        leave_days = 0
         for leave in leaves:
-            current = max(leave.start_date, date(year, month, 1))
-            end = min(leave.end_date, date(year, month, 31))
-            while current <= end:
-                leave_days.add(current)
-                current += timedelta(days=1)
+            start = max(leave.start_date, first_day)
+            end = min(leave.end_date, last_day)
+            leave_days += (end - start).days + 1
 
-        total_actual_hours = Decimal("0.0")
-        total_capped_hours = Decimal("0.0")
-        present_days = 0
-        absent_days = 0
-        leave_count = 0
+        # -------------------------------------------------
+        # 3️⃣ Count working days (excluding Sundays)
+        # -------------------------------------------------
 
-        # Iterate all days in the month
-        start = date(year, month, 1)
-        end = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
-        current = start
+        total_days_in_month = (last_day - first_day).days + 1
 
-        while current < end:
-            if current.weekday() == 6:  # Skip Sundays
-                current += timedelta(days=1)
-                continue
+        sundays = sum(
+            1
+            for i in range(total_days_in_month)
+            if (first_day + timedelta(days=i)).weekday() == 6
+        )
 
-            if current in leave_days:
-                leave_count += 1
-            else:
-                record = attendance_map.get(current)
-                if record:
-                    entry = record.entry_time
-                    exit = record.exit_time
-                    if exit <= entry:
-                        actual_hours = Decimal("0.0")
-                    else:
-                        seconds = Decimal(str((exit - entry).total_seconds()))
-                        actual_hours = seconds / Decimal("3600")
-                    capped_hours = min(actual_hours, AttendanceService.STANDARD_DAILY_HOURS)
-                    total_actual_hours += actual_hours
-                    total_capped_hours += capped_hours
-                    present_days += 1
-                else:
-                    # No record and no leave = absent
-                    absent_days += 1
+        working_days = total_days_in_month - sundays
 
-            current += timedelta(days=1)
+        absent_days = working_days - present_days - leave_days
+        absent_days = max(0, absent_days)
 
-        total_working_days = present_days + absent_days + leave_count
-        expected_hours = total_working_days * AttendanceService.STANDARD_DAILY_HOURS
-        overtime_hours = max(Decimal("0.0"), total_actual_hours - total_capped_hours)
-        deficit_hours = max(Decimal("0.0"), expected_hours - total_capped_hours)
+        expected_hours = working_days * AttendanceService.STANDARD_DAILY_HOURS
+
+        overtime_hours = max(
+            Decimal("0.0"),
+            total_actual_hours - total_capped_hours
+        )
+
+        deficit_hours = max(
+            Decimal("0.0"),
+            expected_hours - total_capped_hours
+        )
 
         return {
             "year": year,
             "month": month,
             "employee_id": employee.id,
-            "total_working_days": total_working_days,
+            "total_working_days": working_days,
             "present_days": present_days,
             "absent_days": absent_days,
-            "leave_days": leave_count,
+            "leave_days": leave_days,
             "total_actual_hours": round(total_actual_hours, 2),
             "total_payable_hours": round(total_capped_hours, 2),
             "overtime_hours": round(overtime_hours, 2),

@@ -135,6 +135,25 @@ class CarModelViewSet(ModelViewSet):
     update=extend_schema(tags=["Dealers - Inventory"], request=CarWriteSerializer, responses={200: CarDetailSerializer}),
     partial_update=extend_schema(tags=["Dealers - Inventory"], request=CarWriteSerializer, responses={200: CarDetailSerializer}),
     destroy=extend_schema(tags=["Dealers - Inventory"], responses={204: None}),
+
+    filter=extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Filter cars based on query parameters such as price, make, model, year, etc.",
+        parameters=[
+            OpenApiParameter(name="price_min", type=float, location="query", description="Minimum price"),
+            OpenApiParameter(name="price_max", type=float, location="query", description="Maximum price"),
+            OpenApiParameter(name="make", type=str, location="query", description="Car make"),
+            OpenApiParameter(name="model", type=str, location="query", description="Car model"),
+            OpenApiParameter(name="year", type=int, location="query", description="Car year"),
+        ],
+        responses={200: CarListSerializer(many=True)}
+    ),
+    bid=extend_schema(
+        tags=["Dealers - Inventory"],
+        description="Place a bid on a specific car.",
+        request=BidSerializer,
+        responses={201: BidSerializer, 400: OpenApiResponse(description="Invalid bid")}
+    )
 )
 class CarViewSet(ModelViewSet):
     permission_classes = [IsAuthenticatedOrReadOnly]
