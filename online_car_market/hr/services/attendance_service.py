@@ -9,97 +9,93 @@ class AttendanceService:
     @staticmethod
     def monthly_employee_summary(year, month, employee):
         """
-        Payroll-ready monthly analytics for a single employee, including:
-        - Total actual hours worked
-        - Total payable hours (capped per day)
-        - Overtime hours
-        - Deficit / absent hours
-        - Total working days, present days, absent days
-        - Sundays are treated as 'automatic present' (not counted as absent)
+        Payroll-ready monthly analytics for a single employee.
+        - Missing Attendance on working days counts as absent
+        - Approved leaves are not counted as absent
+        - Sundays are skipped
         """
-
-        # Get all Attendance records for the month
+        # All attendance records for the month
         records = Attendance.objects.filter(
             employee=employee,
             date__year=year,
-            date__month=month
+            date__month=month,
+            status="present"
         )
 
-        # Map of date -> Attendance
-        attendance_map = {att.date: att for att in records}
+        # Map date -> attendance record
+        attendance_map = {rec.date: rec for rec in records}
 
-        total_actual_hours = Decimal("0.00")
-        total_payable_hours = Decimal("0.00")
+        # Approved leaves in the month
+        leaves = Leave.objects.filter(
+            employee=employee,
+            status="approved",
+            start_date__lte=date(year, month, 31),
+            end_date__gte=date(year, month, 1)
+        )
+
+        # Map all leave dates to True
+        leave_days = set()
+        for leave in leaves:
+            current = max(leave.start_date, date(year, month, 1))
+            end = min(leave.end_date, date(year, month, 31))
+            while current <= end:
+                leave_days.add(current)
+                current += timedelta(days=1)
+
+        total_actual_hours = Decimal("0.0")
+        total_capped_hours = Decimal("0.0")
         present_days = 0
         absent_days = 0
+        leave_count = 0
 
-        # Compute expected working days excluding Sundays
-        expected_days = AttendanceService.working_days_in_month(year, month)
+        # Iterate all days in the month
+        start = date(year, month, 1)
+        end = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
+        current = start
 
-        # Iterate over all days in the month
-        start_date = date(year, month, 1)
-        if month == 12:
-            end_date = date(year + 1, 1, 1)
-        else:
-            end_date = date(year, month + 1, 1)
-
-        for single_day in (start_date + timedelta(days=i) for i in range((end_date - start_date).days)):
-            if single_day.weekday() == 6:  # Sunday
-                # Automatically count Sunday as "present" but no hours
+        while current < end:
+            if current.weekday() == 6:  # Skip Sundays
+                current += timedelta(days=1)
                 continue
 
-            att = attendance_map.get(single_day)
-            if att and att.entry_time and att.exit_time and att.status == "present":
-                # Compute hours for this day
-                entry_dt = att.entry_time
-                exit_dt = att.exit_time
-
-                if exit_dt <= entry_dt:
-                    continue
-
-                seconds = Decimal(str((exit_dt - entry_dt).total_seconds()))
-                actual_hours = seconds / Decimal("3600")
-                capped_hours = min(actual_hours, AttendanceService.STANDARD_DAILY_HOURS)
-
-                total_actual_hours += actual_hours
-                total_payable_hours += capped_hours
-                present_days += 1
+            if current in leave_days:
+                leave_count += 1
             else:
-                # Day with no record or not present -> count as absent
-                absent_days += 1
+                record = attendance_map.get(current)
+                if record:
+                    entry = record.entry_time
+                    exit = record.exit_time
+                    if exit <= entry:
+                        actual_hours = Decimal("0.0")
+                    else:
+                        seconds = Decimal(str((exit - entry).total_seconds()))
+                        actual_hours = seconds / Decimal("3600")
+                    capped_hours = min(actual_hours, AttendanceService.STANDARD_DAILY_HOURS)
+                    total_actual_hours += actual_hours
+                    total_capped_hours += capped_hours
+                    present_days += 1
+                else:
+                    # No record and no leave = absent
+                    absent_days += 1
 
-        # Deficit and overtime
-        expected_hours = expected_days * AttendanceService.STANDARD_DAILY_HOURS
-        deficit_hours = max(Decimal("0.00"), expected_hours - total_payable_hours)
-        overtime_hours = max(Decimal("0.00"), total_actual_hours - total_payable_hours)
+            current += timedelta(days=1)
+
+        total_working_days = present_days + absent_days + leave_count
+        expected_hours = total_working_days * AttendanceService.STANDARD_DAILY_HOURS
+        overtime_hours = max(Decimal("0.0"), total_actual_hours - total_capped_hours)
+        deficit_hours = max(Decimal("0.0"), expected_hours - total_capped_hours)
 
         return {
             "year": year,
             "month": month,
             "employee_id": employee.id,
-            "expected_working_days": expected_days,
+            "total_working_days": total_working_days,
             "present_days": present_days,
             "absent_days": absent_days,
+            "leave_days": leave_count,
             "total_actual_hours": round(total_actual_hours, 2),
-            "total_payable_hours": round(total_payable_hours, 2),
-            "absent_hours": round(deficit_hours, 2),
+            "total_payable_hours": round(total_capped_hours, 2),
             "overtime_hours": round(overtime_hours, 2),
+            "deficit_hours": round(deficit_hours, 2),
             "standard_daily_hours": AttendanceService.STANDARD_DAILY_HOURS,
         }
-
-    @staticmethod
-    def working_days_in_month(year, month):
-        """Return number of working days in a month (excluding Sundays)."""
-        start = date(year, month, 1)
-        if month == 12:
-            end = date(year + 1, 1, 1)
-        else:
-            end = date(year, month + 1, 1)
-
-        days = 0
-        current = start
-        while current < end:
-            if current.weekday() != 6:  # Exclude Sundays
-                days += 1
-            current += timedelta(days=1)
-        return days

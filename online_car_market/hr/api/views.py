@@ -242,8 +242,13 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         },
         description="Get monthly working hours analytics for all employees"
     )
-    @action(detail=False, methods=['get'], permission_classes=[IsHR], url_path='payroll-analytics')
+    @action(detail=False, methods=['get'], url_path='payroll-analytics')
     def payroll_analytics(self, request):
+        # Safely get the employee profile
+        employee = getattr(request.user, 'employee_profile', None)
+        if not employee:
+            return Response({"detail": "Employee profile not found."}, status=404)
+
         year = request.query_params.get('year')
         month = request.query_params.get('month')
 
@@ -251,18 +256,12 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         now = timezone.now()
 
         try:
-            year = int(year) if year is not None else now.year
-            month = int(month) if month is not None else now.month
+            year = int(year) if year else now.year
+            month = int(month) if month else now.month
         except ValueError:
             return Response({"detail": "Invalid year or month"}, status=400)
 
-        # Get employee instance correctly
-        try:
-            employee = request.user.employee_profile
-        except Employee.DoesNotExist:
-            return Response({"detail": "Employee profile not found."}, status=404)
-
-        result = AttendanceService.monthly_employee_summary(year=year, month=month, employee=employee)
+        result = AttendanceService.monthly_employee_payroll(year, month, employee)
         return Response(result)
 
 # leave viewset
