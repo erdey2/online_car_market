@@ -6,14 +6,14 @@ from online_car_market.payroll.services.tax import calculate_income_tax
 from online_car_market.payroll.services.pension import calculate_pension
 from online_car_market.payroll.services.allowances import split_taxable
 from online_car_market.payroll.services.overtime import calculate_overtime_amount
+from online_car_market.hr.services.attendance_service import AttendanceService
 
-TOTAL_MONTHLY_HOURS = Decimal("192")  # 8 * 6 * 4 (Ethiopian standard)
 
 @transaction.atomic
-def process_payroll_for_employee(employee, payroll_run):
+def process_payroll_for_employee(employee, payroll_run, year, month):
     """
-    Process payroll for a single employee and return a fully populated JSON
-    with earnings, deductions, totals, and overtime summary.
+    Process payroll for a single employee using actual monthly worked hours.
+    Fully Decimal-safe and production ready.
     """
 
     salaries = EmployeeSalary.objects.select_related("component").filter(employee=employee)
@@ -24,7 +24,20 @@ def process_payroll_for_employee(employee, payroll_run):
     non_taxable_income = Decimal("0.00")
     pensionable_income = Decimal("0.00")
 
-    # Create or get payroll item
+    # ---------------------------
+    # Attendance Data
+    # ---------------------------
+    attendance_data = AttendanceService.monthly_working_hours(
+        year=year,
+        month=month,
+        employee=employee,
+    )
+
+    worked_hours = attendance_data["total_worked_hours"]
+
+    # ---------------------------
+    # Payroll Item
+    # ---------------------------
     payroll_item, _ = PayrollItem.objects.get_or_create(
         payroll_run=payroll_run,
         employee=employee,
@@ -41,18 +54,22 @@ def process_payroll_for_employee(employee, payroll_run):
     earnings_list = []
     deductions_list = []
 
-    # Base salary & allowances
+    # ---------------------------
+    # Base Salary & Allowances
+    # ---------------------------
     for salary in salaries:
         component = salary.component
         amount = salary.amount
 
-        PayrollLine.objects.create(payroll_item=payroll_item, component=component, amount=amount)
+        PayrollLine.objects.create(
+            payroll_item=payroll_item,
+            component=component,
+            amount=amount,
+        )
 
         if component.component_type == SalaryComponent.EARNING:
             gross_earnings += amount
-            earnings_list.append(
-                {"name": component.name, "amount": str(amount)}
-            )
+            earnings_list.append({"name": component.name, "amount": str(amount)})
 
             if component.is_taxable:
                 split = split_taxable(amount)
@@ -66,97 +83,132 @@ def process_payroll_for_employee(employee, payroll_run):
 
         else:
             total_deductions += amount
-            deductions_list.append(
-                {"name": component.name, "amount": str(amount)}
-            )
+            deductions_list.append({"name": component.name, "amount": str(amount)})
 
-    # OVERTIME (1.5 / 1.75 / 2 / 2.5)
+    # ---------------------------
+    # OVERTIME
+    # ---------------------------
     overtime_summary = {
         "total_hours": Decimal("0.00"),
         "total_amount": Decimal("0.00"),
         "by_type": {},
     }
 
-    overtime_component = SalaryComponent.objects.get(name__iexact="Overtime")
+    try:
+        overtime_component = SalaryComponent.objects.get(name__iexact="Overtime")
+    except SalaryComponent.DoesNotExist:
+        overtime_component = None
 
-    overtime_entries = OvertimeEntry.objects.filter(employee=employee, payroll_run=payroll_run)
+    overtime_entries = OvertimeEntry.objects.filter(
+        employee=employee,
+        payroll_run=payroll_run,
+    )
 
-    basic_salary = salaries.filter(component__name__iexact="Basic Salary").first()
+    basic_salary = salaries.filter(
+        component__name__iexact="Basic Salary"
+    ).first()
 
-    if basic_salary:
-        basic_salary_amount = basic_salary.amount
+    basic_salary_amount = basic_salary.amount if basic_salary else Decimal("0.00")
 
-        for ot in overtime_entries:
-            overtime_amount = calculate_overtime_amount(
-                basic_salary=basic_salary_amount,
-                total_hours_worked=TOTAL_MONTHLY_HOURS,
-                overtime_hours=ot.hours,
-                overtime_type=ot.overtime_type,
-            )
+    # Expected Monthly Hours
+    working_days = AttendanceService.working_days_in_month(year, month)
+    expected_hours = Decimal(working_days) * AttendanceService.STANDARD_DAILY_HOURS
 
+    if expected_hours <= 0:
+        raise ValueError("Expected hours cannot be zero for payroll calculation.")
+
+    for ot in overtime_entries:
+
+        overtime_hours = (
+            ot.hours if isinstance(ot.hours, Decimal)
+            else Decimal(str(ot.hours))
+        )
+
+        overtime_amount = calculate_overtime_amount(
+            basic_salary=basic_salary_amount,
+            expected_hours=expected_hours,
+            overtime_hours=overtime_hours,
+            overtime_type=ot.overtime_type,
+        )
+
+        if overtime_component:
             PayrollLine.objects.create(
                 payroll_item=payroll_item,
                 component=overtime_component,
                 amount=overtime_amount,
             )
 
-            gross_earnings += overtime_amount
+        gross_earnings += overtime_amount
 
-            earnings_list.append({
-                "name": f"Overtime ({ot.overtime_type})",
-                "amount": str(overtime_amount),
-            })
+        earnings_list.append({
+            "name": f"Overtime ({ot.overtime_type})",
+            "amount": str(overtime_amount),
+        })
 
-            # 600 exemption applies
-            split = split_taxable(overtime_amount)
-            taxable_income += split["taxable"]
-            non_taxable_income += split["non_taxable"]
+        split = split_taxable(overtime_amount)
+        taxable_income += split["taxable"]
+        non_taxable_income += split["non_taxable"]
 
-            # ---- Overtime summary ----
-            overtime_summary["total_hours"] += ot.hours
-            overtime_summary["total_amount"] += overtime_amount
+        overtime_summary["total_hours"] += overtime_hours
+        overtime_summary["total_amount"] += overtime_amount
 
-            if ot.overtime_type not in overtime_summary["by_type"]:
-                overtime_summary["by_type"][ot.overtime_type] = {
-                    "hours": Decimal("0.00"),
-                    "amount": Decimal("0.00"),
-                }
+        if ot.overtime_type not in overtime_summary["by_type"]:
+            overtime_summary["by_type"][ot.overtime_type] = {
+                "hours": Decimal("0.00"),
+                "amount": Decimal("0.00"),
+            }
 
-            overtime_summary["by_type"][ot.overtime_type]["hours"] += ot.hours
-            overtime_summary["by_type"][ot.overtime_type]["amount"] += overtime_amount
+        overtime_summary["by_type"][ot.overtime_type]["hours"] += overtime_hours
+        overtime_summary["by_type"][ot.overtime_type]["amount"] += overtime_amount
 
+    # ---------------------------
     # Pension
+    # ---------------------------
     pension = calculate_pension(pensionable_income)
     employee_pension = pension["employee"]
 
-    employee_pension_component = SalaryComponent.objects.get(
-        name__iexact="Employee Pension"
-    )
+    try:
+        employee_pension_component = SalaryComponent.objects.get(name__iexact="Employee Pension")
 
-    PayrollLine.objects.create(
-        payroll_item=payroll_item,
-        component=employee_pension_component,
-        amount=employee_pension,
-    )
+        PayrollLine.objects.create(
+            payroll_item=payroll_item,
+            component=employee_pension_component,
+            amount=employee_pension,
+        )
 
-    total_deductions += employee_pension
-    deductions_list.append(
-        {"name": employee_pension_component.name, "amount": str(employee_pension)}
-    )
+        total_deductions += employee_pension
+        deductions_list.append({
+            "name": employee_pension_component.name,
+            "amount": str(employee_pension),
+        })
 
+    except SalaryComponent.DoesNotExist:
+        pass
+
+    # ---------------------------
     # Income Tax
+    # ---------------------------
     income_tax_amount = calculate_income_tax(taxable_income)
 
-    income_tax_component = SalaryComponent.objects.get(name__iexact="Income Tax")
+    try:
+        income_tax_component = SalaryComponent.objects.get(name__iexact="Income Tax")
 
-    PayrollLine.objects.create(payroll_item=payroll_item, component=income_tax_component, amount=income_tax_amount)
+        PayrollLine.objects.create(
+            payroll_item=payroll_item,
+            component=income_tax_component,
+            amount=income_tax_amount,
+        )
 
-    total_deductions += income_tax_amount
-    deductions_list.append(
-        {"name": income_tax_component.name, "amount": str(income_tax_amount)}
-    )
+        total_deductions += income_tax_amount
+        deductions_list.append({
+            "name": income_tax_component.name,
+            "amount": str(income_tax_amount),
+        })
 
-    # Final totals
+    except SalaryComponent.DoesNotExist:
+        pass
+
+    # Final Totals
     net_salary = gross_earnings - total_deductions
 
     payroll_item.gross_earnings = gross_earnings
@@ -185,4 +237,5 @@ def process_payroll_for_employee(employee, payroll_run):
         "earnings": earnings_list,
         "deductions": deductions_list,
         "overtime_summary": overtime_summary_serialized,
+        "worked_hours": str(worked_hours),  # Decimal-safe return
     }

@@ -82,7 +82,7 @@ class IsDealerOrHR(BasePermission):
         return (
             request.user.is_authenticated and
             (has_role(request.user, 'dealer') or
-             has_role(request.user, 'HR'))
+             has_role(request.user, 'hr'))
         )
 
 class IsDealerBrokerOrSeller(BasePermission):

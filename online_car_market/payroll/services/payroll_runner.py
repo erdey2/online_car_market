@@ -3,8 +3,10 @@ from django.core.exceptions import ValidationError
 from online_car_market.payroll.models import Employee, PayrollRun
 from online_car_market.payroll.services.payroll_processor import process_payroll_for_employee
 
+
 @transaction.atomic
 def run_payroll(payroll_run):
+
     # 🔒 Prevent modifying posted payroll
     if payroll_run.status == "posted":
         raise ValidationError("Posted payroll cannot be modified")
@@ -18,10 +20,20 @@ def run_payroll(payroll_run):
     ).exclude(id=payroll_run.id).exists():
         raise ValueError("Payroll already exists for this period")
 
+    # Extract year and month from period
+    year = payroll_run.period.year
+    month = payroll_run.period.month
+
     results = []
 
     for employee in Employee.objects.filter(is_active=True):
-        result = process_payroll_for_employee(employee, payroll_run)
+
+        result = process_payroll_for_employee(
+            employee=employee,
+            payroll_run=payroll_run,
+            year=year,
+            month=month,
+        )
 
         if not result["earnings"]:
             raise ValueError(
