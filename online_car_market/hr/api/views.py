@@ -261,7 +261,7 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         except ValueError:
             return Response({"detail": "Invalid year or month"}, status=400)
 
-        result = AttendanceService.monthly_employee_payroll(year, month, employee)
+        result = AttendanceService.monthly_employee_summary(year, month, employee)
         return Response(result)
 
 # leave viewset
