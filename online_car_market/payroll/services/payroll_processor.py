@@ -49,7 +49,7 @@ def process_payroll_for_employee(employee, payroll_run, year, month):
         },
     )
 
-    payroll_item.payrollline_set.all().delete()
+    PayrollLine.objects.filter(payroll_item=payroll_item).delete()
 
     earnings_list = []
     deductions_list = []
