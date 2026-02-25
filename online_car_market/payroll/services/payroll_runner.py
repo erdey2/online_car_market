@@ -57,7 +57,11 @@ def run_payroll(payroll_run):
         )
         .values("employee_id")
         .annotate(
-            total_overtime=Coalesce(Sum("weighted_hours"), Value(0))
+            total_overtime=Coalesce(
+                Sum("weighted_hours"),
+                Value(Decimal("0.00")),
+                output_field=DecimalField(max_digits=12, decimal_places=2),
+            )
         )
     )
 
