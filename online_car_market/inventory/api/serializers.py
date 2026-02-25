@@ -235,10 +235,36 @@ class CarDetailSerializer(serializers.ModelSerializer):
     bid_count = serializers.IntegerField(read_only=True)
     highest_bid = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     seller_average_rating = serializers.FloatField(source="dealer_avg", read_only=True)
+    features = serializers.SerializerMethodField()
 
     class Meta:
         model = Car
-        exclude = ["dealer", "broker"]
+        fields = [
+            "id",
+            "vin",
+            "origin",
+            "make",
+            "model",
+            "year",
+            "price",
+            "mileage",
+            "fuel_type",
+            "body_type",
+            "drivetrain",
+            "condition",
+            "status",
+            "sale_type",
+            "auction_end",
+            "description",
+            "images",
+            "bids",
+            "seller",
+            "bid_count",
+            "highest_bid",
+            "seller_average_rating",
+            "features",
+            "created_at",
+        ]
 
     def get_seller(self, obj):
         seller_obj = obj.dealer or obj.broker
@@ -268,6 +294,65 @@ class CarDetailSerializer(serializers.ModelSerializer):
                 "user_name": getattr(getattr(bid, "user", None), "username", None),
             }
             for bid in top_bids
+        ]
+
+    def get_features(self, obj):
+        feature_fields = [
+            "bluetooth",
+            "heated_seats",
+            "cd_player",
+            "power_locks",
+            "premium_wheels_rims",
+            "winch",
+            "alarm_anti_theft",
+            "cooled_seats",
+            "keyless_start",
+            "body_kit",
+            "navigation_system",
+            "premium_lights",
+            "cassette_player",
+            "fog_lights",
+            "leather_seats",
+            "roof_rack",
+            "dvd_player",
+            "power_mirrors",
+            "power_sunroof",
+            "aux_audio_in",
+            "brush_guard",
+            "air_conditioning",
+            "performance_tyres",
+            "premium_sound_system",
+            "heat",
+            "vhs_player",
+            "off_road_kit",
+            "am_fm_radio",
+            "moonroof",
+            "racing_seats",
+            "premium_paint",
+            "spoiler",
+            "power_windows",
+            "sunroof",
+            "climate_control",
+            "parking_sensors",
+            "rear_view_camera",
+            "keyless_entry",
+            "off_road_tyres",
+            "satellite_radio",
+            "power_seats",
+            "tiptronic_gears",
+            "dual_exhaust",
+            "power_steering",
+            "cruise_control",
+            "all_wheel_steering",
+            "front_airbags",
+            "side_airbags",
+            "n2o_system",
+            "anti_lock_brakes",
+        ]
+        return [
+            field.replace("_", " ").title()
+            for field in feature_fields
+            if getattr(obj, field, False)
         ]
 
 class CarWriteSerializer(serializers.ModelSerializer):
