@@ -1,5 +1,6 @@
 from decimal import Decimal
 from django.db import transaction
+
 from online_car_market.payroll.models import PayrollItem, PayrollLine, SalaryComponent
 from online_car_market.hr.models import EmployeeSalary, OvertimeEntry
 from online_car_market.payroll.services.tax import calculate_income_tax
@@ -12,10 +13,8 @@ from online_car_market.hr.services.attendance_service import AttendanceService
 @transaction.atomic
 def process_payroll_for_employee(employee, payroll_run, year, month):
     """
-    Process payroll for a single employee using actual monthly worked hours.
-    Fully Decimal-safe and production ready.
+    Process payroll for a single employee using optimized attendance analytics.
     """
-
     salaries = EmployeeSalary.objects.select_related("component").filter(employee=employee)
 
     gross_earnings = Decimal("0.00")
@@ -24,20 +23,22 @@ def process_payroll_for_employee(employee, payroll_run, year, month):
     non_taxable_income = Decimal("0.00")
     pensionable_income = Decimal("0.00")
 
-    # ---------------------------
-    # Attendance Data
-    # ---------------------------
-    attendance_data = AttendanceService.monthly_working_hours(
+    # Attendance Summary
+    attendance_data = AttendanceService.monthly_employee_summary(
         year=year,
         month=month,
         employee=employee,
     )
 
-    worked_hours = attendance_data["total_worked_hours"]
+    worked_hours = attendance_data["total_actual_hours"]
+    working_days = attendance_data["total_working_days"]
 
-    # ---------------------------
+    expected_hours = (
+        Decimal(working_days)
+        * AttendanceService.STANDARD_DAILY_HOURS
+    )
+
     # Payroll Item
-    # ---------------------------
     payroll_item, _ = PayrollItem.objects.get_or_create(
         payroll_run=payroll_run,
         employee=employee,
@@ -48,15 +49,12 @@ def process_payroll_for_employee(employee, payroll_run, year, month):
         },
     )
 
-    # Safe re-run
     payroll_item.payrollline_set.all().delete()
 
     earnings_list = []
     deductions_list = []
 
-    # ---------------------------
     # Base Salary & Allowances
-    # ---------------------------
     for salary in salaries:
         component = salary.component
         amount = salary.amount
@@ -85,9 +83,7 @@ def process_payroll_for_employee(employee, payroll_run, year, month):
             total_deductions += amount
             deductions_list.append({"name": component.name, "amount": str(amount)})
 
-    # ---------------------------
     # OVERTIME
-    # ---------------------------
     overtime_summary = {
         "total_hours": Decimal("0.00"),
         "total_amount": Decimal("0.00"),
@@ -109,10 +105,6 @@ def process_payroll_for_employee(employee, payroll_run, year, month):
     ).first()
 
     basic_salary_amount = basic_salary.amount if basic_salary else Decimal("0.00")
-
-    # Expected Monthly Hours
-    working_days = AttendanceService.working_days_in_month(year, month)
-    expected_hours = Decimal(working_days) * AttendanceService.STANDARD_DAILY_HOURS
 
     if expected_hours <= 0:
         raise ValueError("Expected hours cannot be zero for payroll calculation.")
@@ -152,18 +144,15 @@ def process_payroll_for_employee(employee, payroll_run, year, month):
         overtime_summary["total_hours"] += overtime_hours
         overtime_summary["total_amount"] += overtime_amount
 
-        if ot.overtime_type not in overtime_summary["by_type"]:
-            overtime_summary["by_type"][ot.overtime_type] = {
-                "hours": Decimal("0.00"),
-                "amount": Decimal("0.00"),
-            }
+        overtime_summary["by_type"].setdefault(
+            ot.overtime_type,
+            {"hours": Decimal("0.00"), "amount": Decimal("0.00")},
+        )
 
         overtime_summary["by_type"][ot.overtime_type]["hours"] += overtime_hours
         overtime_summary["by_type"][ot.overtime_type]["amount"] += overtime_amount
 
-    # ---------------------------
     # Pension
-    # ---------------------------
     pension = calculate_pension(pensionable_income)
     employee_pension = pension["employee"]
 
@@ -185,9 +174,7 @@ def process_payroll_for_employee(employee, payroll_run, year, month):
     except SalaryComponent.DoesNotExist:
         pass
 
-    # ---------------------------
     # Income Tax
-    # ---------------------------
     income_tax_amount = calculate_income_tax(taxable_income)
 
     try:
@@ -216,26 +203,12 @@ def process_payroll_for_employee(employee, payroll_run, year, month):
     payroll_item.net_salary = net_salary
     payroll_item.save()
 
-    # Serialize overtime summary
-    overtime_summary_serialized = {
-        "total_hours": str(overtime_summary["total_hours"]),
-        "total_amount": str(overtime_summary["total_amount"]),
-        "by_type": {
-            ot_type: {
-                "hours": str(data["hours"]),
-                "amount": str(data["amount"]),
-            }
-            for ot_type, data in overtime_summary["by_type"].items()
-        },
-    }
-
     return {
         "employee": employee.id,
         "gross_earnings": str(gross_earnings),
         "total_deductions": str(total_deductions),
         "net_salary": str(net_salary),
-        "earnings": earnings_list,
-        "deductions": deductions_list,
-        "overtime_summary": overtime_summary_serialized,
-        "worked_hours": str(worked_hours),  # Decimal-safe return
+        "worked_hours": str(worked_hours),
+        "working_days": working_days,
+        "attendance_summary": attendance_data,
     }

@@ -1,10 +1,7 @@
 from decimal import Decimal
 from datetime import date, timedelta
 import calendar
-
 from django.db.models import F, Sum, ExpressionWrapper, DurationField
-from django.db.models.functions import ExtractWeekDay
-
 from ..models import Attendance, Leave
 
 
@@ -18,10 +15,7 @@ class AttendanceService:
         first_day = date(year, month, 1)
         last_day = date(year, month, calendar.monthrange(year, month)[1])
 
-        # -------------------------------------------------
-        # 1️⃣ Aggregate attendance hours in DB
-        # -------------------------------------------------
-
+        # Aggregate attendance hours in DB
         duration_expression = ExpressionWrapper(
             F("exit_time") - F("entry_time"),
             output_field=DurationField()
@@ -58,10 +52,7 @@ class AttendanceService:
             present_days * AttendanceService.STANDARD_DAILY_HOURS
         )
 
-        # -------------------------------------------------
-        # 2️⃣ Leave Days (efficient overlap query)
-        # -------------------------------------------------
-
+        # Leave Days
         leaves = Leave.objects.filter(
             employee=employee,
             status="approved",
@@ -75,10 +66,7 @@ class AttendanceService:
             end = min(leave.end_date, last_day)
             leave_days += (end - start).days + 1
 
-        # -------------------------------------------------
-        # 3️⃣ Count working days (excluding Sundays)
-        # -------------------------------------------------
-
+        # Count working days (excluding Sundays)
         total_days_in_month = (last_day - first_day).days + 1
 
         sundays = sum(
