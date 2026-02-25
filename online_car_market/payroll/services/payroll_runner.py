@@ -5,8 +5,8 @@ from django.db.models.functions import Cast, Coalesce
 from decimal import Decimal
 import calendar
 from datetime import date
-from online_car_market.hr.models import Employee, SalaryComponent
-from online_car_market.payroll.models import PayrollRun, PayrollItem, OvertimeEntry
+from online_car_market.hr.models import Employee, SalaryComponent, OvertimeEntry
+from online_car_market.payroll.models import PayrollRun, PayrollItem
 
 
 @transaction.atomic
@@ -104,7 +104,6 @@ def run_payroll(payroll_run):
             )
         )
 
-    # Remove existing items if re-running draft
     PayrollItem.objects.filter(payroll_run=payroll_run).delete()
 
     PayrollItem.objects.bulk_create(payroll_items)
