@@ -7,7 +7,6 @@ def calculate_income_tax(taxable_income: Decimal) -> Decimal:
     """
     Ethiopian monthly income tax
     """
-
     taxable_income = Decimal(taxable_income)
 
     if taxable_income <= 600:
