@@ -5,8 +5,9 @@ from django.db.models.functions import Cast, Coalesce
 from decimal import Decimal
 import calendar
 from datetime import date
-from online_car_market.hr.models import Employee, SalaryComponent, OvertimeEntry
+from online_car_market.hr.models import Employee
 from online_car_market.payroll.models import PayrollRun, PayrollItem
+from online_car_market.hr.models import EmployeeSalary, OvertimeEntry
 
 
 @transaction.atomic
@@ -36,7 +37,7 @@ def run_payroll(payroll_run):
     # ACTIVE EMPLOYEES
     employees = Employee.objects.filter(is_active=True).only("id")
 
-    # OVERTIME AGGREGATION (1 QUERY)
+    # OVERTIME AGGREGATION
     overtime_data = (
         OvertimeEntry.objects
         .filter(
@@ -70,10 +71,13 @@ def run_payroll(payroll_run):
         for row in overtime_data
     }
 
-    # SALARY COMPONENT AGGREGATION
+    # SALARY AGGREGATION
     salary_data = (
-        SalaryComponent.objects
-        .values("employee_id", "component_type")
+        EmployeeSalary.objects
+        .values(
+            "employee_id",
+            "component__component_type"
+        )
         .annotate(total=Sum("amount"))
     )
 
@@ -81,19 +85,23 @@ def run_payroll(payroll_run):
     deductions_map = {}
 
     for row in salary_data:
-        if row["component_type"] == "earning":
-            earnings_map[row["employee_id"]] = row["total"]
+        emp_id = row["employee_id"]
+        component_type = row["component__component_type"]
+        total = row["total"]
+
+        if component_type == "earning":
+            earnings_map[emp_id] = total
         else:
-            deductions_map[row["employee_id"]] = row["total"]
+            deductions_map[emp_id] = total
 
     # BUILD PAYROLL ITEMS
     payroll_items = []
 
     for emp in employees:
 
-        base_earnings = earnings_map.get(emp.id, Decimal("0"))
-        deductions = deductions_map.get(emp.id, Decimal("0"))
-        overtime = overtime_map.get(emp.id, Decimal("0"))
+        base_earnings = earnings_map.get(emp.id, Decimal("0.00"))
+        deductions = deductions_map.get(emp.id, Decimal("0.00"))
+        overtime = overtime_map.get(emp.id, Decimal("0.00"))
 
         gross = base_earnings + overtime
         net = gross - deductions
@@ -108,6 +116,7 @@ def run_payroll(payroll_run):
             )
         )
 
+    # Remove existing draft items (safe re-run)
     PayrollItem.objects.filter(payroll_run=payroll_run).delete()
 
     PayrollItem.objects.bulk_create(payroll_items)
