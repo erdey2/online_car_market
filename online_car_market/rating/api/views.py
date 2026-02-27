@@ -2,7 +2,7 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.serializers import ValidationError
+from rest_framework.exceptions import PermissionDenied
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
 from django.db.models import Avg, Count
 from ..models import CarRating
@@ -82,12 +82,12 @@ class CarRatingViewSet(ModelViewSet):
 
     def perform_update(self, serializer):
         if serializer.instance.user != self.request.user:
-            raise ValidationError("You can only edit your own rating.")
+            raise PermissionDenied("You can only edit your own rating.")
         serializer.save()
 
     def perform_destroy(self, instance):
         if instance.user != self.request.user:
-            raise ValidationError("You can only delete your own rating.")
+            raise PermissionDenied("You can only delete your own rating.")
         instance.delete()
 
     @action(detail=False, methods=['get'], url_path='ratings-stats', url_name='ratings_stats')
@@ -97,7 +97,7 @@ class CarRatingViewSet(ModelViewSet):
         - avg_rating
         - rating_count
         """
-        cars = Car.objects.all().annotate(
+        cars = Car.objects.only('id', 'make', 'model').annotate(
             avg_rating=Avg('ratings__rating'),
             rating_count=Count('ratings')
         )

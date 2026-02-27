@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from ..models import CarRating
 from online_car_market.inventory.api.serializers import CarMiniSerializer
-from online_car_market.inventory.models import Car
+
 
 class CarRatingSerializer(serializers.ModelSerializer):
     user = serializers.HiddenField(default=serializers.CurrentUserDefault())

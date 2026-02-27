@@ -5,7 +5,7 @@ from online_car_market.users.models import User
 class CarRating(models.Model):
     car = models.ForeignKey(Car, on_delete=models.CASCADE, related_name='ratings')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='car_ratings')
-    rating = models.PositiveIntegerField()  # 1–5
+    rating = models.PositiveIntegerField(db_index=True)  # 1–5
     comment = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
