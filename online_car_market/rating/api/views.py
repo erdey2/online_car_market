@@ -6,7 +6,7 @@ from rest_framework.exceptions import PermissionDenied
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse
 from django.db.models import Avg, Count
 from ..models import CarRating
-from .serializers import CarRatingSerializer, CarRatingReadSerializer
+from .serializers import CarRatingSerializer, CarRatingReadSerializer, CarRatingsStatsSerializer
 from online_car_market.inventory.models import Car
 from online_car_market.inventory.api.serializers import CarListSerializer
 
@@ -101,5 +101,5 @@ class CarRatingViewSet(ModelViewSet):
             avg_rating=Avg('ratings__rating'),
             rating_count=Count('ratings')
         )
-        serializer = CarListSerializer(cars, many=True)
+        serializer = CarRatingsStatsSerializer(cars, many=True)
         return Response(serializer.data)

@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from ..models import CarRating
 from online_car_market.inventory.api.serializers import CarMiniSerializer
-
+from online_car_market.inventory.models import Car
 
 class CarRatingSerializer(serializers.ModelSerializer):
     user = serializers.HiddenField(default=serializers.CurrentUserDefault())
@@ -26,7 +26,7 @@ class CarRatingSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         """
-        Ensure user can rate the car (example: only buyers).
+        user can rate the car (example: only buyers).
         """
         user = self.context['request'].user
         car = attrs.get('car')
@@ -56,4 +56,12 @@ class CarRatingReadSerializer(serializers.ModelSerializer):
             'comment',
             'created_at'
         ]
+
+class CarRatingsStatsSerializer(serializers.ModelSerializer):
+    avg_rating = serializers.FloatField()
+    rating_count = serializers.IntegerField()
+
+    class Meta:
+        model = Car
+        fields = ['id', 'make', 'model', 'avg_rating', 'rating_count']
 
