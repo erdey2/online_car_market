@@ -1,5 +1,7 @@
+from django.db import models
 from django.utils import timezone
 from django.db.models import Avg, Max, Count
+from jsonschema.benchmarks.const_vs_enum import value
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
@@ -239,7 +241,7 @@ class CarDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Car
-        fields = [
+        ''' fields = [
             "id",
             "vin",
             "origin",
@@ -264,7 +266,8 @@ class CarDetailSerializer(serializers.ModelSerializer):
             "seller_average_rating",
             "features",
             "created_at",
-        ]
+        ] '''
+        fields = '__all__'
 
     def get_seller(self, obj):
         seller_obj = obj.dealer or obj.broker
@@ -297,63 +300,12 @@ class CarDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_features(self, obj):
-        feature_fields = [
-            "bluetooth",
-            "heated_seats",
-            "cd_player",
-            "power_locks",
-            "premium_wheels_rims",
-            "winch",
-            "alarm_anti_theft",
-            "cooled_seats",
-            "keyless_start",
-            "body_kit",
-            "navigation_system",
-            "premium_lights",
-            "cassette_player",
-            "fog_lights",
-            "leather_seats",
-            "roof_rack",
-            "dvd_player",
-            "power_mirrors",
-            "power_sunroof",
-            "aux_audio_in",
-            "brush_guard",
-            "air_conditioning",
-            "performance_tyres",
-            "premium_sound_system",
-            "heat",
-            "vhs_player",
-            "off_road_kit",
-            "am_fm_radio",
-            "moonroof",
-            "racing_seats",
-            "premium_paint",
-            "spoiler",
-            "power_windows",
-            "sunroof",
-            "climate_control",
-            "parking_sensors",
-            "rear_view_camera",
-            "keyless_entry",
-            "off_road_tyres",
-            "satellite_radio",
-            "power_seats",
-            "tiptronic_gears",
-            "dual_exhaust",
-            "power_steering",
-            "cruise_control",
-            "all_wheel_steering",
-            "front_airbags",
-            "side_airbags",
-            "n2o_system",
-            "anti_lock_brakes",
-        ]
-        return [
-            field.replace("_", " ").title()
-            for field in feature_fields
-            if getattr(obj, field, False)
-        ]
+        return {
+            field.name: getattr(obj, field.name)
+            for field in obj._meta.fields
+            if isinstance(field, models.BooleanField)
+               and getattr(obj, field.name)
+        }
 
 class CarWriteSerializer(serializers.ModelSerializer):
     dealer = serializers.PrimaryKeyRelatedField(
