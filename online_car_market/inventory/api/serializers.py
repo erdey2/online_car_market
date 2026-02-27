@@ -238,7 +238,12 @@ class CarDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Car
-        fields = '__all__'
+        fields = [
+            "id", "vin", "origin", "make", "model", "year", "price", "mileage", "fuel_type", "body_type",
+            "interior_color", "exterior_color", "engine", "drivetrain", "condition", "trim", "description",
+            "status", "sale_type", "auction_end", "dealer", "broker", "posted_by", "verification_status",
+            "images", "bids", "seller", "bid_count", "highest_bid", "seller_average_rating", "features", "created_at"
+        ]
 
     def get_seller(self, obj):
         seller_obj = obj.dealer or obj.broker
