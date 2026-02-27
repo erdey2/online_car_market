@@ -51,7 +51,7 @@ urlpatterns = [
     path('', RedirectView.as_view(url='/api/docs/', permanent=False)),
     # User management
     path('api/accounts/', include("allauth.urls")),
-    # Your stuff: custom urls includes go here
+    # custom urls
     path('api/users/', include("online_car_market.users.api.urls")),
     path('api/inventory/', include("online_car_market.inventory.api.urls")),
     path('api/bids/', include("online_car_market.bids.api.urls")),

@@ -1,7 +1,4 @@
-from django.db import models
 from django.utils import timezone
-from django.db.models import Avg, Max, Count
-from jsonschema.benchmarks.const_vs_enum import value
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
