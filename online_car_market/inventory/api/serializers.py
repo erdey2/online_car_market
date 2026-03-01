@@ -11,6 +11,8 @@ from django.contrib.auth import get_user_model
 import re, bleach, logging
 from datetime import datetime
 
+from ...inspection.models import Inspection
+
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
@@ -334,19 +336,16 @@ class CarDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_inspection(self, obj):
-        inspections = getattr(obj, "verified_inspections", [])
-        if not inspections:
+        inspection = getattr(obj, "inspections", Inspection.objects.none()).first()
+        if not inspection:
             return None
-
-        inspection = inspections[0]
 
         return {
             "id": inspection.id,
-            "inspection_date": inspection.inspection_date,
-            "condition_status": inspection.condition_status,
+            "status": inspection.status,
+            "uploaded_by": getattr(inspection.uploaded_by, "email", None),
             "remarks": inspection.remarks,
-            "verified_at": inspection.verified_at,
-            "verified_by": inspection.verified_by.email if inspection.verified_by else None,
+            "inspection_date": inspection.inspection_date,
         }
 
 class CarWriteSerializer(serializers.ModelSerializer):
