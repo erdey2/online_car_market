@@ -8,9 +8,22 @@ class InspectionService:
 
     @staticmethod
     def get_user_inspections(user):
+
+        # Admins see everything
         if has_role(user, ["admin", "superadmin"]):
             return Inspection.objects.all()
-        return Inspection.objects.filter(uploaded_by=user)
+
+        # Sellers / Dealers see inspections for THEIR cars
+        if has_role(user, ["dealer", "seller"]):
+            return Inspection.objects.filter(car__owner=user)
+
+        # Brokers see inspections THEY uploaded
+        if has_role(user, ["broker"]):
+            return Inspection.objects.filter(uploaded_by=user)
+
+        # Buyers (public marketplace users)
+        # Only verified inspections should be visible
+        return Inspection.objects.filter(status="verified")
 
     @staticmethod
     def verify_inspection(inspection, user, status_value, admin_remarks):
