@@ -336,9 +336,12 @@ class CarDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_inspection(self, obj):
-        inspection = getattr(obj, "verified_inspections", Inspection.objects.none()).first()
-        if not inspection:
+        inspections = getattr(obj, "verified_inspections", [])
+
+        if not inspections:
             return None
+
+        inspection = inspections[0]  # already ordered by -verified_at
 
         return {
             "id": inspection.id,
