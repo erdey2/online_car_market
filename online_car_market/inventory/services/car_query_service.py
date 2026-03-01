@@ -74,13 +74,12 @@ class CarQueryService:
             .select_related(
                 "dealer", "dealer__profile", "dealer__profile__user",
                 "broker", "broker__profile", "broker__profile__user",
-                "posted_by",
-                "make_ref", "model_ref",
+                "posted_by", "inspection", "make_ref", "model_ref",
+                "inspection__verified_by",
             )
             .prefetch_related(
                 Prefetch("images", queryset=all_images_qs),
                 Prefetch("bids", queryset=top_bids_qs, to_attr="top_bids"),
-                Prefetch("inspection", queryset=verified_inspections_qs, to_attr="verified_inspections"),
             )
             .annotate(
                 bid_count=Count("bids", distinct=True),

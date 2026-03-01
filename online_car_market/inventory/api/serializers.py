@@ -336,20 +336,24 @@ class CarDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_inspection(self, obj):
-        inspections = getattr(obj, "verified_inspections", [])
+        inspection = getattr(obj, "inspection", None)
 
-        if not inspections:
+        if not inspection:
             return None
 
-        inspection = inspections[0]  # already ordered by -verified_at
+        # Optional: only show verified inspections
+        if inspection.status != "verified":
+            return None
 
         return {
             "id": inspection.id,
             "status": inspection.status,
             "remarks": inspection.remarks,
             "inspection_date": inspection.inspection_date,
+            "condition_status": inspection.condition_status,
             "verified_at": inspection.verified_at,
             "verified_by_email": getattr(inspection.verified_by, "email", None),
+            "report_document": inspection.report_document.url if inspection.report_document else None,
         }
 
 class CarWriteSerializer(serializers.ModelSerializer):
