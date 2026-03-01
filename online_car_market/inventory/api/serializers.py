@@ -336,16 +336,17 @@ class CarDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_inspection(self, obj):
-        inspection = getattr(obj, "inspections", Inspection.objects.none()).first()
+        inspection = getattr(obj, "verified_inspections", Inspection.objects.none()).first()
         if not inspection:
             return None
 
         return {
             "id": inspection.id,
             "status": inspection.status,
-            "uploaded_by": getattr(inspection.uploaded_by, "email", None),
             "remarks": inspection.remarks,
             "inspection_date": inspection.inspection_date,
+            "verified_at": inspection.verified_at,
+            "verified_by_email": getattr(inspection.verified_by, "email", None),
         }
 
 class CarWriteSerializer(serializers.ModelSerializer):

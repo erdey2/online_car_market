@@ -63,6 +63,7 @@ class CarQueryService:
                 "condition_status",
                 "remarks",
                 "verified_at",
+                "status",
                 "verified_by__email",
             )
             .order_by("-verified_at")
