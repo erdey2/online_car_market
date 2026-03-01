@@ -235,14 +235,15 @@ class CarDetailSerializer(serializers.ModelSerializer):
     highest_bid = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     seller_average_rating = serializers.FloatField(source="dealer_avg", read_only=True)
     features = serializers.SerializerMethodField()
+    inspection = serializers.SerializerMethodField()
 
     class Meta:
         model = Car
         fields = [
-            "id", "vin", "origin", "make", "model", "year", "price", "mileage", "fuel_type", "body_type",
-            "interior_color", "exterior_color", "engine", "drivetrain", "condition", "trim", "description",
-            "status", "sale_type", "auction_end", "dealer", "broker", "posted_by", "verification_status",
-            "images", "bids", "seller", "bid_count", "highest_bid", "seller_average_rating", "features", "created_at"
+            "id", "vin", "origin", "make", "model", "year", "price", "mileage", "fuel_type", "body_type", "interior_color",
+            "exterior_color", "engine", "drivetrain", "condition", "trim", "description", "status", "sale_type", "auction_end",
+            "dealer", "broker", "posted_by", "verification_status", "images", "bids", "seller", "bid_count", "highest_bid",
+            "seller_average_rating", "features", "inspection", "created_at"
         ]
 
     def get_seller(self, obj):
@@ -331,6 +332,22 @@ class CarDetailSerializer(serializers.ModelSerializer):
             for field in feature_fields
             if getattr(obj, field, False)
         ]
+
+    def get_inspection(self, obj):
+        inspections = getattr(obj, "verified_inspections", [])
+        if not inspections:
+            return None
+
+        inspection = inspections[0]
+
+        return {
+            "id": inspection.id,
+            "inspection_date": inspection.inspection_date,
+            "condition_status": inspection.condition_status,
+            "remarks": inspection.remarks,
+            "verified_at": inspection.verified_at,
+            "verified_by": inspection.verified_by.email if inspection.verified_by else None,
+        }
 
 class CarWriteSerializer(serializers.ModelSerializer):
     dealer = serializers.PrimaryKeyRelatedField(

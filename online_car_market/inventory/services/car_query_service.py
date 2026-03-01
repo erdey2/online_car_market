@@ -3,6 +3,7 @@ from django.db.models.functions import Coalesce
 from rest_framework.exceptions import PermissionDenied
 from online_car_market.inventory.models import Car, CarImage
 from online_car_market.bids.models import Bid
+from online_car_market.inspection.models import Inspection
 from rolepermissions.checkers import has_role
 
 class CarQueryService:
@@ -40,21 +41,45 @@ class CarQueryService:
 
     @staticmethod
     def for_detail():
-        """Detail view: prefetch all images and top 10 bids."""
-        all_images_qs = CarImage.objects.all().only("id", "image", "is_featured")
-        top_bids_qs = Bid.objects.select_related("user").only(
-            "id", "amount", "user_id", "created_at"
-        ).order_by("-amount")[:10]
+        """Detail view: prefetch all images, top 10 bids, and verified inspection."""
+
+        all_images_qs = CarImage.objects.only("id", "image", "is_featured")
+
+        top_bids_qs = (
+            Bid.objects
+            .select_related("user")
+            .only("id", "amount", "user_id", "created_at")
+            .order_by("-amount")[:10]
+        )
+
+        verified_inspections_qs = (
+            Inspection.objects
+            .filter(status="verified")
+            .select_related("verified_by")
+            .only(
+                "id",
+                "car_id",
+                "inspection_date",
+                "condition_status",
+                "remarks",
+                "verified_at",
+                "verified_by__email",
+            )
+            .order_by("-verified_at")
+        )
 
         return (
             Car.objects
             .select_related(
-                "dealer", "dealer__profile", "broker", "broker__profile",
-                "posted_by", "make_ref", "model_ref"
+                "dealer", "dealer__profile", "dealer__profile__user",
+                "broker", "broker__profile", "broker__profile__user",
+                "posted_by",
+                "make_ref", "model_ref",
             )
             .prefetch_related(
-                Prefetch("images", queryset=all_images_qs),  # normal prefetch
-                Prefetch("bids", queryset=top_bids_qs, to_attr="top_bids")
+                Prefetch("images", queryset=all_images_qs),
+                Prefetch("bids", queryset=top_bids_qs, to_attr="top_bids"),
+                Prefetch("inspections", queryset=verified_inspections_qs, to_attr="verified_inspections"),
             )
             .annotate(
                 bid_count=Count("bids", distinct=True),
