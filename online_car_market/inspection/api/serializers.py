@@ -1,9 +1,12 @@
 from rest_framework import serializers
 from ..models import Inspection
 from online_car_market.inventory.models import Car
+from online_car_market.inventory.api.serializers import CarMiniSerializer
 from ..services.inspection_service import InspectionService
 
+
 class InspectionSerializer(serializers.ModelSerializer):
+    car = CarMiniSerializer(read_only=True)
     car_id = serializers.IntegerField(write_only=True, required=True)
     car_display = serializers.CharField(source='car.title', read_only=True)
     report_url = serializers.SerializerMethodField(read_only=True)
@@ -13,7 +16,9 @@ class InspectionSerializer(serializers.ModelSerializer):
         model = Inspection
         fields = [
             "id",
-            "car_id", "car_display",
+            "car",
+            "car_id",
+            "car_display",
             "inspected_by",
             "inspection_date",
             "remarks",
@@ -25,7 +30,7 @@ class InspectionSerializer(serializers.ModelSerializer):
             "created_at", "updated_at"
         ]
         read_only_fields = [
-            "id", "car_display", "report_url",
+            "id", "car", "car_display", "report_url",
             "uploaded_by", "uploaded_at",
             "verified_by_email", "verified_at",
             "created_at", "updated_at"
