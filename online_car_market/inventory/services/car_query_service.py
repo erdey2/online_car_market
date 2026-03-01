@@ -79,7 +79,7 @@ class CarQueryService:
             .prefetch_related(
                 Prefetch("images", queryset=all_images_qs),
                 Prefetch("bids", queryset=top_bids_qs, to_attr="top_bids"),
-                Prefetch("inspections", queryset=verified_inspections_qs, to_attr="verified_inspections"),
+                Prefetch("inspection", queryset=verified_inspections_qs, to_attr="verified_inspections"),
             )
             .annotate(
                 bid_count=Count("bids", distinct=True),
