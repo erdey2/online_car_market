@@ -170,15 +170,17 @@ class Car(models.Model):
         return f"{self.make} {self.model} ({self.year})"
 
     def save(self, *args, **kwargs):
-        if self.make_ref and not self.make:
+        if self.make_ref:
             self.make = self.make_ref.name
-        if self.model_ref and not self.model:
+
+        if self.model_ref:
             self.model = self.model_ref.name
 
         if self.status == 'sold' and not self.sold_at:
             self.sold_at = timezone.now()
 
         super().save(*args, **kwargs)
+
 
     class Meta:
         indexes = [

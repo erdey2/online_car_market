@@ -173,9 +173,13 @@ class CarViewSet(ModelViewSet):
         return mapping.get(self.action, CarListSerializer)
 
     def get_queryset(self):
-        base_qs = CarQueryService.for_list() if self.action == "list" else \
-                  CarQueryService.for_detail() if self.action == "retrieve" else \
-                  CarQueryService.base_queryset()
+        if self.action == "list":
+            base_qs = CarQueryService.for_list()
+        elif self.action == "retrieve":
+            base_qs = CarQueryService.for_detail()
+        else:
+            base_qs = CarQueryService.base_queryset()
+
         return CarQueryService.get_visible_cars_for_user(self.request.user, base_qs)
 
     def get_permissions(self):
@@ -187,15 +191,13 @@ class CarViewSet(ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        car = CarService.create_car_with_images(
-            serializer=serializer,
-            request=request
-        )
+        # Call service layer
+        car = CarService.create_car_with_images(serializer, request)
 
-        return Response(
-            CarDetailSerializer(car, context={"request": request}).data,
-            status=status.HTTP_201_CREATED
-        )
+        # Return detailed response
+        response_serializer = CarDetailSerializer(car, context={"request": request})
+
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["get"], url_path="filter")
     def filter(self, request):

@@ -1,3 +1,5 @@
+from django.db import transaction
+
 from online_car_market.inventory.models import CarImage
 from online_car_market.brokers.models import BrokerProfile
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -15,35 +17,49 @@ class CarService:
                 raise ValidationError("Broker profile not found.")
 
     @staticmethod
+    @transaction.atomic
     def create_car_with_images(serializer, request):
+        """
+        Creates a Car instance and its associated images.
+        Works with both:
+        1. Indexed form-data: uploaded_images[0].image_file
+        2. Simple list: uploaded_images
+        """
+        # Save the car first
         car = serializer.save()
 
-        uploaded_images = []
+        uploaded_images = {}
+
+        # Handle indexed keys (uploaded_images[0].image_file)
         for key, file in request.FILES.items():
             if key.startswith("uploaded_images"):
-                index = key.split('[')[1].split(']')[0]
-                caption = request.data.get(f"uploaded_images[{index}].caption")
-                is_featured = request.data.get(
-                    f"uploaded_images[{index}].is_featured", "false"
-                ).lower() == "true"
+                if "]." in key:
+                    # Extract index and field name
+                    index = key.split('[')[1].split(']')[0]
+                    field_name = key.split('].')[1]
 
-                uploaded_images.append({
-                    "image_file": file,
-                    "caption": caption,
-                    "is_featured": is_featured
-                })
+                    if index not in uploaded_images:
+                        uploaded_images[index] = {}
+                    uploaded_images[index][field_name] = file
+                else:
+                    # Simple list case
+                    uploaded_images.setdefault(key, {})["image_file"] = file
+
+        if not uploaded_images:
+            raise ValidationError("No images uploaded.")
 
         first_image = None
-        for i, img in enumerate(uploaded_images):
+        for i, img_data in enumerate(uploaded_images.values()):
             image = CarImage.objects.create(
                 car=car,
-                image=img['image_file'],
-                caption=img['caption'],
-                is_featured=img['is_featured']
+                image=img_data.get("image_file"),
+                caption=img_data.get("caption", ""),
+                is_featured=img_data.get("is_featured", i == 0)  # first image default featured
             )
             if i == 0:
                 first_image = image
 
+        # Ensure at least one featured image
         if not CarImage.objects.filter(car=car, is_featured=True).exists() and first_image:
             first_image.is_featured = True
             first_image.save()
