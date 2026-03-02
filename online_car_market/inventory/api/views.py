@@ -25,6 +25,7 @@ from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAd
 from online_car_market.users.permissions.business_permissions import CanPostCar
 from online_car_market.users.models import Profile
 from online_car_market.bids.api.serializers import BidSerializer
+
 from ..services.car_service import CarService
 from ..services.car_filter_service import CarFilterService
 from ..services.car_query_service import CarQueryService
@@ -183,11 +184,18 @@ class CarViewSet(ModelViewSet):
         return super().get_permissions()
 
     def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
         car = CarService.create_car_with_images(
-            serializer=self.get_serializer(data=request.data).is_valid(raise_exception=True),
+            serializer=serializer,
             request=request
         )
-        return Response(CarDetailSerializer(car, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+        return Response(
+            CarDetailSerializer(car, context={"request": request}).data,
+            status=status.HTTP_201_CREATED
+        )
 
     @action(detail=False, methods=["get"], url_path="filter")
     def filter(self, request):
@@ -200,11 +208,19 @@ class CarViewSet(ModelViewSet):
     @action(detail=True, methods=["post"])
     def bid(self, request, pk=None):
         car = self.get_object()
+
+        serializer = BidSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+
         bid = CarBidService.place_bid(
             car=car,
-            serializer=BidSerializer(data=request.data, context={"request": request}).is_valid(raise_exception=True)
+            serializer=serializer
         )
-        return Response(BidSerializer(bid, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+        return Response(
+            BidSerializer(bid, context={"request": request}).data,
+            status=status.HTTP_201_CREATED
+        )
 
 @extend_schema_view(
 list=extend_schema(
@@ -293,9 +309,7 @@ class CarVerificationViewSet(GenericViewSet):
     )
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated, IsSuperAdminOrAdmin], url_path="analytics")
     def analytics(self, request):
-        data = CarVerificationService.get_verification_analytics(
-            request.user
-        )
+        data = CarVerificationService.get_verification_analytics(request.user)
 
         serializer = CarVerificationAnalyticsSerializer(data)
         return Response(serializer.data)
