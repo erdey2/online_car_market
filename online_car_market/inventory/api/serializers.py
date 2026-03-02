@@ -230,6 +230,8 @@ class CarListSerializer(serializers.ModelSerializer):
         }
 
 class CarDetailSerializer(serializers.ModelSerializer):
+    make = serializers.CharField(source="make_ref.name", read_only=True)
+    model = serializers.CharField(source="model_ref.name", read_only=True)
     images = CarImageSerializer(many=True, read_only=True)  # all images
     bids = BidNestedSerializer(source="top_bids", many=True, read_only=True)  # top 10 bids
     seller = serializers.SerializerMethodField()
@@ -385,6 +387,8 @@ class CarWriteSerializer(serializers.ModelSerializer):
         model = Car
         exclude = [
             "id",
+            "make",
+            "model",
             "created_at",
             "updated_at",
             "sold_at",
