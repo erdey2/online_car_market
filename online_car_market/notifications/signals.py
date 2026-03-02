@@ -11,7 +11,7 @@ User = get_user_model()
 
 logger = logging.getLogger(__name__)
 
-@receiver(post_save, sender=Car)
+""" @receiver(post_save, sender=Car)
 def notify_new_car(sender, instance, created, **kwargs):
     if not created:
         return
@@ -53,13 +53,13 @@ def notify_new_car(sender, instance, created, **kwargs):
             }
         )
 
-""" @receiver(post_save, sender=Bid)
+@receiver(post_save, sender=Bid)
 def notify_seller_on_bid(sender, instance, created, **kwargs):
     if not created:
         return
 
     car = instance.car
-    seller = car.user  # adjust if your seller field is different
+    seller = car.user
 
     notification = Notification.objects.create(
         recipient=seller,
