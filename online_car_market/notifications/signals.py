@@ -1,3 +1,4 @@
+import logging
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from online_car_market.inventory.models import Car
@@ -8,10 +9,13 @@ from channels.layers import get_channel_layer
 
 User = get_user_model()
 
+logger = logging.getLogger(__name__)
+
 @receiver(post_save, sender=Car)
 def notify_new_car(sender, instance, created, **kwargs):
     if not created:
         return
+
     try:
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(
@@ -22,9 +26,8 @@ def notify_new_car(sender, instance, created, **kwargs):
             }
         )
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
         logger.warning(f"Redis notification failed: {e}")
+
 
 
     channel_layer = get_channel_layer()
