@@ -209,6 +209,15 @@ class CarImage(models.Model):
     caption = models.CharField(max_length=255, blank=True, null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["car"],
+                condition=models.Q(is_featured=True),
+                name="unique_featured_image_per_car"
+            )
+        ]
+
     def __str__(self):
         return f"Image for {self.car} (Featured: {self.is_featured})"
 
