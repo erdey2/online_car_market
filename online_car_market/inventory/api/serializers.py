@@ -96,7 +96,6 @@ class CarImageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CarImage
-        # fields = ["id", "image_file", "image_url", "is_featured", "caption", "uploaded_at"]
         fields = '__all__'
         read_only_fields = ["id", "image_url", "uploaded_at"]
 
@@ -382,6 +381,7 @@ class CarWriteSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
+    images = CarImageSerializer(many=True, required=False)
 
     class Meta:
         model = Car
