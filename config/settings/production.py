@@ -5,14 +5,21 @@ DEBUG = False
 
 ALLOWED_HOSTS = [
     "online-car-market.onrender.com",
-    ".onrender.com",
     "ecar4.onrender.com",
+    "hulucar.com",
+    "www.hulucar.com",
+    ".onrender.com",
 ]
 
 DATABASES = {
     "default": env.db("DATABASE_URL")
 }
 DATABASES["default"]["CONN_MAX_AGE"] = env.int("CONN_MAX_AGE", default=60)
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://online-car-market.onrender.com",
+    "https://ecar4.onrender.com",
+]
 
 # CACHES
 CACHES = {
