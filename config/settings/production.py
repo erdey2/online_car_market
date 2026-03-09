@@ -6,6 +6,7 @@ DEBUG = False
 ALLOWED_HOSTS = [
     "online-car-market.onrender.com",
     ".onrender.com",
+    "ecar4.onrender.com",
 ]
 
 DATABASES = {
