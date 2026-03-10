@@ -9,6 +9,9 @@ ALLOWED_HOSTS = [
     "hulucar.com",
     "www.hulucar.com",
     ".onrender.com",
+    "dealer.hulucar.com",
+    "admin.hulucar.com",
+    "api.hulucar.com",
 ]
 
 DATABASES = {
