@@ -10,22 +10,14 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('bids', '0002_initial'),
+        ('advertisement', '0001_initial'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='bid',
-            name='user',
+            model_name='advertisement',
+            name='created_by',
             field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to=settings.AUTH_USER_MODEL),
-        ),
-        migrations.AddIndex(
-            model_name='bid',
-            index=models.Index(fields=['car', '-amount'], name='bids_bid_car_id_802542_idx'),
-        ),
-        migrations.AddIndex(
-            model_name='bid',
-            index=models.Index(fields=['car', '-created_at'], name='bids_bid_car_id_46a752_idx'),
         ),
     ]

@@ -7,7 +7,7 @@ User = get_user_model()
 class Employee(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='employee_profile')
     hire_date = models.DateField(default=timezone.now)
-    position = models.CharField(max_length=100, blank=True)
+    position = models.CharField(max_length=100, blank=True, null=True)
     salary = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='employees_created')
     is_active = models.BooleanField(default=True)
