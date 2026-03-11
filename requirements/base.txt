@@ -41,4 +41,4 @@ python-slugify==8.0.4
 
 cryptography==43.0.1
 
-fido2==2.3.0
+fido2==2.1.1
