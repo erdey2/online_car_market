@@ -42,3 +42,6 @@ python-slugify==8.0.4
 cryptography==43.0.1
 
 fido2==2.1.1
+
+argon2-cffi==25.1.0
+argon2-cffi-bindings==21.2.0
