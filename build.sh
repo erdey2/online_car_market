@@ -4,7 +4,7 @@
 pip install --upgrade pip
 
 # Install Python packages
-pip install -r requirements/local.txt
+pip install -r requirements/production.txt
 
 # Collect static files and run migrations
 python manage.py collectstatic --noinput
