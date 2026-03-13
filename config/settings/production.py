@@ -9,7 +9,7 @@ ALLOWED_HOSTS = [
     "hulucar.com",
     "www.hulucar.com",
     ".onrender.com",
-    "dealer.hulucar.com",
+    "erp.hulucar.com",
     "admin.hulucar.com",
     "api.hulucar.com",
 ]
