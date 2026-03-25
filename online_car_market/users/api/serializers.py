@@ -412,58 +412,42 @@ class DealerRegisterSerializer(serializers.ModelSerializer):
         )
         return user
 
-class ProfileSerializer2(serializers.ModelSerializer):
+class DealerProfileSerializer2(serializers.ModelSerializer):
     class Meta:
-        model = Profile
-        fields = ["first_name", "last_name", "contact", "address", "image"]
+        model = DealerProfile
+        fields = ['id', 'company_name', 'license_number', 'tax_id', 'telebirr_account', 'status', 'is_verified']
 
 class BrokerProfileSerializer2(serializers.ModelSerializer):
     class Meta:
         model = BrokerProfile
-        fields = ["national_id", "telebirr_account", "status"]
+        fields = ['id', 'national_id', 'telebirr_account', 'status', 'is_verified']
 
-class DealerProfileSerializer2(serializers.ModelSerializer):
+class ProfileSerializer2(serializers.ModelSerializer):
     class Meta:
-        model = DealerProfile
-        fields = ["company_name", "license_number", "tax_id", "telebirr_account", "status"]
+        model = Profile
+        fields = ['id', 'first_name', 'last_name', 'contact', 'address', 'image']
 
 class UserFullSerializer(serializers.ModelSerializer):
-    profile = ProfileSerializer(read_only=True)
-    broker_profile = serializers.SerializerMethodField()
-    dealer_profile = serializers.SerializerMethodField()
+    profile = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "email", "role", "date_joined", "profile", "broker_profile", "dealer_profile"]
+        fields = ['id', 'email', 'role', 'date_joined', 'profile']
 
-    def get_broker_profile(self, obj):
-        """Return broker profile only if exists."""
-        if hasattr(obj.profile, "broker_profile"):
-            return BrokerProfileSerializer(obj.profile.broker_profile).data
-        return None
+    def get_profile(self, obj):
+        if not hasattr(obj, 'profile'):
+            return None
 
-    def get_dealer_profile(self, obj):
-        """Return dealer profile only if exists."""
-        if hasattr(obj.profile, "dealer_profile"):
-            return DealerProfileSerializer(obj.profile.dealer_profile).data
-        return None
+        profile_data = ProfileSerializer(obj.profile).data
 
-    def to_representation(self, instance):
-        """Exclude null fields and flatten nested profiles."""
-        rep = super().to_representation(instance)
+        if obj.role == User.Role.DEALER and hasattr(obj.profile, 'dealer_profile'):
+            profile_data['dealer_profile'] = DealerProfileSerializer(obj.profile.dealer_profile).data
+        elif obj.role == User.Role.BROKER and hasattr(obj.profile, 'broker_profile'):
+            profile_data['broker_profile'] = BrokerProfileSerializer(obj.profile.broker_profile).data
 
-        # remove None values
-        rep = {k: v for k, v in rep.items() if v is not None}
-
-        # remove nested dealer/broker inside profile
-        if "profile" in rep:
-            profile_data = rep["profile"]
-            profile_data.pop("dealer_profile", None)
-            profile_data.pop("broker_profile", None)
-            profile_data.pop("buyer_profile", None)  # if you have one
-            rep["profile"] = profile_data
-
-        return rep
+        # remove null fields inside profile_data
+        profile_data = {k: v for k, v in profile_data.items() if v is not None}
+        return profile_data
 
 
 
