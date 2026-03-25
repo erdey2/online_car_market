@@ -428,38 +428,32 @@ class ProfileSerializer2(serializers.ModelSerializer):
         fields = ['id', 'first_name', 'last_name', 'contact', 'address', 'image']
 
 class UserFullSerializer(serializers.ModelSerializer):
-    profile = ProfileSerializer(read_only=True)
-    dealer_profile = serializers.SerializerMethodField()
-    broker_profile = serializers.SerializerMethodField()
+    profile = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'role', 'date_joined', 'profile', 'dealer_profile', 'broker_profile']
+        fields = ['id', 'email', 'role', 'date_joined', 'profile']
 
-    def get_dealer_profile(self, obj):
-        if obj.role == User.Role.DEALER and hasattr(obj, 'profile') and hasattr(obj.profile, 'dealer_profile'):
+    def get_profile(self, obj):
+        if not hasattr(obj, 'profile'):
+            return None
+
+        profile_data = ProfileSerializer(obj.profile).data
+
+        # Include only the relevant role profile, flattening nested profile
+        if obj.role == User.Role.DEALER and hasattr(obj.profile, 'dealer_profile'):
             dealer = obj.profile.dealer_profile
-            data = DealerProfileSerializer(dealer).data
-            data.pop('profile', None)  # remove inner profile to avoid duplication
-            return data
-        return None
-
-    def get_broker_profile(self, obj):
-        if obj.role == User.Role.BROKER and hasattr(obj, 'profile') and hasattr(obj.profile, 'broker_profile'):
+            dealer_data = DealerProfileSerializer(dealer).data
+            
+            dealer_data.pop('profile', None)
+            profile_data['dealer_profile'] = dealer_data
+        elif obj.role == User.Role.BROKER and hasattr(obj.profile, 'broker_profile'):
             broker = obj.profile.broker_profile
-            data = BrokerProfileSerializer(broker).data
-            data.pop('profile', None)  # remove inner profile to avoid duplication
-            return data
-        return None
+            broker_data = BrokerProfileSerializer(broker).data
+            broker_data.pop('profile', None)
+            profile_data['broker_profile'] = broker_data
 
-    def to_representation(self, instance):
-        rep = super().to_representation(instance)
-        # remove null profiles
-        if rep.get('dealer_profile') is None:
-            rep.pop('dealer_profile')
-        if rep.get('broker_profile') is None:
-            rep.pop('broker_profile')
-        return rep
+        return profile_data
 
 
 
