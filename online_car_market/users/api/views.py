@@ -1,13 +1,14 @@
 import logging
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
+from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet, ViewSet, ReadOnlyModelViewSet
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, inline_serializer
 from .serializers import (UserRoleSerializer, ProfileSerializer, UserSerializer,
                           ERPLoginSerializer, AdminLoginSerializer, BuyerRegisterSerializer,
-                          BrokerRegisterSerializer, DealerRegisterSerializer)
+                          BrokerRegisterSerializer, DealerRegisterSerializer, UserFullSerializer)
 from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin
 from rest_framework.decorators import action
 from dj_rest_auth.views import LoginView
@@ -106,6 +107,18 @@ class AuthViewSet(ViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({"detail": "Dealer registered. Awaiting approval"}, status=201)
+
+class MeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """
+        Retrieve the authenticated user's full info:
+        User + Profile + BrokerProfile/DealerProfile
+        """
+        user = request.user
+        serializer = UserFullSerializer(user)
+        return Response(serializer.data)
 
 @extend_schema_view(
     list=extend_schema(tags=["Authentication & Users"]),

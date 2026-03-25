@@ -413,6 +413,47 @@ class DealerRegisterSerializer(serializers.ModelSerializer):
 
         return user
 
+class ProfileSerializer2(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        fields = ["first_name", "last_name", "contact", "address", "image"]
+
+
+class BrokerProfileSerializer2(serializers.ModelSerializer):
+    class Meta:
+        model = BrokerProfile
+        fields = ["national_id", "telebirr_account", "status"]
+
+
+class DealerProfileSerializer2(serializers.ModelSerializer):
+    class Meta:
+        model = DealerProfile
+        fields = ["company_name", "license_number", "tax_id", "telebirr_account", "status"]
+
+class UserFullSerializer(serializers.ModelSerializer):
+    profile = ProfileSerializer(read_only=True)
+    broker_profile = serializers.SerializerMethodField()
+    dealer_profile = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["id", "email", "role", "date_joined", "profile", "broker_profile", "dealer_profile"]
+
+    def get_broker_profile(self, obj):
+        if hasattr(obj.profile, "broker_profile"):
+            return BrokerProfileSerializer(obj.profile.broker_profile).data
+        return None
+
+    def get_dealer_profile(self, obj):
+        if hasattr(obj.profile, "dealer_profile"):
+            return DealerProfileSerializer(obj.profile.dealer_profile).data
+        return None
+
+    def to_representation(self, instance):
+        """Exclude fields that are None"""
+        rep = super().to_representation(instance)
+        return {k: v for k, v in rep.items() if v is not None}
+
 
 
 
