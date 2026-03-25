@@ -111,6 +111,12 @@ class AuthViewSet(ViewSet):
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        tags=["Users"],
+        summary="Get current user info",
+        description="Returns full info of the authenticated user: User + Profile + BrokerProfile/DealerProfile",
+        responses={200: UserFullSerializer}
+    )
     def get(self, request):
         """
         Retrieve the authenticated user's full info:
@@ -119,6 +125,28 @@ class MeView(APIView):
         user = request.user
         serializer = UserFullSerializer(user)
         return Response(serializer.data)
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Users"],
+        summary="List all users",
+        description="Admin endpoint to list all users with full profiles (User + Profile + Broker/Dealer).",
+        responses={200: UserFullSerializer(many=True)}
+    ),
+    retrieve=extend_schema(
+        tags=["Users"],
+        summary="Retrieve a single user",
+        description="Admin endpoint to retrieve a single user with full profile info.",
+        responses={200: UserFullSerializer}
+    )
+)
+class UserViewSet(ReadOnlyModelViewSet):
+    """
+    Admin endpoint to list and retrieve all users with full profiles.
+    """
+    queryset = User.objects.all().select_related('profile', 'profile__broker_profile', 'profile__dealer_profile')
+    serializer_class = UserFullSerializer
+    permission_classes = [IsSuperAdminOrAdmin]  # only admin can see all users
 
 @extend_schema_view(
     list=extend_schema(tags=["Authentication & Users"]),

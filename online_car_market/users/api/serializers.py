@@ -410,7 +410,6 @@ class DealerRegisterSerializer(serializers.ModelSerializer):
             telebirr_account=telebirr,
             status=DealerProfile.Status.PENDING
         )
-
         return user
 
 class ProfileSerializer2(serializers.ModelSerializer):
@@ -418,12 +417,10 @@ class ProfileSerializer2(serializers.ModelSerializer):
         model = Profile
         fields = ["first_name", "last_name", "contact", "address", "image"]
 
-
 class BrokerProfileSerializer2(serializers.ModelSerializer):
     class Meta:
         model = BrokerProfile
         fields = ["national_id", "telebirr_account", "status"]
-
 
 class DealerProfileSerializer2(serializers.ModelSerializer):
     class Meta:
@@ -440,19 +437,33 @@ class UserFullSerializer(serializers.ModelSerializer):
         fields = ["id", "email", "role", "date_joined", "profile", "broker_profile", "dealer_profile"]
 
     def get_broker_profile(self, obj):
+        """Return broker profile only if exists."""
         if hasattr(obj.profile, "broker_profile"):
             return BrokerProfileSerializer(obj.profile.broker_profile).data
         return None
 
     def get_dealer_profile(self, obj):
+        """Return dealer profile only if exists."""
         if hasattr(obj.profile, "dealer_profile"):
             return DealerProfileSerializer(obj.profile.dealer_profile).data
         return None
 
     def to_representation(self, instance):
-        """Exclude fields that are None"""
+        """Exclude null fields and flatten nested profiles."""
         rep = super().to_representation(instance)
-        return {k: v for k, v in rep.items() if v is not None}
+
+        # remove None values
+        rep = {k: v for k, v in rep.items() if v is not None}
+
+        # remove nested dealer/broker inside profile
+        if "profile" in rep:
+            profile_data = rep["profile"]
+            profile_data.pop("dealer_profile", None)
+            profile_data.pop("broker_profile", None)
+            profile_data.pop("buyer_profile", None)  # if you have one
+            rep["profile"] = profile_data
+
+        return rep
 
 
 
