@@ -1,10 +1,13 @@
 import logging
 from django.contrib.auth import get_user_model
+from rest_framework import serializers
 from rest_framework.viewsets import ModelViewSet, ViewSet, ReadOnlyModelViewSet
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema, extend_schema_view
-from .serializers import UserRoleSerializer, ProfileSerializer, UserSerializer, ERPLoginSerializer, AdminLoginSerializer
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, inline_serializer
+from .serializers import (UserRoleSerializer, ProfileSerializer, UserSerializer,
+                          ERPLoginSerializer, AdminLoginSerializer, BuyerRegisterSerializer,
+                          BrokerRegisterSerializer, DealerRegisterSerializer)
 from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin
 from rest_framework.decorators import action
 from dj_rest_auth.views import LoginView
@@ -13,6 +16,96 @@ from ..services.user_service import UserService
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+
+class AuthViewSet(ViewSet):
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        tags=["Authentication"],
+        summary="Register as Buyer",
+        description="Create a new buyer account. This creates a User and Profile.",
+        request=inline_serializer(
+            name="BuyerRegisterRequest",
+            fields={
+                "email": serializers.EmailField(),
+                "password": serializers.CharField(),
+            },
+        ),
+        responses={
+            201: OpenApiResponse(description="Buyer registered successfully"),
+            400: OpenApiResponse(description="Invalid input"),
+        },
+    )
+    @action(detail=False, methods=["post"])
+    def register_buyer(self, request):
+        serializer = BuyerRegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "Buyer registered successfully"}, status=201)
+
+    @extend_schema(
+        tags=["Authentication"],
+        summary="Register as Broker",
+        description="""
+            Register a new broker.
+
+            - Creates User + Profile + BrokerProfile
+            - Broker status will be **PENDING**
+            - Requires admin approval before activation
+            """,
+        request=inline_serializer(
+            name="BrokerRegisterRequest",
+            fields={
+                "email": serializers.EmailField(),
+                "password": serializers.CharField(),
+                "national_id": serializers.CharField(),
+                "telebirr_account": serializers.CharField(),
+            },
+        ),
+        responses={
+            201: OpenApiResponse(description="Broker registered. Awaiting approval"),
+            400: OpenApiResponse(description="Invalid input"),
+        },
+    )
+    @action(detail=False, methods=["post"])
+    def register_broker(self, request):
+        serializer = BrokerRegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "Broker registered. Awaiting approval"}, status=201)
+
+    @extend_schema(
+        tags=["Authentication"],
+        summary="Register as Dealer",
+        description="""
+            Register a new dealer.
+
+            - Creates User + Profile + DealerProfile
+            - Dealer status will be **PENDING**
+            - Requires admin approval before activation
+            """,
+        request=inline_serializer(
+            name="DealerRegisterRequest",
+            fields={
+                "email": serializers.EmailField(),
+                "password": serializers.CharField(),
+                "company_name": serializers.CharField(),
+                "license_number": serializers.CharField(),
+                "tax_id": serializers.CharField(required=False),
+                "telebirr_account": serializers.CharField(required=False),
+            },
+        ),
+        responses={
+            201: OpenApiResponse(description="Dealer registered. Awaiting approval"),
+            400: OpenApiResponse(description="Invalid input"),
+        },
+    )
+    @action(detail=False, methods=["post"])
+    def register_dealer(self, request):
+        serializer = DealerRegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "Dealer registered. Awaiting approval"}, status=201)
 
 @extend_schema_view(
     list=extend_schema(tags=["Authentication & Users"]),

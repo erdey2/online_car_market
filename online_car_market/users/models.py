@@ -26,11 +26,18 @@ class UserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 class User(AbstractBaseUser, PermissionsMixin):
+    class Role(models.TextChoices):
+        BUYER = "buyer", "Buyer"
+        BROKER = "broker", "Broker"
+        DEALER = "dealer", "Dealer"
+        ADMIN = "admin", "Admin"
+
     email = models.EmailField(_('Email address'), unique=True)
     description = models.TextField(max_length=500, blank=True, null=True)
     date_joined = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.BUYER)
     objects = UserManager()
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []

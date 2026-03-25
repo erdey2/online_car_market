@@ -14,6 +14,8 @@ from online_car_market.dealers.api.serializers import DealerProfileSerializer
 from online_car_market.buyers.api.serializers import BuyerProfileSerializer
 from ..services.user_service import UserService
 from ..services.profile_service import ProfileService
+from online_car_market.brokers.models import BrokerProfile
+from online_car_market.dealers.models import DealerProfile
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -320,6 +322,96 @@ class AdminLoginSerializer(LoginSerializer):
             )
 
         return data
+
+class BuyerRegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = User
+        fields = ["email", "password"]
+
+    def create(self, validated_data):
+        user = User.objects.create_user(
+            email=validated_data["email"],
+            password=validated_data["password"],
+            role="buyer"
+        )
+
+        Profile.objects.create(user=user)
+
+        return user
+
+class BrokerRegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+    national_id = serializers.CharField()
+    telebirr_account = serializers.CharField()
+
+    class Meta:
+        model = User
+        fields = ["email", "password", "national_id", "telebirr_account"]
+
+    def create(self, validated_data):
+        national_id = validated_data.pop("national_id")
+        telebirr = validated_data.pop("telebirr_account")
+
+        user = User.objects.create_user(
+            role="broker",
+            **validated_data
+        )
+
+        profile = Profile.objects.create(user=user)
+
+        BrokerProfile.objects.create(
+            profile=profile,
+            national_id=national_id,
+            telebirr_account=telebirr,
+            status=BrokerProfile.Status.PENDING
+        )
+
+        return user
+
+class DealerRegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+
+    company_name = serializers.CharField()
+    license_number = serializers.CharField()
+    tax_id = serializers.CharField(required=False)
+    telebirr_account = serializers.CharField(required=False)
+
+    class Meta:
+        model = User
+        fields = [
+            "email",
+            "password",
+            "company_name",
+            "license_number",
+            "tax_id",
+            "telebirr_account",
+        ]
+
+    def create(self, validated_data):
+        company_name = validated_data.pop("company_name")
+        license_number = validated_data.pop("license_number")
+        tax_id = validated_data.pop("tax_id", None)
+        telebirr = validated_data.pop("telebirr_account", None)
+
+        user = User.objects.create_user(
+            role="dealer",
+            **validated_data
+        )
+
+        profile = Profile.objects.create(user=user)
+
+        DealerProfile.objects.create(
+            profile=profile,
+            company_name=company_name,
+            license_number=license_number,
+            tax_id=tax_id,
+            telebirr_account=telebirr,
+            status=DealerProfile.Status.PENDING
+        )
+
+        return user
 
 
 
