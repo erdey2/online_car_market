@@ -428,26 +428,38 @@ class ProfileSerializer2(serializers.ModelSerializer):
         fields = ['id', 'first_name', 'last_name', 'contact', 'address', 'image']
 
 class UserFullSerializer(serializers.ModelSerializer):
-    profile = serializers.SerializerMethodField()
+    profile = ProfileSerializer(read_only=True)
+    dealer_profile = serializers.SerializerMethodField()
+    broker_profile = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'role', 'date_joined', 'profile']
+        fields = ['id', 'email', 'role', 'date_joined', 'profile', 'dealer_profile', 'broker_profile']
 
-    def get_profile(self, obj):
-        if not hasattr(obj, 'profile'):
-            return None
+    def get_dealer_profile(self, obj):
+        if obj.role == User.Role.DEALER and hasattr(obj, 'profile') and hasattr(obj.profile, 'dealer_profile'):
+            dealer = obj.profile.dealer_profile
+            data = DealerProfileSerializer(dealer).data
+            data.pop('profile', None)  # remove inner profile to avoid duplication
+            return data
+        return None
 
-        profile_data = ProfileSerializer(obj.profile).data
+    def get_broker_profile(self, obj):
+        if obj.role == User.Role.BROKER and hasattr(obj, 'profile') and hasattr(obj.profile, 'broker_profile'):
+            broker = obj.profile.broker_profile
+            data = BrokerProfileSerializer(broker).data
+            data.pop('profile', None)  # remove inner profile to avoid duplication
+            return data
+        return None
 
-        if obj.role == User.Role.DEALER and hasattr(obj.profile, 'dealer_profile'):
-            profile_data['dealer_profile'] = DealerProfileSerializer(obj.profile.dealer_profile).data
-        elif obj.role == User.Role.BROKER and hasattr(obj.profile, 'broker_profile'):
-            profile_data['broker_profile'] = BrokerProfileSerializer(obj.profile.broker_profile).data
-
-        # remove null fields inside profile_data
-        profile_data = {k: v for k, v in profile_data.items() if v is not None}
-        return profile_data
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        # remove null profiles
+        if rep.get('dealer_profile') is None:
+            rep.pop('dealer_profile')
+        if rep.get('broker_profile') is None:
+            rep.pop('broker_profile')
+        return rep
 
 
 
