@@ -14,14 +14,14 @@ logger = logging.getLogger(__name__)
 class DealerProfileSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(read_only=True)
     profile = ProfileLiteSerializer(read_only=True)
-    company_name = serializers.CharField()
-    license_number = serializers.CharField()
-    tax_id = serializers.CharField()
-    telebirr_account = serializers.CharField()
     is_verified = serializers.BooleanField(read_only=True)
     role = serializers.SerializerMethodField(read_only=True)
 
     @extend_schema_field(serializers.CharField())
+    def get_role(self, obj):
+        return obj.profile.user.role if obj.profile and obj.profile.user else None
+
+    ''' @extend_schema_field(serializers.CharField())
     def get_role(self, obj) -> str:
         roles = [r.get_name() for r in get_user_roles(obj.profile.user)]
         if 'dealer' in roles:
@@ -32,15 +32,24 @@ class DealerProfileSerializer(serializers.ModelSerializer):
             return 'accountant'
         elif 'buyer' in roles:
             return 'buyer'
-        return None
+        return None '''
 
     class Meta:
         model = DealerProfile
         fields = [
-            'id', 'profile', 'company_name', 'license_number',
-            'tax_id', 'telebirr_account', 'is_verified', 'role'
+            'id',
+            'profile',
+            'company_name',
+            'license_number',
+            'tax_id',
+            'telebirr_account',
+            'status',
+            'is_verified',
+            'role',
+            'created_at',
+            'updated_at',
         ]
-        read_only_fields = ['id', 'profile', 'is_verified', 'role']
+        read_only_fields = ['id', 'profile', 'is_verified']
 
     def validate_company_name(self, value):
         cleaned = bleach.clean(value.strip(), tags=[], strip=True)

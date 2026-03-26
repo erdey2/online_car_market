@@ -3,46 +3,69 @@ from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
 from online_car_market.brokers.models import BrokerRating, BrokerProfile
 from online_car_market.users.models import User
-from rolepermissions.roles import get_user_roles
-import bleach
-import logging
+import bleach, logging
 
 logger = logging.getLogger(__name__)
 
 class BrokerProfileSerializer(serializers.ModelSerializer):
-    id = serializers.IntegerField(read_only=True)
-    profile = serializers.PrimaryKeyRelatedField(read_only=True)
-    national_id = serializers.CharField()
-    telebirr_account = serializers.CharField(allow_blank=True)
-    is_verified = serializers.BooleanField(read_only=True)
     role = serializers.SerializerMethodField(read_only=True)
 
     @extend_schema_field(serializers.CharField())
-    def get_role(self, obj) -> str:
-        roles = get_user_roles(obj.profile.user)
-        return roles[0].get_name() if roles else None
+    def get_role(self, obj):
+        return obj.profile.user.role if obj.profile and obj.profile.user else None
 
     class Meta:
         model = BrokerProfile
-        fields = ['id', 'profile', 'national_id', 'telebirr_account', 'is_verified', 'role']
-        read_only_fields = ['id', 'profile','is_verified', 'role']
+        fields = [
+            "id",
+            "profile",
+            "national_id",
+            "telebirr_account",
+            "status",
+            "created_at",
+            "updated_at",
+            "role",
+        ]
+        read_only_fields = [
+            "id",
+            "profile",
+            "status",
+            "created_at",
+            "updated_at",
+            "role",
+        ]
 
     def validate_national_id(self, value):
         cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+
         if len(cleaned) > 100:
-            raise serializers.ValidationError("National ID cannot exceed 100 characters.")
-        if BrokerProfile.objects.filter(national_id=cleaned).exclude(
-            profile=self.instance.profile if self.instance else None
-        ).exists():
-            raise serializers.ValidationError("This national ID is already in use.")
+            raise serializers.ValidationError(
+                "National ID cannot exceed 100 characters."
+            )
+
+        qs = BrokerProfile.objects.filter(national_id=cleaned)
+
+        if self.instance and self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if qs.exists():
+            raise serializers.ValidationError(
+                "This national ID is already in use."
+            )
+
         return cleaned
 
     def validate_telebirr_account(self, value):
         if value:
             cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+
             if len(cleaned) > 100:
-                raise serializers.ValidationError("Telebirr account cannot exceed 100 characters.")
+                raise serializers.ValidationError(
+                    "Telebirr account cannot exceed 100 characters."
+                )
+
             return cleaned
+
         return value
 
 class BrokerRatingSerializer(serializers.ModelSerializer):

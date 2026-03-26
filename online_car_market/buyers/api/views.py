@@ -27,16 +27,28 @@ class RoleUpgradeViewSet(ViewSet):
 
     @action(detail=False, methods=['post'])
     def upgrade_to_dealer(self, request):
-        serializer = UpgradeToDealerSerializer(data=request.data, context={'request': request})
+        serializer = UpgradeToDealerSerializer(
+            data=request.data,
+            context={'request': request}
+        )
         serializer.is_valid(raise_exception=True)
-        dealer = serializer.save()
-        logger.info(f"User {request.user.email} upgraded to dealer with profile ID {dealer.pk}")
-        return Response(serializer.data, status=201)
+        serializer.save()
+
+        return Response(
+            {"detail": "Dealer application submitted. Await admin approval."},
+            status=201
+        )
 
     @action(detail=False, methods=['post'])
     def upgrade_to_broker(self, request):
-        serializer = UpgradeToBrokerSerializer(data=request.data, context={'request': request})
+        serializer = UpgradeToBrokerSerializer(
+            data=request.data,
+            context={'request': request}
+        )
         serializer.is_valid(raise_exception=True)
-        broker = serializer.save()
-        logger.info(f"User {request.user.email} upgraded to broker with profile ID {broker.pk}")
-        return Response(serializer.data, status=201)
+        serializer.save()
+
+        return Response(
+            {"detail": "Broker application submitted. Await admin approval."},
+            status=201
+        )

@@ -334,11 +334,10 @@ class BuyerRegisterSerializer(serializers.ModelSerializer):
         user = User.objects.create_user(
             email=validated_data["email"],
             password=validated_data["password"],
-            role="buyer"
+            role=User.Role.BUYER
         )
 
         Profile.objects.create(user=user)
-
         return user
 
 class BrokerRegisterSerializer(serializers.ModelSerializer):
@@ -355,7 +354,7 @@ class BrokerRegisterSerializer(serializers.ModelSerializer):
         telebirr = validated_data.pop("telebirr_account")
 
         user = User.objects.create_user(
-            role="broker",
+            role=User.Role.BUYER,  # STILL buyer until approved
             **validated_data
         )
 
@@ -372,7 +371,6 @@ class BrokerRegisterSerializer(serializers.ModelSerializer):
 
 class DealerRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
-
     company_name = serializers.CharField()
     license_number = serializers.CharField()
     tax_id = serializers.CharField(required=False)
@@ -396,7 +394,7 @@ class DealerRegisterSerializer(serializers.ModelSerializer):
         telebirr = validated_data.pop("telebirr_account", None)
 
         user = User.objects.create_user(
-            role="dealer",
+            role=User.Role.BUYER,
             **validated_data
         )
 
@@ -410,6 +408,7 @@ class DealerRegisterSerializer(serializers.ModelSerializer):
             telebirr_account=telebirr,
             status=DealerProfile.Status.PENDING
         )
+
         return user
 
 class DealerProfileSerializer2(serializers.ModelSerializer):
@@ -444,7 +443,7 @@ class UserFullSerializer(serializers.ModelSerializer):
         if obj.role == User.Role.DEALER and hasattr(obj.profile, 'dealer_profile'):
             dealer = obj.profile.dealer_profile
             dealer_data = DealerProfileSerializer(dealer).data
-            
+
             dealer_data.pop('profile', None)
             profile_data['dealer_profile'] = dealer_data
         elif obj.role == User.Role.BROKER and hasattr(obj.profile, 'broker_profile'):

@@ -1,9 +1,7 @@
 from django.utils import timezone
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
-
 from .models import DealerProfile
-
 
 @transaction.atomic
 def approve_dealer(dealer, reviewer):
@@ -15,6 +13,10 @@ def approve_dealer(dealer, reviewer):
     dealer.reviewed_at = timezone.now()
     dealer.rejection_reason = None
     dealer.save()
+
+    user = dealer.profile.user
+    user.role = user.Role.DEALER
+    user.save()
 
 @transaction.atomic
 def reject_dealer(dealer: DealerProfile, admin_user, reason: str):
@@ -37,6 +39,10 @@ def suspend_dealer(dealer: DealerProfile, admin_user):
     dealer.reviewed_at = timezone.now()
     dealer.save()
 
+    user = dealer.profile.user
+    user.role = user.Role.BUYER
+    user.save()
+
 @transaction.atomic
 def reactivate_dealer(dealer: DealerProfile, admin_user):
     if dealer.status != DealerProfile.Status.SUSPENDED:
@@ -46,3 +52,8 @@ def reactivate_dealer(dealer: DealerProfile, admin_user):
     dealer.reviewed_by = admin_user
     dealer.reviewed_at = timezone.now()
     dealer.save()
+
+    # restore role
+    user = dealer.profile.user
+    user.role = user.Role.DEALER
+    user.save()

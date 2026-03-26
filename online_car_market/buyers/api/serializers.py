@@ -1,11 +1,10 @@
+from django.db import transaction
 from rest_framework import serializers
 from rolepermissions.checkers import has_role
-from rolepermissions.roles import assign_role
 from online_car_market.buyers.models import BuyerProfile, LoyaltyProgram
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
-from online_car_market.users.api.serializers import DealerProfileSerializer
-from online_car_market.brokers.api.serializers import BrokerProfileSerializer
+from online_car_market.users.models import Profile, User
 from online_car_market.users.models import Profile
 import logging
 
@@ -25,40 +24,114 @@ class BuyerProfileSerializer(serializers.ModelSerializer):
         fields = ['loyalty_points', 'loyalty_programs']
         read_only_fields = ['loyalty_points', 'loyalty_programs']
 
-class UpgradeToDealerSerializer(DealerProfileSerializer):
-    class Meta(DealerProfileSerializer.Meta):
+class UpgradeToDealerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DealerProfile
         fields = ['company_name', 'license_number', 'tax_id', 'telebirr_account']
 
-    def validate(self, data):
+    def validate(self, attrs):
         user = self.context['request'].user
-        if has_role(user, 'dealer'):
-            raise serializers.ValidationError("User is already a dealer.")
-        return data
 
+        if user.role == User.Role.DEALER:
+            raise serializers.ValidationError("User is already a dealer.")
+
+        return attrs
+
+    @transaction.atomic
     def create(self, validated_data):
         user = self.context['request'].user
+
         profile, _ = Profile.objects.get_or_create(user=user)
-        dealer = DealerProfile.objects.create(profile=profile, **validated_data)
-        assign_role(user, 'dealer')
-        logger.info(f"User {user.email} upgraded to dealer")
+
+        existing = DealerProfile.objects.filter(profile=profile).first()
+
+        # CASE 1: existing application
+        if existing:
+            if existing.status in [
+                DealerProfile.Status.PENDING,
+                DealerProfile.Status.APPROVED,
+                DealerProfile.Status.SUSPENDED,
+            ]:
+                raise serializers.ValidationError(
+                    f"Application already exists with status '{existing.status}'"
+                )
+
+            # CASE 2: RE-APPLICATION
+            if existing.status == DealerProfile.Status.REJECTED:
+                existing.status = DealerProfile.Status.PENDING
+                existing.reviewed_by = None
+                existing.reviewed_at = None
+                existing.rejection_reason = None
+
+                for attr, value in validated_data.items():
+                    setattr(existing, attr, value)
+
+                existing.save()
+
+                return existing
+
+        # CASE 3: NEW APPLICATION
+        dealer = DealerProfile.objects.create(
+            profile=profile,
+            status=DealerProfile.Status.PENDING,
+            **validated_data
+        )
+
         return dealer
 
-class UpgradeToBrokerSerializer(BrokerProfileSerializer):
-    class Meta(BrokerProfileSerializer.Meta):
+class UpgradeToBrokerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BrokerProfile
         fields = ['national_id', 'telebirr_account']
 
-    def validate(self, data):
+    def validate(self, attrs):
         user = self.context['request'].user
-        if has_role(user, 'broker'):
-            raise serializers.ValidationError("User is already a broker.")
-        return data
 
+        if user.role == User.Role.BROKER:
+            raise serializers.ValidationError("User is already a broker.")
+
+        return attrs
+
+    @transaction.atomic
     def create(self, validated_data):
         user = self.context['request'].user
+
         profile, _ = Profile.objects.get_or_create(user=user)
-        broker = BrokerProfile.objects.create(profile=profile, **validated_data)
-        assign_role(user, 'broker')
-        logger.info(f"User {user.email} upgraded to broker")
+
+        existing = BrokerProfile.objects.filter(profile=profile).first()
+
+        # CASE 1: existing application
+        if existing:
+            if existing.status in [
+                BrokerProfile.Status.PENDING,
+                BrokerProfile.Status.APPROVED,
+                BrokerProfile.Status.SUSPENDED,
+            ]:
+                raise serializers.ValidationError(
+                    f"Application already exists with status '{existing.status}'"
+                )
+
+            # CASE 2: RE-APPLICATION
+            if existing.status == BrokerProfile.Status.REJECTED:
+                existing.status = BrokerProfile.Status.PENDING
+                existing.reviewed_by = None
+                existing.reviewed_at = None
+                existing.rejection_reason = None
+
+                for attr, value in validated_data.items():
+                    setattr(existing, attr, value)
+
+                existing.save()
+
+                return existing
+
+        # CASE 3: NEW APPLICATION
+        broker = BrokerProfile.objects.create(
+            profile=profile,
+            status=BrokerProfile.Status.PENDING,
+            **validated_data
+        )
+
         return broker
 
 class VerifyDealerSerializer(serializers.ModelSerializer):
