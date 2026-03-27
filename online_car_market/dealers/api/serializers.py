@@ -4,7 +4,6 @@ from rolepermissions.checkers import has_role
 from online_car_market.common.serializers import ProfileLiteSerializer
 from online_car_market.users.models import User, Profile
 from ..models import DealerProfile, DealerStaff, DealerRating
-from rolepermissions.checkers import get_user_roles
 from rolepermissions.roles import assign_role
 import bleach
 import logging

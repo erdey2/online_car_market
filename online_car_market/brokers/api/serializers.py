@@ -1,18 +1,15 @@
 from rest_framework import serializers
-from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
 from online_car_market.brokers.models import BrokerRating, BrokerProfile
+from online_car_market.common.serializers import ProfileLiteSerializer
 from online_car_market.users.models import User
 import bleach, logging
 
 logger = logging.getLogger(__name__)
 
 class BrokerProfileSerializer(serializers.ModelSerializer):
-    role = serializers.SerializerMethodField(read_only=True)
-
-    @extend_schema_field(serializers.CharField())
-    def get_role(self, obj):
-        return obj.profile.user.role if obj.profile and obj.profile.user else None
+    profile = ProfileLiteSerializer(read_only=True)
+    role = serializers.CharField(source="profile.user.role", read_only=True)
 
     class Meta:
         model = BrokerProfile

@@ -283,7 +283,9 @@ class BrokerProfileViewSet(viewsets.GenericViewSet):
 
     def get_object(self):
         try:
-            broker = BrokerProfile.objects.get(profile__user=self.request.user)
+            broker = BrokerProfile.objects.select_related("profile__user").get(
+                profile__user=self.request.user
+            )
         except BrokerProfile.DoesNotExist:
             raise NotFound("Broker profile not found.")
 
