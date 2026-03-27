@@ -11,8 +11,6 @@ from django.contrib.auth import get_user_model
 import re, bleach, logging
 from datetime import datetime
 
-from ...inspection.models import Inspection
-
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
@@ -721,10 +719,9 @@ class FavoriteCarSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        user = self.context["request"].user
+        user = validated_data.pop("user")
         car = validated_data["car"]
 
-        # Use update_or_create to avoid duplicates
         favorite, created = FavoriteCar.objects.update_or_create(
             user=user,
             car=car,
