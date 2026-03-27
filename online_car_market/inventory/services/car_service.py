@@ -8,13 +8,23 @@ class CarService:
 
     @staticmethod
     def validate_broker_can_post(user):
-        if user.has_role('broker'):
+        if user.role == "broker":
             try:
-                broker_profile = BrokerProfile.objects.get(profile__user=user)
+                broker_profile = BrokerProfile.objects.select_related("profile__user").get(
+                    profile__user=user
+                )
+
                 if not broker_profile.can_post:
-                    raise PermissionDenied("Broker must complete payment to post cars.")
+                    raise PermissionDenied(
+                        "Broker must complete payment to post cars."
+                    )
+
             except BrokerProfile.DoesNotExist:
                 raise ValidationError("Broker profile not found.")
+
+        # Optional: restrict others
+        elif user.role not in ["admin", "dealer"]:
+            raise PermissionDenied("You are not allowed to post cars.")
 
     @staticmethod
     @transaction.atomic
@@ -46,12 +56,18 @@ class CarService:
         if not uploaded_images:
             raise ValidationError("At least one image is required.")
 
-        # Create images properly
         created_images = []
         featured_exists = False
 
+        # Create images
         for index in sorted(uploaded_images.keys(), key=int):
             img_data = uploaded_images[index]
+
+            image_file = img_data.get("image_file")
+
+            # Validate image existence
+            if not image_file:
+                raise ValidationError("Each image must include an image_file.")
 
             is_featured = str(
                 img_data.get("is_featured", "false")
@@ -63,7 +79,7 @@ class CarService:
 
             image = CarImage.objects.create(
                 car=car,
-                image=img_data.get("image_file"),
+                image=image_file,
                 caption=img_data.get("caption", ""),
                 is_featured=is_featured,
             )
@@ -73,7 +89,7 @@ class CarService:
 
             created_images.append(image)
 
-        # If none marked featured → make first one featured
+        # If none marked featured make first one featured
         if not featured_exists and created_images:
             first_image = created_images[0]
             first_image.is_featured = True

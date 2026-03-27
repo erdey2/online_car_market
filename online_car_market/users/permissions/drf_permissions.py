@@ -1,103 +1,66 @@
 from rest_framework.permissions import BasePermission
-from rolepermissions.checkers import has_role
+
+def has_any_role(user, roles):
+    return user.is_authenticated and user.role in roles
 
 class IsSuperAdmin(BasePermission):
     def has_permission(self, request, view):
-        return has_role(request.user, 'super_admin')
+        return request.user.is_authenticated and request.user.role == "super_admin"
 
 class IsAdmin(BasePermission):
     def has_permission(self, request, view):
-        return has_role(request.user, 'admin')
+        return request.user.is_authenticated and request.user.role == "admin"
 
 class IsDealer(BasePermission):
     def has_permission(self, request, view):
-        return has_role(request.user, 'dealer')
+        return request.user.is_authenticated and request.user.role == "dealer"
 
 class IsBroker(BasePermission):
     def has_permission(self, request, view):
-        return has_role(request.user, 'broker')
+        return request.user.is_authenticated and request.user.role == "broker"
 
 class IsHR(BasePermission):
     def has_permission(self, request, view):
-        return has_role(request.user, 'hr')
+        return request.user.is_authenticated and request.user.role == "hr"
 
 class IsBuyer(BasePermission):
     def has_permission(self, request, view):
-        return has_role(request.user, 'buyer')
+        return request.user.is_authenticated and request.user.role == "buyer"
+
+class IsFinance(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == "finance"
 
 class IsSuperAdminOrAdmin(BasePermission):
     def has_permission(self, request, view):
-        return request.user.is_authenticated and (
-            request.user.is_superuser or request.user.is_staff
-        )
+        return has_any_role(request.user, ["super_admin", "admin"])
 
 class IsSuperAdminOrAdminOrDealer(BasePermission):
     def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated and
-            (has_role(request.user, 'super_admin') or
-             has_role(request.user, 'admin') or
-             has_role(request.user, 'dealer'))
-        )
+        return has_any_role(request.user, ["super_admin", "admin", "dealer"])
 
 class IsSuperAdminOrAdminOrBroker(BasePermission):
     def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated and
-            (has_role(request.user, 'super_admin') or
-             has_role(request.user, 'admin') or
-             has_role(request.user, 'broker')
-             )
-        )
+        return has_any_role(request.user, ["super_admin", "admin", "broker"])
 
 class IsSuperAdminOrAdminOrDealerOrBroker(BasePermission):
     def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated and
-            (has_role(request.user, 'super_admin') or
-             has_role(request.user, 'admin') or
-             has_role(request.user, 'dealer') or
-             has_role(request.user, 'broker'))
-        )
+        return has_any_role(request.user, ["super_admin", "admin", "dealer", "broker"])
 
 class IsSuperAdminOrAdminOrBuyer(BasePermission):
     def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated and
-            (has_role(request.user, 'super_admin') or
-             has_role(request.user, 'admin') or
-             has_role(request.user, 'buyer'))
-        )
+        return has_any_role(request.user, ["super_admin", "admin", "buyer"])
 
 class IsDealerOrAccountant(BasePermission):
     def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated and
-            (has_role(request.user, 'dealer') or
-             has_role(request.user, 'accountant'))
-        )
+        return has_any_role(request.user, ["dealer", "accountant"])
 
 class IsDealerOrHR(BasePermission):
     def has_permission(self, request, view):
-        return (
-            request.user.is_authenticated and
-            (has_role(request.user, 'dealer') or
-             has_role(request.user, 'hr'))
-        )
+        return has_any_role(request.user, ["dealer", "hr"])
 
 class IsDealerBrokerOrSeller(BasePermission):
     message = "Only dealers, brokers or sellers can create or edit inspections."
 
     def has_permission(self, request, view):
-        if not request.user.is_authenticated:
-            return False
-
-        # Allow brokers, dealers, or sellers
-        return has_role(request.user, ["broker", "dealer", "seller"])
-
-class IsFinance(BasePermission):
-    def has_permission(self, request, view):
-        return request.user.is_authenticated and has_role(request.user, "finance")
-
-
-
+        return has_any_role(request.user, ["dealer", "broker", "seller"])

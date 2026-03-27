@@ -3,7 +3,9 @@
     <option name="myName" value="Project Default" />
     <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
       <option name="ignoredPackages">
-        <list />
+        <list>
+          <option value="ipython" />
+        </list>
       </option>
     </inspection_tool>
   </profile>
