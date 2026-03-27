@@ -16,6 +16,7 @@ class SuperAdmin(AbstractUserRole):
         'run_payroll': True,
         'approve_payroll': True,
         'lock_payroll': True,
+        "view_inventory": True
     }
 
 class Admin(AbstractUserRole):
@@ -31,6 +32,7 @@ class Admin(AbstractUserRole):
         'verify_broker': True,
         'verify_dealer': True,
         'run_payroll': True,
+        "view_inventory": True
     }
 
 class Dealer(AbstractUserRole):
@@ -41,6 +43,7 @@ class Dealer(AbstractUserRole):
         'manage_own_inventory': True,
         'view_cars': True,
         'manage_staff': True,
+        "view_inventory": True
     }
 
 class Broker(AbstractUserRole):
@@ -50,6 +53,7 @@ class Broker(AbstractUserRole):
         'edit_own_broker_profile': True,
         'view_cars': True,
         'post_car': True,
+        "view_inventory": True
     }
 
 class Buyer(AbstractUserRole):
@@ -83,6 +87,7 @@ class Seller(AbstractUserRole):
         'post_car': True,
         'request_leave': True,
         'view_own_contract': True,
+        "view_inventory": True
     }
 
 class Accountant(AbstractUserRole):
@@ -100,22 +105,15 @@ class Finance(AbstractUserRole):
         Finance controls payroll & financial validation
         """
     available_permissions = {
-        # Read
         "view_finance": True,
         "view_payroll": True,
         "view_payroll_report": True,
         "view_salary_breakdown": True,
-
-        # Control
         "run_payroll": True,
         "approve_payroll": True,
         "lock_payroll": True,
-
-        # Adjustments
         "adjust_overtime": True,
         "adjust_allowances": True,
-
-        # Explicit NO
         "manage_employees": False,
         "manage_salary_components": False,
     }
