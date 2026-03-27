@@ -226,10 +226,8 @@ class CanViewInventory(BasePermission):
     def has_permission(self, request, view):
         user = request.user
 
-        role = getattr(user.profile, "role", None)
-
         return (
-            role in ["super_admin", "admin", "dealer", "broker"] or
+            user.role in ["super_admin", "admin", "dealer", "broker"] or
             user.dealer_staff_assignments.filter(role="seller").exists()
         )
 

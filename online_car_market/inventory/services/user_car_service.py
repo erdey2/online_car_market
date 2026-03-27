@@ -1,5 +1,4 @@
 from ..models import Car
-from rolepermissions.checkers import has_role
 
 class UserCarService:
     @staticmethod
@@ -8,9 +7,7 @@ class UserCarService:
             "dealer", "broker", "posted_by"
         ).prefetch_related("images", "bids")
 
-        # Super admins / admins → full access
-        role = getattr(user.profile, "role", None)
-        if role in ["super_admin", "admin"]:
+        if user.role in ["super_admin", "admin"]:
             return qs
 
         profile = getattr(user, "profile", None)
@@ -25,7 +22,7 @@ class UserCarService:
         if broker_profile:
             return qs.filter(broker=broker_profile)
 
-        # Seller (dealer staff)
+        # Seller
         seller_record = user.dealer_staff_assignments.filter(role="seller").first()
         if seller_record:
             return qs.filter(
@@ -33,5 +30,4 @@ class UserCarService:
                 posted_by=user
             )
 
-        # Default: no access
         return qs.none()
