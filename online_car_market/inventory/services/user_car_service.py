@@ -9,7 +9,8 @@ class UserCarService:
         ).prefetch_related("images", "bids")
 
         # Super admins / admins → full access
-        if has_role(user, ["super_admin", "admin"]):
+        role = getattr(user.profile, "role", None)
+        if role in ["super_admin", "admin"]:
             return qs
 
         profile = getattr(user, "profile", None)
