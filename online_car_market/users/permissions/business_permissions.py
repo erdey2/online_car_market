@@ -222,4 +222,13 @@ class IsERPUsers(BasePermission):
             'super_admin'
         ])
 
+class CanViewInventory(BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+
+        return (
+            has_role(user, ["super_admin", "admin", "dealer", "broker"]) or
+            user.dealer_staff_assignments.filter(role="seller").exists()
+        )
+
 

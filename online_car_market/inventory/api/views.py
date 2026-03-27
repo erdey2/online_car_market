@@ -11,7 +11,6 @@ from rest_framework.viewsets import ReadOnlyModelViewSet, ModelViewSet, GenericV
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.filters import SearchFilter, OrderingFilter
 
-from rolepermissions.checkers import has_role
 from drf_spectacular.utils import (extend_schema, extend_schema_view, OpenApiParameter,
                                    OpenApiTypes, OpenApiExample, OpenApiResponse)
 from ..models import Car, CarMake, CarModel, FavoriteCar, CarView
@@ -22,7 +21,7 @@ from .serializers import (
                           CarVerificationListSerializer, CarVerificationAnalyticsSerializer
                           )
 from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, IsSuperAdminOrAdminOrBuyer
-from online_car_market.users.permissions.business_permissions import CanPostCar
+from online_car_market.users.permissions.business_permissions import CanPostCar, CanViewInventory
 from online_car_market.users.models import Profile
 from online_car_market.bids.api.serializers import BidSerializer
 
@@ -366,7 +365,7 @@ class CarVerificationViewSet(GenericViewSet):
     ),
 )
 class UserCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanViewInventory]
     queryset = Car.objects.all()
 
     def get_serializer_class(self):
@@ -378,29 +377,6 @@ class UserCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericV
 
     def get_queryset(self):
         return UserCarService.get_user_visible_cars(self.request.user)
-
-    # Extra permission guard (cleaned)
-    def _has_inventory_access(self, user):
-        return (
-            has_role(user, ["super_admin", "admin", "dealer", "broker"]) or
-            user.dealer_staff_assignments.filter(role="seller").exists()
-        )
-
-    def list(self, request, *args, **kwargs):
-        if not self._has_inventory_access(request.user):
-            return Response(
-                {"detail": "You do not have permission to view cars."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        return super().list(request, *args, **kwargs)
-
-    def retrieve(self, request, *args, **kwargs):
-        if not self._has_inventory_access(request.user):
-            return Response(
-                {"detail": "You do not have permission to view this car."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        return super().retrieve(request, *args, **kwargs)
 
 @extend_schema_view(
     list=extend_schema(

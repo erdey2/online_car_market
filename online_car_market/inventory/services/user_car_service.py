@@ -4,14 +4,33 @@ from rolepermissions.checkers import has_role
 class UserCarService:
     @staticmethod
     def get_user_visible_cars(user):
-        qs = Car.objects.select_related("dealer", "broker", "posted_by").prefetch_related("images", "bids")
+        qs = Car.objects.select_related(
+            "dealer", "broker", "posted_by"
+        ).prefetch_related("images", "bids")
+
+        # Super admins / admins → full access
         if has_role(user, ["super_admin", "admin"]):
             return qs
-        if hasattr(user, "profile") and hasattr(user.profile, "dealer_profile"):
-            return qs.filter(dealer=user.profile.dealer_profile)
-        if hasattr(user, "profile") and hasattr(user.profile, "broker_profile"):
-            return qs.filter(broker=user.profile.broker_profile)
+
+        profile = getattr(user, "profile", None)
+
+        # Dealer
+        dealer_profile = getattr(profile, "dealer_profile", None)
+        if dealer_profile:
+            return qs.filter(dealer=dealer_profile)
+
+        # Broker
+        broker_profile = getattr(profile, "broker_profile", None)
+        if broker_profile:
+            return qs.filter(broker=broker_profile)
+
+        # Seller (dealer staff)
         seller_record = user.dealer_staff_assignments.filter(role="seller").first()
         if seller_record:
-            return qs.filter(dealer=seller_record.dealer, posted_by=user)
+            return qs.filter(
+                dealer=seller_record.dealer,
+                posted_by=user
+            )
+
+        # Default: no access
         return qs.none()
