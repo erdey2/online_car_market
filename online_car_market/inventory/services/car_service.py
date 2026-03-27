@@ -8,23 +8,15 @@ class CarService:
 
     @staticmethod
     def validate_broker_can_post(user):
+
         if user.role == "broker":
-            try:
-                broker_profile = BrokerProfile.objects.select_related("profile__user").get(
-                    profile__user=user
-                )
-
-                if not broker_profile.can_post:
-                    raise PermissionDenied(
-                        "Broker must complete payment to post cars."
-                    )
-
-            except BrokerProfile.DoesNotExist:
-                raise ValidationError("Broker profile not found.")
+            return  # allowed
 
         # Optional: restrict others
-        elif user.role not in ["admin", "dealer"]:
-            raise PermissionDenied("You are not allowed to post cars.")
+        elif user.role in ["super_admin", "admin", "dealer"]:
+            return  # allowed
+
+        raise PermissionDenied("You are not allowed to post cars.")
 
     @staticmethod
     @transaction.atomic

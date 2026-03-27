@@ -49,7 +49,6 @@ class CarMakeSerializer(serializers.ModelSerializer):
                 )
         return data
 
-
 class CarModelSerializer(serializers.ModelSerializer):
     make_id = serializers.IntegerField(source='make.id', read_only=True)
     make_name = serializers.CharField(source='make.name', read_only=True)
@@ -582,15 +581,39 @@ class CarWriteSerializer(serializers.ModelSerializer):
         raise serializers.ValidationError("Permission denied.")
 
     def validate_broker(self, value):
-        user = self.context["request"].user
+        request_user = self.context["request"].user
 
-        if value and value.profile.user.role != "broker":
-            raise serializers.ValidationError("Broker user must have broker role.")
+        print("BROKER VALUE:", value)
 
-        if value and value.profile.user != user and user.role not in ["admin", "super_admin"]:
-            raise serializers.ValidationError("Only broker owner or admins can assign this broker.")
+        if not value:
+            return value
 
-        return value
+        if isinstance(value, BrokerProfile):
+            broker = value
+        else:
+            broker = BrokerProfile.objects.select_related("profile__user").get(pk=value)
+
+        print("BROKER OBJ:", broker)
+        print("BROKER USER:", broker.profile.user.email)
+        print("BROKER ROLE:", broker.profile.user.role)
+        print("REQUEST USER:", request_user.email)
+
+        # role check
+        if broker.profile.user.role != "broker":
+            raise serializers.ValidationError("Selected user is not a broker.")
+
+        # approval check
+        if not broker.is_verified:
+            raise serializers.ValidationError("Broker is not approved.")
+
+        # permission check
+        if request_user.role not in ["admin", "super_admin"]:
+            if broker.profile.user != request_user:
+                raise serializers.ValidationError(
+                    "You can only use your own broker account."
+                )
+
+        return broker
 
     def validate_model_ref(self, value):
         make_ref_id = self.initial_data.get("make_ref")
@@ -705,6 +728,7 @@ class CarWriteSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     "Only the car owner or admins can update this car."
                 )
+        return data
 
     def create(self, validated_data):
         request = self.context["request"]
