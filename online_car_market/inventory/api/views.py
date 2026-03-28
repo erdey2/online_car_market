@@ -174,12 +174,12 @@ class CarViewSet(ModelViewSet):
     def get_queryset(self):
         if self.action == "list":
             base_qs = CarQueryService.for_list()
-        elif self.action == "retrieve":
-            base_qs = CarQueryService.for_detail()
-        else:
-            base_qs = CarQueryService.base_queryset()
+            return CarQueryService.get_visible_cars_for_user(self.request.user, base_qs)
 
-        return CarQueryService.get_visible_cars_for_user(self.request.user, base_qs)
+        elif self.action == "retrieve":
+            return CarQueryService.for_detail()
+
+        return CarQueryService.base_queryset()
 
     def get_permissions(self):
         if self.action in ["create", "update", "partial_update", "destroy"]:
