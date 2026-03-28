@@ -1,6 +1,5 @@
 from django.db.models import Avg, Count, Sum
 from online_car_market.dealers.models import DealerProfile
-from online_car_market.inventory.models import Car
 
 class DealerAnalyticsService:
 

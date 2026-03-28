@@ -1,4 +1,4 @@
-from django.db.models import Avg, Count, Q, F, Value, CharField
+from django.db.models import Avg, Count, Q, F, Value
 from django.db.models.functions import Coalesce
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.db.models.functions import JSONObject
@@ -27,7 +27,7 @@ class RatingAnalyticsService:
             "user",
         )
 
-        # ---- Apply Filters ----
+        # Apply Filters
         if filters.get("car_id"):
             queryset = queryset.filter(car_id=filters["car_id"])
 

@@ -47,7 +47,7 @@ class FinancialAnalyticsService:
         for row in car_expenses:
             expense_map[row["period"]] = expense_map.get(row["period"], 0) + row["total"]
 
-        # --- Revenue ---
+        # Revenue
         revenue_qs = (
             Revenue.objects.filter(dealer=dealer)
             .annotate(period=Trunc("created_at"))

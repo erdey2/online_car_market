@@ -1,6 +1,6 @@
 from django.db.models import Sum, F
 from django.db.models.functions import TruncDay, TruncWeek, TruncMonth, TruncYear
-from online_car_market.accounting.models import Expense, CarExpense, Revenue
+from online_car_market.accounting.models import Expense, Revenue
 from online_car_market.dealers.models import DealerProfile
 
 

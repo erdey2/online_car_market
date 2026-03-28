@@ -43,6 +43,14 @@ class User(AbstractBaseUser, PermissionsMixin):
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = []
 
+    @property
+    def dealer(self):
+        return getattr(self.profile, "dealer_profile", None)
+
+    @property
+    def broker(self):
+        return getattr(self.profile, "broker_profile", None)
+
     def __str__(self):
         return self.email
 

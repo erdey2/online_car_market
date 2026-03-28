@@ -1,4 +1,4 @@
-from django.db.models import Count, F, Q
+from django.db.models import Count, F
 from django.db.models.functions import TruncDay, TruncWeek, TruncMonth, TruncYear
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.db.models import Value, CharField, Case, When

@@ -79,13 +79,6 @@ class AnalyticsViewSet(ViewSet):
     @action(detail=False, methods=['get'], url_path="platform-analytics",
             permission_classes=[IsSuperAdminOrAdmin])
     def analytics(self, request):
-
-        if not has_role(request.user, ['super_admin', 'admin']):
-            return Response(
-                {"error": "Only super admin or admin can access this analytics."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
         data = PlatformAnalyticsService.get_platform_analytics()
         return Response(data)
 
@@ -123,7 +116,6 @@ class AnalyticsViewSet(ViewSet):
     )
     @action(detail=False, methods=['get'], url_path='buyer-analytics', permission_classes=[AllowAny])
     def buyer_analytics(self, request):
-
         data = BuyerAnalyticsService.get_buyer_analytics()
         return Response(data)
 
@@ -152,20 +144,13 @@ class AnalyticsViewSet(ViewSet):
     )
     @action(detail=False, methods=["get"], url_path="broker-analytics", permission_classes=[IsAuthenticated])
     def broker_analytics(self, request):
-        """
-        Broker analytics endpoint.
-        """
-        # Ensure the user has the broker role
-        if not has_role(request.user, ["broker"]):
-            return Response(
-                {"error": "Only brokers can access this analytics."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
         try:
-            broker = BrokerProfile.objects.get(profile=request.user.profile)
-        except BrokerProfile.DoesNotExist:
-            return Response({"error": "Broker profile not found."}, status=status.HTTP_404_NOT_FOUND)
+            broker = request.user.profile.broker_profile
+        except AttributeError:
+            return Response(
+                {"error": "Broker profile not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
         data = BrokerAnalyticsService.get_broker_analytics(broker)
         return Response(data)
@@ -199,15 +184,13 @@ class AnalyticsViewSet(ViewSet):
     )
     @action(detail=False, methods=['get'], url_path='dealer-analytics', permission_classes=[IsDealer])
     def dealer_analytics(self, request):
-
-        if not has_role(request.user, ['dealer']):
-            return Response({"error": "Only dealers can access this analytics."},
-                            status=status.HTTP_403_FORBIDDEN)
-
         try:
-            dealer = DealerProfile.objects.get(profile__user=request.user)
-        except DealerProfile.DoesNotExist:
-            return Response({"error": "Dealer profile not found."}, status=404)
+            dealer = request.user.profile.dealer_profile
+        except AttributeError:
+            return Response(
+                {"error": "Dealer profile not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
         data = DealerAnalyticsService.get_dealer_analytics(dealer)
         return Response(data)
@@ -223,15 +206,15 @@ class AnalyticsViewSet(ViewSet):
     )
     @action(detail=False, methods=['get'], url_path="top-sellers", permission_classes=[IsDealer])
     def top_sellers(self, request):
-        month = request.query_params.get("month")
-        year = request.query_params.get("year")
+        month_date = parse_month_year(
+            request.query_params.get("month"),
+            request.query_params.get("year")
+        )
 
-        month_date = parse_month_year(month, year)
-        if month and not month_date:
+        if request.query_params.get("month") and not month_date:
             return Response({"detail": "Invalid month/year."}, status=400)
 
-        sellers = get_top_sellers(month_date)
-        return Response(sellers, status=200)
+        return Response(get_top_sellers(month_date))
 
     @extend_schema(
         tags=["Analytics"],
@@ -244,15 +227,15 @@ class AnalyticsViewSet(ViewSet):
     )
     @action(detail=False, methods=['get'], url_path="high-sales-cars", permission_classes=[IsDealer])
     def high_sales_rate(self, request):
-        month = request.query_params.get("month")
-        year = request.query_params.get("year")
+        month_date = parse_month_year(
+            request.query_params.get("month"),
+            request.query_params.get("year")
+        )
 
-        month_date = parse_month_year(month, year)
-        if month and not month_date:
+        if request.query_params.get("month") and not month_date:
             return Response({"detail": "Invalid month/year."}, status=400)
 
-        cars = get_high_sales_rate_cars(month_date)
-        return Response(cars, status=200)
+        return Response(get_high_sales_rate_cars(month_date))
 
     @extend_schema(
         tags=["Analytics"],
@@ -353,10 +336,9 @@ class AnalyticsViewSet(ViewSet):
             permission_classes=[IsSuperAdminOrAdminOrDealer],
             url_path='dealer-view-analytics')
     def dealer_analytic_views(self, request):
-
         try:
-            dealer = DealerProfile.objects.get(profile=request.user.profile)
-        except DealerProfile.DoesNotExist:
+            dealer = request.user.profile.dealer_profile
+        except AttributeError:
             return Response({"error": "Dealer profile not found."}, status=404)
 
         data = CarViewAnalyticsService.get_dealer_view_analytics(dealer)
@@ -399,8 +381,8 @@ class AnalyticsViewSet(ViewSet):
     def broker_analytic_views(self, request):
 
         try:
-            broker = BrokerProfile.objects.get(profile=request.user.profile)
-        except BrokerProfile.DoesNotExist:
+            broker = request.user.profile.broker_profile
+        except AttributeError:
             return Response({"error": "Broker profile not found."}, status=404)
 
         data = CarViewAnalyticsService.get_broker_view_analytics(broker)
@@ -445,19 +427,16 @@ class AnalyticsViewSet(ViewSet):
     )
     @action(detail=False, methods=['get'], url_path='financial-analytics', permission_classes=[IsDealer])
     def financial_analytics(self, request):
-        user = request.user
-
-        # Ensure user has a profile
-        if not hasattr(user, "profile"):
-            return Response({"error": "User has no profile."}, status=status.HTTP_400_BAD_REQUEST)
-
         try:
-            dealer = DealerProfile.objects.get(profile=user.profile)
-        except DealerProfile.DoesNotExist:
-            return Response({"error": "Dealer profile not found."}, status=status.HTTP_404_NOT_FOUND)
+            dealer = request.user.profile.dealer_profile
+        except AttributeError:
+            return Response({"error": "Dealer profile not found."}, status=404)
 
         period = request.GET.get("range", "month")
-        data = FinancialAnalyticsService.get_financial_analytics(dealer=dealer, period=period)
+        data = FinancialAnalyticsService.get_financial_analytics(
+            dealer=dealer,
+            period=period
+        )
         return Response(data)
 
 
