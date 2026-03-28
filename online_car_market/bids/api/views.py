@@ -1,13 +1,13 @@
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
-from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.decorators import action
 from ..models import Bid, Auction
 from .serializers import BidSerializer, AuctionSerializer
 from online_car_market.users.permissions.drf_permissions import IsBuyer, IsSuperAdminOrAdmin
+from online_car_market.users.models import User
 from online_car_market.bids.services import bid_service, auction_service
 
 
@@ -33,10 +33,18 @@ class BidViewSet(ModelViewSet):
     http_method_names = ["get", "post"]
 
     def get_queryset(self):
-        qs = Bid.objects.select_related("user", "user__profile", "car")
-        if has_role(self.request.user, ["admin", "superadmin"]):
+        user = self.request.user
+
+        qs = Bid.objects.select_related(
+            "user", "user__profile", "car"
+        )
+
+        # Admins see all bids
+        if user.role in [User.Role.ADMIN, User.Role.SUPER_ADMIN]:
             return qs.order_by("-created_at")
-        return qs.filter(user=self.request.user).order_by("-created_at")
+
+        # Regular users see only their own bids
+        return qs.filter(user=user).order_by("-created_at")
 
     def get_permissions(self):
         if self.action == "create":
@@ -72,11 +80,13 @@ class BidViewSet(ModelViewSet):
         )
 
         ranked = bids.order_by("-amount")
+
         return Response({
             "all_bids": BidSerializer(bids, many=True).data,
             "highest_bid": BidSerializer(ranked.first()).data if ranked.exists() else None,
             "top_3_bids": BidSerializer(ranked[:3], many=True).data,
         })
+
 
 @extend_schema_view(
     list=extend_schema(tags=["Auctions"]),
@@ -109,12 +119,8 @@ class AuctionViewSet(ModelViewSet):
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
         auction_service.cancel_auction(pk)
-        return Response({"detail": "Auction cancelled"}, status=status.HTTP_200_OK)
 
-
-
-
-
-
-
-
+        return Response(
+            {"detail": "Auction cancelled"},
+            status=status.HTTP_200_OK
+        )
