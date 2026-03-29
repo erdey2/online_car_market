@@ -760,6 +760,7 @@ class VerifyCarSerializer(serializers.ModelSerializer):
 
 class ContactSerializer(serializers.ModelSerializer):
     phone = serializers.CharField(required=True)
+    recipient = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = Contact
