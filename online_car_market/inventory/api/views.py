@@ -3,17 +3,18 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
 from rest_framework.generics import get_object_or_404
+from rest_framework.mixins import CreateModelMixin, ListModelMixin, RetrieveModelMixin
 
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework import status, mixins
+from rest_framework import status, mixins, serializers
 from rest_framework.viewsets import ReadOnlyModelViewSet, ModelViewSet, GenericViewSet
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.filters import SearchFilter, OrderingFilter
 
 from drf_spectacular.utils import (extend_schema, extend_schema_view, OpenApiParameter,
-                                   OpenApiTypes, OpenApiExample, OpenApiResponse)
+                                   OpenApiTypes, OpenApiExample, OpenApiResponse, inline_serializer)
 from ..models import Car, CarMake, CarModel, FavoriteCar, CarView, Contact
 from .serializers import (
                           VerifyCarSerializer, CarMakeSerializer, ContactSerializer,
@@ -712,47 +713,55 @@ class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Gener
 
 @extend_schema_view(
     list=extend_schema(
-        tags=["Dealers - Inventory"],
-        description="List all contacts (admin-only).",
+        tags=["Contacts"],
+        summary="List all contacts (Admin only)",
+        description="Retrieve all contact requests. Accessible only by admins.",
         responses={200: ContactSerializer(many=True)},
     ),
+
     retrieve=extend_schema(
-        tags=["Dealers - Inventory"],
-        description=(
-            "Retrieve the contact info of the user associated with a specific car, "
-            "dealer, or broker. Accessible to authenticated users (buyers) or admins."
-        ),
-        parameters=[
-            OpenApiParameter(
-                name="car_id",
-                type=int,
-                location="path",
-                description="ID of the car to get the poster's profile",
-                required=False,
-            ),
-            OpenApiParameter(
-                name="dealer_id",
-                type=int,
-                location="query",
-                description="ID of the dealer to get contact info",
-                required=False,
-            ),
-            OpenApiParameter(
-                name="broker_id",
-                type=int,
-                location="query",
-                description="ID of the broker to get contact info",
-                required=False,
-            ),
-        ],
+        tags=["Contacts"],
+        summary="Retrieve a contact",
+        description="Retrieve details of a specific contact request by ID.",
         responses={
             200: ContactSerializer,
-            404: OpenApiResponse(description="Car, dealer, or broker not found"),
+            404: OpenApiResponse(description="Contact not found"),
+        },
+    ),
+
+    create=extend_schema(
+        tags=["Contacts"],
+        summary="Send contact request",
+        description="""
+        Create a contact request to a car owner, dealer, or broker.
+
+        Rules:
+        - Provide ONLY ONE of: `car_id`, `dealer_id`, or `broker_id`
+        - Buyer must include phone number
+        - Prevents duplicate contact per car
+        - Rate limited (anti-spam protection)
+
+        Notifications:
+        - Sends notification to recipient (dealer/broker/user)
+        """,
+        request=inline_serializer(
+            name="ContactRequest",
+            fields={
+                "phone": serializers.CharField(),
+                "message": serializers.CharField(required=False),
+                "car_id": serializers.IntegerField(required=False),
+                "dealer_id": serializers.IntegerField(required=False),
+                "broker_id": serializers.IntegerField(required=False),
+            },
+        ),
+        responses={
+            201: ContactSerializer,
+            400: OpenApiResponse(description="Invalid input or duplicate request"),
             403: OpenApiResponse(description="Permission denied"),
         },
     ),
 )
-class ContactViewSet(ModelViewSet):
+class ContactViewSet(CreateModelMixin, ListModelMixin, RetrieveModelMixin, GenericViewSet):
     queryset = Contact.objects.select_related("sender", "recipient", "car")
     serializer_class = ContactSerializer
     permission_classes = [IsSuperAdminOrAdminOrBuyer]
@@ -765,7 +774,6 @@ class ContactViewSet(ModelViewSet):
         dealer_id = request.data.get("dealer_id")
         broker_id = request.data.get("broker_id")
 
-        # get recipient profile
         profile = ContactService.get_profile(
             car_id=car_id,
             dealer_id=dealer_id,
@@ -785,7 +793,6 @@ class ContactViewSet(ModelViewSet):
             car=car
         )
 
-        # send notification
         ContactService.notify_contact_created(
             sender=request.user,
             recipient_profile=profile,
