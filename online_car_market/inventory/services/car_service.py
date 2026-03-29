@@ -1,8 +1,8 @@
 from django.db import transaction
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from online_car_market.inventory.models import CarImage
-from online_car_market.brokers.models import BrokerProfile
-
+from online_car_market.notifications.services import notify_user
+from .favorite_car_service import FavoriteCarService
 
 class CarService:
 
@@ -88,3 +88,23 @@ class CarService:
             first_image.save(update_fields=["is_featured"])
 
         return car
+
+    def notify_price_drop(car, old_price, new_price):
+        favorites = FavoriteCarService.get_car_favorers(car)
+
+        car_name = f"{car.make} {car.model} ({car.year})"
+
+        for fav in favorites:
+            notify_user(
+                user=fav.user,
+                message=(
+                    f"Price dropped for {car_name} "
+                    f"from {old_price} to {new_price}!"
+                ),
+                data={
+                    "car_id": car.id,
+                    "type": "price_drop",
+                    "old_price": str(old_price),
+                    "new_price": str(new_price),
+                }
+            )

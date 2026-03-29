@@ -1,6 +1,7 @@
 from rest_framework.exceptions import PermissionDenied, NotFound
 from rolepermissions.checkers import has_role
 from ..models import FavoriteCar
+from online_car_market.notifications.services import notify_user
 
 class FavoriteCarService:
     @staticmethod
@@ -39,3 +40,11 @@ class FavoriteCarService:
         except FavoriteCar.DoesNotExist:
             raise NotFound("Favorite car not found or you do not have permission to delete it.")
         favorite.delete()
+
+    @staticmethod
+    def get_car_favorers(car):
+        return (
+            FavoriteCar.objects
+            .filter(car=car)
+            .select_related("user")
+        )
