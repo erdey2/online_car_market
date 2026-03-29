@@ -12,28 +12,20 @@ class ContactService:
 
     @staticmethod
     def get_profile(car_id=None, dealer_id=None, broker_id=None):
-        inputs = [car_id, dealer_id, broker_id]
-
-        # Ensure exactly one is provided
-        if not any(inputs):
-            raise ValidationError("Provide car_id, dealer_id, or broker_id.")
-
-        if sum(bool(x) for x in inputs) > 1:
-            raise ValidationError("Provide only one of car_id, dealer_id, or broker_id.")
 
         if car_id:
-            car = get_object_or_404(Car.objects.select_related("posted_by__profile"), id=car_id)
-            return car.posted_by.profile
+            car = get_object_or_404(Car, id=car_id)
+            user = car.posted_by
 
-        if dealer_id:
-            dealer = get_object_or_404(DealerProfile.objects.select_related("profile"), id=dealer_id)
-            return dealer.profile
+            profile = getattr(user, "profile", None)
 
-        if broker_id:
-            broker = get_object_or_404(BrokerProfile.objects.select_related("profile"), id=broker_id)
-            return broker.profile
+            if profile is None:
+                raise ValidationError(
+                    f"User {user.id} has no profile. Please complete profile setup."
+                )
 
-        raise ValidationError("Invalid request.")
+            return profile
+
 
     @staticmethod
     def notify_contact_created(sender, recipient_profile, contact):
