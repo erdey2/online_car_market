@@ -1,10 +1,11 @@
 from django.utils import timezone
+from datetime import timedelta
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from ..models import Car, CarImage, CarMake, CarModel, FavoriteCar, CarView
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
-from online_car_market.users.models import Profile
+from online_car_market.inventory.models import Contact
 from online_car_market.bids.models import Bid
 from django.contrib.auth import get_user_model
 import re, bleach, logging
@@ -758,14 +759,27 @@ class VerifyCarSerializer(serializers.ModelSerializer):
         return data
 
 class ContactSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Profile
-        fields = ['id', 'first_name', 'last_name', 'contact', 'address', 'image', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'created_at', 'updated_at']
+    phone = serializers.CharField(required=True)
 
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        # Convert CloudinaryField image to URL if it exists
-        if instance.image and hasattr(instance.image, 'url'):
-            representation['image'] = instance.image.url
-        return representation
+    class Meta:
+        model = Contact
+        fields = ['id', 'sender', 'recipient', 'message', 'phone', 'car', 'created_at']
+        read_only_fields = ['id', 'sender', 'created_at']
+
+    def validate_phone(self, value):
+        if len(value) < 9:
+            raise serializers.ValidationError("Invalid phone number.")
+        return value
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        user = request.user
+        car = attrs.get("car")
+
+        # Prevent duplicate contact per car
+        if car and Contact.objects.filter(sender=user, car=car).exists():
+            raise serializers.ValidationError(
+                "You already contacted about this car."
+            )
+
+        return attrs

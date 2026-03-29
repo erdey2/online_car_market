@@ -2,6 +2,7 @@ import logging
 from django_filters.rest_framework import DjangoFilterBackend
 from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
+from rest_framework.generics import get_object_or_404
 
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.decorators import action
@@ -13,7 +14,7 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 
 from drf_spectacular.utils import (extend_schema, extend_schema_view, OpenApiParameter,
                                    OpenApiTypes, OpenApiExample, OpenApiResponse)
-from ..models import Car, CarMake, CarModel, FavoriteCar, CarView
+from ..models import Car, CarMake, CarModel, FavoriteCar, CarView, Contact
 from .serializers import (
                           VerifyCarSerializer, CarMakeSerializer, ContactSerializer,
                           CarModelSerializer, FavoriteCarSerializer, CarViewSerializer,
@@ -22,7 +23,6 @@ from .serializers import (
                           )
 from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, IsSuperAdminOrAdminOrBuyer
 from online_car_market.users.permissions.business_permissions import CanPostCar, CanViewInventory
-from online_car_market.users.models import Profile
 from online_car_market.bids.api.serializers import BidSerializer
 
 from ..services.car_service import CarService
@@ -752,21 +752,55 @@ class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Gener
         },
     ),
 )
-class ContactViewSet(ReadOnlyModelViewSet):
-    queryset = Profile.objects.all()
+class ContactViewSet(ModelViewSet):
+    queryset = Contact.objects.select_related("sender", "recipient", "car")
     serializer_class = ContactSerializer
     permission_classes = [IsSuperAdminOrAdminOrBuyer]
 
+    def get_serializer_context(self):
+        return {"request": self.request}
+
+    def create(self, request, *args, **kwargs):
+        car_id = request.data.get("car_id")
+        dealer_id = request.data.get("dealer_id")
+        broker_id = request.data.get("broker_id")
+
+        # get recipient profile
+        profile = ContactService.get_profile(
+            car_id=car_id,
+            dealer_id=dealer_id,
+            broker_id=broker_id,
+        )
+
+        car = None
+        if car_id:
+            car = get_object_or_404(Car, id=car_id)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        contact = serializer.save(
+            sender=request.user,
+            recipient=profile,
+            car=car
+        )
+
+        # send notification
+        ContactService.notify_contact_created(
+            sender=request.user,
+            recipient_profile=profile,
+            contact=contact
+        )
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
     def list(self, request, *args, **kwargs):
-        """Admin-only list of all contacts."""
         ContactService.check_admin(request.user)
         return super().list(request, *args, **kwargs)
 
     def retrieve(self, request, *args, **kwargs):
-        car_id = kwargs.get("pk")  # From URL path
-        dealer_id = request.query_params.get("dealer_id")
-        broker_id = request.query_params.get("broker_id")
+        # Now retrieves actual contact
+        contact = self.get_object()
+        serializer = self.get_serializer(contact)
+        return Response(serializer.data)
 
-        profile = ContactService.get_profile(car_id=car_id, dealer_id=dealer_id, broker_id=broker_id)
-        serializer = self.get_serializer(profile)
-        return Response(serializer.data, status=status.HTTP_200_OK)

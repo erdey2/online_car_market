@@ -5,6 +5,7 @@ from cloudinary.models import CloudinaryField
 from django.contrib.auth import get_user_model
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
+from online_car_market.users.models import Profile
 
 User = get_user_model()
 
@@ -267,6 +268,15 @@ class CarView(models.Model):
 
     def __str__(self):
         return f"{self.user or self.ip_address} viewed {self.car}"
+
+class Contact(models.Model):
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sent_contacts")
+    recipient = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="received_contacts")
+    phone = models.CharField(max_length=20)
+    message = models.TextField(blank=True, null=True)
+    car = models.ForeignKey(Car, on_delete=models.CASCADE, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 

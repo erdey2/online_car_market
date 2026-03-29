@@ -1,31 +1,66 @@
 from rest_framework.exceptions import PermissionDenied, ValidationError, NotFound
 from django.shortcuts import get_object_or_404
 from ..models import Car, DealerProfile, BrokerProfile
+from online_car_market.notifications.services import notify_user
 
 class ContactService:
+
     @staticmethod
     def check_admin(user):
         if not (user.is_staff or getattr(user, "is_super_admin", False)):
-            raise PermissionDenied("Only admins can list all contacts.")
+            raise PermissionDenied("Only admins can perform this action.")
 
     @staticmethod
     def get_profile(car_id=None, dealer_id=None, broker_id=None):
-        # Validate input
-        if not any([car_id, dealer_id, broker_id]):
-            raise ValidationError("Please provide car_id, dealer_id, or broker_id.")
+        inputs = [car_id, dealer_id, broker_id]
 
-        if sum(bool(x) for x in [car_id, dealer_id, broker_id]) > 1:
-            raise ValidationError("Please provide only one of car_id, dealer_id, or broker_id.")
+        # Ensure exactly one is provided
+        if not any(inputs):
+            raise ValidationError("Provide car_id, dealer_id, or broker_id.")
 
-        # Retrieve profile
+        if sum(bool(x) for x in inputs) > 1:
+            raise ValidationError("Provide only one of car_id, dealer_id, or broker_id.")
+
         if car_id:
-            car = get_object_or_404(Car, id=car_id)
+            car = get_object_or_404(Car.objects.select_related("posted_by__profile"), id=car_id)
             return car.posted_by.profile
-        elif dealer_id:
-            dealer = get_object_or_404(DealerProfile, id=dealer_id)
+
+        if dealer_id:
+            dealer = get_object_or_404(DealerProfile.objects.select_related("profile"), id=dealer_id)
             return dealer.profile
-        elif broker_id:
-            broker = get_object_or_404(BrokerProfile, id=broker_id)
+
+        if broker_id:
+            broker = get_object_or_404(BrokerProfile.objects.select_related("profile"), id=broker_id)
             return broker.profile
+
+        raise ValidationError("Invalid request.")
+
+    @staticmethod
+    def notify_contact_created(sender, recipient_profile, contact):
+        recipient_user = recipient_profile.user
+
+        if sender == recipient_user:
+            return
+
+        car = contact.car
+
+        if car:
+            message = (
+                f"{sender.email} is interested in your "
+                f"{car.make} {car.model} ({car.year})"
+            )
         else:
-            raise ValidationError("Invalid request.")
+            message = f"New contact request from {sender.email}"
+
+        notify_user(
+            user=recipient_user,
+            message=message,
+            data={
+                "type": "contact_request",
+                "sender_id": sender.id,
+                "contact_id": contact.id,
+                "car_id": car.id if car else None,
+                "phone": contact.phone,
+                "message": contact.message,
+            }
+        )
