@@ -771,8 +771,12 @@ class ContactViewSet(CreateModelMixin, ListModelMixin, RetrieveModelMixin, Gener
 
     def create(self, request, *args, **kwargs):
         car_id = request.data.get("car_id")
+        car = get_object_or_404(Car, id=car_id)
         dealer_id = request.data.get("dealer_id")
         broker_id = request.data.get("broker_id")
+
+        print("REQUEST USER:", request.user.id)
+        print("CAR POSTED BY:", car.posted_by.id)
 
         profile = ContactService.get_profile(
             car_id=car_id,
