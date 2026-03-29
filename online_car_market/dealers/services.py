@@ -2,6 +2,7 @@ from django.utils import timezone
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
 from .models import DealerProfile
+from online_car_market.notifications.services import notify_user
 
 @transaction.atomic
 def approve_dealer(dealer, reviewer):
@@ -16,7 +17,18 @@ def approve_dealer(dealer, reviewer):
 
     user = dealer.profile.user
     user.role = user.Role.DEALER
-    user.save()
+    user.save(updated_fields=['role'])
+
+    # CREATE NOTIFICATION
+    notify_user(
+        user=user,
+        message="Your dealer application has been approved!",
+        data={
+            "type": "dealer_approved",
+            "dealer_id": dealer.id,
+            "company_name": dealer.company_name,
+        }
+    )
 
 @transaction.atomic
 def reject_dealer(dealer: DealerProfile, admin_user, reason: str):
@@ -28,6 +40,20 @@ def reject_dealer(dealer: DealerProfile, admin_user, reason: str):
     dealer.reviewed_at = timezone.now()
     dealer.rejection_reason = reason
     dealer.save()
+
+    user = dealer.profile.user
+    user.role = user.Role.BUYER
+    user.save(update_fields=["role"])
+
+    # NOTIFICATION
+    notify_user(
+        user=user,
+        message=f"Your dealer application was rejected: {reason}",
+        data={
+            "type": "dealer_rejected",
+            "reason": reason,
+        }
+    )
 
 @transaction.atomic
 def suspend_dealer(dealer: DealerProfile, admin_user):

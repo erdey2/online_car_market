@@ -1,6 +1,7 @@
 from django.utils import timezone
 from django.db import transaction
 from online_car_market.brokers.models import BrokerProfile
+from online_car_market.notifications.services import notify_user
 
 # Broker Services with Transactions
 @transaction.atomic
@@ -19,6 +20,17 @@ def approve_broker(broker: BrokerProfile, admin_user):
     user.role = user.Role.BROKER
     user.save()
 
+    # CREATE NOTIFICATION
+    notify_user(
+        user=user,
+        message="Your dealer application has been approved!",
+        data={
+            "type": "dealer_approved",
+            "dealer_id": broker.id,
+            "company_name": broker.company_name,
+        }
+    )
+
 @transaction.atomic
 def reject_broker(broker, admin_user, reason):
     if broker.status != BrokerProfile.Status.PENDING:
@@ -29,6 +41,20 @@ def reject_broker(broker, admin_user, reason):
     broker.reviewed_by = admin_user
     broker.rejection_reason = reason
     broker.save()
+
+    user = broker.profile.user
+    user.role = user.Role.BUYER
+    user.save(update_fields=["role"])
+
+    # NOTIFICATION
+    notify_user(
+        user=user,
+        message=f"Your broker application was rejected: {reason}",
+        data={
+            "type": "broker_rejected",
+            "reason": reason,
+        }
+    )
 
 @transaction.atomic
 def suspend_broker(broker, admin_user):
