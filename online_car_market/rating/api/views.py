@@ -9,6 +9,7 @@ from ..models import CarRating
 from .serializers import CarRatingSerializer, CarRatingReadSerializer, CarRatingsStatsSerializer
 from online_car_market.inventory.models import Car
 from online_car_market.inventory.api.serializers import CarListSerializer
+from online_car_market.notifications.services import notify_user
 
 
 @extend_schema_view(
@@ -78,7 +79,22 @@ class CarRatingViewSet(ModelViewSet):
         return CarRatingSerializer
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        rating = serializer.save(user=self.request.user)
+
+        car = rating.car
+        owner = car.posted_by
+
+        if owner != self.request.user:
+            notify_user(
+                user=owner,
+                message=f"Your car {car.make} {car.model} received a {rating.rating} ⭐ rating",
+                data={
+                    "type": "car_rating",
+                    "car_id": car.id,
+                    "rating": rating.rating,
+                    "user_id": self.request.user.id,
+                }
+            )
 
     def perform_update(self, serializer):
         if serializer.instance.user != self.request.user:
