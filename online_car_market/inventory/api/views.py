@@ -775,8 +775,8 @@ class ContactViewSet(CreateModelMixin, ListModelMixin, RetrieveModelMixin, Gener
         dealer_id = request.data.get("dealer_id")
         broker_id = request.data.get("broker_id")
 
-        print("REQUEST USER:", request.user.id)
-        print("CAR POSTED BY:", car.posted_by.id)
+        logger.info(f"REQUEST USER: {request.user.id}")
+        logger.info(f"CAR POSTED BY: {car.posted_by.id}")
 
         profile = ContactService.get_profile(
             car_id=car_id,
