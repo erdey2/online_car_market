@@ -217,7 +217,7 @@ class ProfileViewSet(ViewSet):
         user = request.user
 
         # Dealer
-        if has_role(user, "dealer"):
+        if user.role == "dealer":
             try:
                 dealer_profile = DealerProfile.objects.get(profile__user=user)
             except DealerProfile.DoesNotExist:
@@ -225,12 +225,9 @@ class ProfileViewSet(ViewSet):
 
             return Response(DealerProfileSerializer(dealer_profile).data)
 
-        # Staff
-        if has_role(user, self.STAFF_ROLES):
-            staff_profile = DealerStaff.objects.filter(user=user).first()
-            if not staff_profile:
-                return Response({"detail": "Staff profile not found."}, status=404)
-
+        # Staff (seller, hr, accountant, etc.)
+        staff_profile = DealerStaff.objects.filter(user=user).first()
+        if staff_profile:
             return Response(DealerStaffSerializer(staff_profile).data)
 
         return Response({"detail": "Not allowed."}, status=403)
