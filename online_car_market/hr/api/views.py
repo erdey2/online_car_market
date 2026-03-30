@@ -1,5 +1,4 @@
 import logging
-from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 
 from ..models import Employee, Contract, Attendance, Leave, SalaryComponent, EmployeeSalary, OvertimeEntry
@@ -58,12 +57,13 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     permission_classes = [IsHRorDealer]
 
     def get_queryset(self):
-        """
-        Optional: Dealers see only employees they created, HR see all.
-        """
         user = self.request.user
-        if has_role(user, ["dealer"]):
+
+        # Dealer → only their employees
+        if user.role == "dealer":
             return Employee.objects.filter(created_by=user)
+
+        # HR → all
         return Employee.objects.all()
 
 @extend_schema_view(
@@ -300,8 +300,11 @@ class LeaveViewSet(viewsets.ModelViewSet):
         user = self.request.user
         qs = Leave.objects.select_related("employee__user", "approved_by")
 
-        if has_role(user, 'hr'):
+        # HR → all
+        if user.role == "hr":
             return qs
+
+        # Others → only own
         return qs.filter(employee__user=user)
 
     def get_permissions(self):
