@@ -11,7 +11,6 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
-from rolepermissions.checkers import has_role
 from online_car_market.users.permissions.drf_permissions import IsHR, IsDealerOrHR, IsFinance
 from online_car_market.users.permissions.business_permissions import IsHRorDealer
 from drf_spectacular.utils import extend_schema_view, extend_schema, OpenApiResponse, OpenApiParameter

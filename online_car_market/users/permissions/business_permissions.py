@@ -1,9 +1,21 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 from online_car_market.dealers.models import DealerStaff
 
+
+# HELPERS
+def is_staff(user, roles=None):
+    staff = DealerStaff.objects.filter(user=user).first()
+    if not staff:
+        return False
+    if roles:
+        return staff.role in roles
+    return True
+
 def has_any_role(user, roles):
     return user.is_authenticated and user.role in roles
 
+
+# BASIC
 class IsAdminOrReadOnly(BasePermission):
     def has_object_permission(self, request, view, obj):
         if request.method in SAFE_METHODS:
@@ -12,17 +24,29 @@ class IsAdminOrReadOnly(BasePermission):
 
 class IsHROrAdmin(BasePermission):
     def has_permission(self, request, view):
-        u = request.user
-        return u.is_authenticated and (u.is_staff or u.is_superuser or u.role == "hr")
+        user = request.user
+        return (
+            user.is_authenticated and
+            (user.role == "admin" or is_staff(user, ["hr"]))
+        )
 
 class IsHRorDealer(BasePermission):
     def has_permission(self, request, view):
-        return has_any_role(request.user, ["hr", "dealer"])
+        user = request.user
+        return (
+            user.is_authenticated and
+            (user.role == "dealer" or is_staff(user, ["hr"]))
+        )
 
 class IsOwnerOrHR(BasePermission):
     def has_object_permission(self, request, view, obj):
-        return request.user.role == "hr" or obj.employee.user == request.user
+        return (
+            request.user == obj.employee.user or
+            is_staff(request.user, ["hr"])
+        )
 
+
+# CAR / SALES
 class CanPostCar(BasePermission):
 
     def has_permission(self, request, view):
@@ -34,11 +58,12 @@ class CanPostCar(BasePermission):
         if not user.is_authenticated:
             return False
 
-        # Seller must belong to dealer
-        if user.role == "seller":
-            return user.dealer_staff_assignments.filter(role="seller").exists()
+        # Dealer / Broker / Admin
+        if user.role in ["dealer", "broker", "admin"]:
+            return True
 
-        return user.role in ["dealer", "broker", "admin"]
+        # Seller staff
+        return is_staff(user, ["seller"])
 
     def has_object_permission(self, request, view, obj):
         user = request.user
@@ -46,48 +71,67 @@ class CanPostCar(BasePermission):
         if request.method in SAFE_METHODS:
             return True
 
-        # High roles
         if user.role in ["admin", "broker"]:
             return True
 
-        # Dealer → only own cars
+        # Dealer → own cars
         if user.role == "dealer":
             return (
                 hasattr(user.profile, "dealer_profile") and
                 obj.dealer == user.profile.dealer_profile
             )
 
-        # Seller → only assigned dealer
-        if user.role == "seller":
-            staff = user.dealer_staff_assignments.filter(role="seller").first()
-            return staff and obj.dealer == staff.dealer
+        # Seller → dealer cars
+        staff = DealerStaff.objects.filter(user=user, role="seller").first()
+        return staff and obj.dealer == staff.dealer
 
-        return False
-
+# ACCOUNTING / FINANCE
 class CanManageAccounting(BasePermission):
     def has_permission(self, request, view):
-        return has_any_role(request.user, ["admin", "broker", "dealer", "accountant", "finance"])
+        user = request.user
+        return (
+            has_any_role(user, ["admin", "dealer", "broker"]) or
+            is_staff(user, ["accountant", "finance"])
+        )
 
 class CanManageSales(BasePermission):
     def has_permission(self, request, view):
-        return has_any_role(request.user, ["admin", "broker", "dealer", "seller"])
+        user = request.user
+        return (
+            has_any_role(user, ["admin", "dealer", "broker"]) or
+            is_staff(user, ["seller"])
+        )
 
 class CanViewPayroll(BasePermission):
     def has_permission(self, request, view):
-        return has_any_role(request.user, ["admin", "hr", "accountant"])
+        user = request.user
+        return (
+            user.role == "admin" or
+            is_staff(user, ["hr", "accountant"])
+        )
 
 class CanRunPayroll(BasePermission):
     def has_permission(self, request, view):
-        return has_any_role(request.user, ["admin", "hr"])
+        user = request.user
+        return (
+            user.role == "admin" or
+            is_staff(user, ["hr"])
+        )
 
 class CanApprovePayroll(BasePermission):
     def has_permission(self, request, view):
-        return has_any_role(request.user, ["admin"])
+        return request.user.role == "admin"
 
 class CanViewSalesData(BasePermission):
     def has_permission(self, request, view):
-        return has_any_role(request.user, ["admin", "accountant", "seller", "finance"])
+        user = request.user
+        return (
+            user.role == "admin" or
+            is_staff(user, ["accountant", "seller", "finance"])
+        )
 
+
+# GENERAL
 class IsRatingOwnerOrAdmin(BasePermission):
     def has_object_permission(self, request, view, obj):
         return request.user == obj.user or request.user.role == "admin"
@@ -108,46 +152,33 @@ class IsHrAccountantSeller(BasePermission):
         if not user.is_authenticated:
             return False
 
-        if user.role in ["hr", "accountant", "seller"]:
+        if is_staff(user, ["hr", "accountant", "seller"]):
             return True
 
-        if request.method in SAFE_METHODS and user.is_staff:
-            return True
-
-        return False
+        return request.method in SAFE_METHODS
 
 class IsFinanceOrAdmin(BasePermission):
     def has_permission(self, request, view):
-        return has_any_role(request.user, ["finance", "admin"])
-
+        return (
+            request.user.role == "admin" or
+            is_staff(request.user, ["finance"])
+        )
 
 class IsDealerOrStaff(BasePermission):
-
     def has_permission(self, request, view):
         user = request.user
-
-        if not user.is_authenticated:
-            return False
-
-        # Dealer
-        if user.role == "dealer":
-            return True
-
-        # Staff
-        if DealerStaff.objects.filter(user=user).exists():
-            return True
-
-        return False
+        return (
+            user.is_authenticated and
+            (user.role == "dealer" or is_staff(user))
+        )
 
 class IsERPUsers(BasePermission):
     def has_permission(self, request, view):
-        return has_any_role(request.user, [
-            "dealer",
-            "seller",
-            "hr",
-            "accountant",
-            "admin"
-        ])
+        user = request.user
+        return (
+            user.is_authenticated and
+            (user.role in ["dealer", "admin"] or is_staff(user))
+        )
 
 class CanViewInventory(BasePermission):
     def has_permission(self, request, view):
@@ -155,5 +186,5 @@ class CanViewInventory(BasePermission):
 
         return (
             user.role in ["admin", "dealer", "broker"] or
-            user.dealer_staff_assignments.filter(role="seller").exists()
+            is_staff(user, ["seller"])
         )
