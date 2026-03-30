@@ -1,4 +1,5 @@
 from rest_framework import serializers, status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.views import APIView
 from rest_framework.viewsets import (ModelViewSet, ViewSet, ReadOnlyModelViewSet)
 from rest_framework.permissions import IsAuthenticated
@@ -210,39 +211,55 @@ class AdminDealerViewSet(ReadOnlyModelViewSet):
 )
 class ProfileViewSet(ViewSet):
     permission_classes = [IsAuthenticated]
-    STAFF_ROLES = ["seller", "accountant", "hr"]
 
     @action(detail=False, methods=["get"], url_path="me")
     def me(self, request):
         user = request.user
 
-        # Dealer
+        # ---------------- Dealer ----------------
         if user.role == "dealer":
-            try:
-                dealer_profile = DealerProfile.objects.get(profile__user=user)
-            except DealerProfile.DoesNotExist:
-                return Response({"detail": "Dealer profile not found."}, status=404)
+            dealer_profile = getattr(user.profile, "dealer_profile", None)
+            if not dealer_profile:
+                return Response(
+                    {"detail": "Dealer profile not found."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
             return Response(DealerProfileSerializer(dealer_profile).data)
 
-        # Staff (seller, hr, accountant, etc.)
-        staff_profile = DealerStaff.objects.filter(user=user).first()
+        # ---------------- Staff ----------------
+        staff_profile = (
+            DealerStaff.objects
+            .select_related("dealer", "user")
+            .filter(user=user)
+            .first()
+        )
+
         if staff_profile:
             return Response(DealerStaffSerializer(staff_profile).data)
 
-        return Response({"detail": "Not allowed."}, status=403)
+        return Response(
+            {"detail": "Not allowed."},
+            status=status.HTTP_403_FORBIDDEN
+        )
 
     @action(detail=False, methods=["patch"], url_path="me")
     def update_me(self, request):
         user = request.user
 
+        # Only dealer can update dealer profile
         if user.role != "dealer":
-            return Response({"detail": "Only dealers can update profile."}, status=403)
+            return Response(
+                {"detail": "Only dealers can update profile."},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
-        try:
-            dealer_profile = DealerProfile.objects.get(profile__user=user)
-        except DealerProfile.DoesNotExist:
-            return Response({"detail": "Dealer profile not found."}, status=404)
+        dealer_profile = getattr(user.profile, "dealer_profile", None)
+        if not dealer_profile:
+            return Response(
+                {"detail": "Dealer profile not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
         serializer = DealerProfileSerializer(
             dealer_profile,
@@ -292,7 +309,7 @@ class ProfileViewSet(ViewSet):
 )
 class DealerStaffViewSet(ModelViewSet):
     serializer_class = DealerStaffSerializer
-    permission_classes = [IsDealerOrStaff]
+    permission_classes = [IsAuthenticated, IsDealerOrStaff]
 
     def get_queryset(self):
         user = self.request.user
@@ -301,35 +318,80 @@ class DealerStaffViewSet(ModelViewSet):
         if not profile:
             return DealerStaff.objects.none()
 
-        # Case 1: Dealer Owner
-        if hasattr(profile, "dealer_profile"):
-            return DealerStaff.objects.filter(
-                dealer=profile.dealer_profile
+        # Dealer Owner
+        dealer_profile = getattr(profile, "dealer_profile", None)
+        if dealer_profile:
+            return (
+                DealerStaff.objects
+                .select_related("user", "dealer")
+                .filter(dealer=dealer_profile)
             )
 
-        # Case 2: Dealer Staff
-        return DealerStaff.objects.filter(user=user)
+        # Staff
+        return (
+            DealerStaff.objects
+            .select_related("user", "dealer")
+            .filter(user=user)
+        )
+
+    def perform_create(self, serializer):
+        """
+        Ensure staff is always attached to the dealer of the request user.
+        Prevent assigning staff to another dealer.
+        """
+        user = self.request.user
+        dealer_profile = getattr(user.profile, "dealer_profile", None)
+
+        if not dealer_profile:
+            raise PermissionDenied("Only dealers can create staff.")
+
+        serializer.save(dealer=dealer_profile)
+
+    def perform_update(self, serializer):
+        """
+        Prevent staff from changing dealer ownership.
+        """
+        instance = self.get_object()
+        user = self.request.user
+
+        dealer_profile = getattr(user.profile, "dealer_profile", None)
+
+        if dealer_profile and instance.dealer != dealer_profile:
+            raise PermissionDenied("You cannot modify staff of another dealer.")
+
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+        dealer_profile = getattr(user.profile, "dealer_profile", None)
+
+        if dealer_profile and instance.dealer != dealer_profile:
+            raise PermissionDenied("You cannot delete staff of another dealer.")
+
+        instance.delete()
 
     @extend_schema(
         tags=["Dealers - Staff Management"],
         summary="Retrieve current staff profile",
-        description="Returns the dealer staff profile of the currently authenticated user. "
-                    "This endpoint allows individual staff members (Seller, HR, Accountant, Finance) "
-                    "to retrieve their own staff information.",
+        description="Returns the dealer staff profile of the currently authenticated user.",
         responses={200: DealerStaffSerializer}
     )
     @action(detail=False, methods=["get"], url_path="me")
     def me(self, request):
-        try:
-            staff = DealerStaff.objects.get(user=request.user)
-        except DealerStaff.DoesNotExist:
+        staff = (
+            DealerStaff.objects
+            .select_related("dealer", "user")
+            .filter(user=request.user)
+            .first()
+        )
+
+        if not staff:
             return Response(
                 {"detail": "You are not registered as dealer staff."},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        serializer = self.get_serializer(staff)
-        return Response(serializer.data)
+        return Response(self.get_serializer(staff).data)
 
 # DEALER RATINGS
 @extend_schema_view(
