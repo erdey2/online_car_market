@@ -239,7 +239,7 @@ class ProfileViewSet(ViewSet):
     def update_me(self, request):
         user = request.user
 
-        if not has_role(user, "dealer"):
+        if user.role != "dealer":
             return Response({"detail": "Only dealers can update profile."}, status=403)
 
         try:

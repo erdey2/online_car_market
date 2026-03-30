@@ -129,14 +129,15 @@ class IsDealerOrStaff(BasePermission):
         if not user.is_authenticated:
             return False
 
-        profile = getattr(user, "profile", None)
-        if not profile:
-            return False
-
-        if hasattr(profile, "dealer_profile"):
+        # Dealer
+        if user.role == "dealer":
             return True
 
-        return DealerStaff.objects.filter(user=user).exists()
+        # Staff
+        if DealerStaff.objects.filter(user=user).exists():
+            return True
+
+        return False
 
 class IsERPUsers(BasePermission):
     def has_permission(self, request, view):
