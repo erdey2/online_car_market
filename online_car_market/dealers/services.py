@@ -17,7 +17,7 @@ def approve_dealer(dealer, reviewer):
 
     user = dealer.profile.user
     user.role = user.Role.DEALER
-    user.save(updated_fields=['role'])
+    user.save(update_fields=['role'])
 
     # CREATE NOTIFICATION
     notify_user(
