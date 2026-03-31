@@ -86,8 +86,9 @@ class CanPostCar(BasePermission):
 class CanManageAccounting(BasePermission):
     def has_permission(self, request, view):
         user = request.user
+
         return (
-            has_any_role(user, ["admin", "dealer", "broker"]) or
+            user.role in ["admin", "super_admin", "dealer"] or
             is_staff(user, ["accountant", "finance"])
         )
 

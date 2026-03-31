@@ -16,7 +16,8 @@ from .serializers import (ExpenseSerializer, FinancialReportSerializer, CarExpen
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse
 from online_car_market.accounting.utils import generate_financial_report
 from online_car_market.dealers.models import DealerStaff
-from online_car_market.users.permissions.business_permissions import CanManageAccounting
+from online_car_market.users.permissions.business_permissions import CanManageAccounting, is_staff
+
 
 # Exchange rate
 @extend_schema_view(
@@ -262,29 +263,40 @@ class ExpenseViewSet(ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        base_qs = Expense.objects.select_related("company", "company__profile__user")
 
-        base_qs = Expense.objects.select_related("company")
-
-        # Dealers can only see their own expenses
-        if has_role(user, 'dealer'):
+        # Dealer → own data
+        if user.role == "dealer":
             dealer_profile = DealerProfile.objects.filter(profile__user=user).first()
             return base_qs.filter(company=dealer_profile) if dealer_profile else base_qs.none()
 
-        # Admin-level roles can see everything
-        if has_role(user, ['super_admin', 'admin', 'accountant']):
+        # Accountant / Finance staff → dealer data
+        staff = DealerStaff.objects.filter(user=user).first()
+        if staff and staff.role in ["accountant", "finance"]:
+            return base_qs.filter(company=staff.dealer)
+
+        # Admin → all
+        if user.role in ["admin", "super_admin"]:
             return base_qs
 
-        # Others see nothing
         return base_qs.none()
 
     def perform_create(self, serializer):
-        """Restrict dealer so they can only create THEIR OWN expense"""
         user = self.request.user
-        if has_role(user, 'dealer'):
+
+        if user.role == "dealer":
             dealer_profile = DealerProfile.objects.filter(profile__user=user).first()
             serializer.save(company=dealer_profile)
-        else:
-            serializer.save()
+            return
+
+        # Staff (accountant/finance)
+        staff = DealerStaff.objects.filter(user=user).first()
+        if staff and staff.role in ["accountant", "finance"]:
+            serializer.save(company=staff.dealer)
+            return
+
+        # Admin
+        serializer.save()
 
 # FinancialReport ViewSet
 @extend_schema_view(
@@ -327,8 +339,14 @@ class FinancialReportViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet)
 
     def get_queryset(self):
         user = self.request.user
-        if has_role(user, ['dealer']):
+
+        if user.role == "dealer":
             return FinancialReport.objects.filter(dealer__profile__user=user)
+
+        staff = DealerStaff.objects.filter(user=user).first()
+        if staff and staff.role in ["accountant", "finance"]:
+            return FinancialReport.objects.filter(dealer=staff.dealer)
+
         return FinancialReport.objects.all()
 
     @extend_schema(
@@ -372,25 +390,26 @@ class FinancialReportViewSet(ListModelMixin, RetrieveModelMixin, GenericViewSet)
         month = request.data.get('month')
         year = request.data.get('year')
 
-        if not has_role(user, ['super_admin', 'admin', 'dealer', 'accountant']):
-            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+        if not (
+            user.role in ["super_admin", "admin", "dealer"] or
+            is_staff(user, ["accountant", "finance"])
+        ):
+            return Response({"detail": "Permission denied."}, status=403)
 
         dealer = None
 
-        if has_role(user, "dealer"):
+        # Dealer
+        if user.role == "dealer":
             dealer = DealerProfile.objects.filter(profile__user=user).first()
 
-        elif has_role(user, "accountant"):
-            dealer_id = (
-                DealerStaff.objects
-                .filter(user=user)
-                .values_list("dealer_id", flat=True)
-                .first()
-            )
-            if dealer_id:
-                dealer = DealerProfile.objects.filter(id=dealer_id).first()
+        # Staff
+        else:
+            staff = DealerStaff.objects.filter(user=user).first()
+            if staff and staff.role in ["accountant", "finance"]:
+                dealer = staff.dealer
 
-        elif has_role(user, ["admin", "super_admin"]):
+        # Admin
+        if user.role in ["admin", "super_admin"]:
             dealer_id = request.data.get("dealer_id")
             if dealer_id:
                 dealer = DealerProfile.objects.filter(id=dealer_id).first()
