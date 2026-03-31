@@ -13,6 +13,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from online_car_market.users.permissions.drf_permissions import IsHR, IsDealerOrHR, IsFinance
 from online_car_market.users.permissions.business_permissions import IsHRorDealer
+from online_car_market.dealers.models import DealerStaff
 from drf_spectacular.utils import extend_schema_view, extend_schema, OpenApiResponse, OpenApiParameter
 from ..services.contract_service import ContractService
 from ..services.leave_service import LeaveService
@@ -58,12 +59,26 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
-        # Dealer → only their employees
-        if user.role == "dealer":
-            return Employee.objects.filter(created_by=user)
+        base_qs = Employee.objects.select_related(
+            "user",
+            "user__profile",
+            "created_by",
+            "created_by__profile",
+            "created_by__profile__dealer_profile"
+        )
 
-        # HR → all
-        return Employee.objects.all()
+        dealer = getattr(user.profile, "dealer_profile", None)
+
+        if dealer:
+            return base_qs.filter(created_by=user)
+
+        staff = DealerStaff.objects.filter(user=user, role="hr").first()
+        if staff:
+            return base_qs.filter(
+                created_by__profile__dealer_profile=staff.dealer
+            )
+
+        return Employee.objects.none()
 
 @extend_schema_view(
     list=extend_schema(

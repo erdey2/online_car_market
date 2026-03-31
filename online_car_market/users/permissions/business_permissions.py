@@ -1,7 +1,6 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 from online_car_market.dealers.models import DealerStaff
 
-
 # HELPERS
 def is_staff(user, roles=None):
     staff = DealerStaff.objects.filter(user=user).first()
@@ -13,7 +12,6 @@ def is_staff(user, roles=None):
 
 def has_any_role(user, roles):
     return user.is_authenticated and user.role in roles
-
 
 # BASIC
 class IsAdminOrReadOnly(BasePermission):
@@ -44,7 +42,6 @@ class IsOwnerOrHR(BasePermission):
             request.user == obj.employee.user or
             is_staff(request.user, ["hr"])
         )
-
 
 # CAR / SALES
 class CanPostCar(BasePermission):
@@ -129,7 +126,6 @@ class CanViewSalesData(BasePermission):
             user.role == "admin" or
             is_staff(user, ["accountant", "seller", "finance"])
         )
-
 
 # GENERAL
 class IsRatingOwnerOrAdmin(BasePermission):

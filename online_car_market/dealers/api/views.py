@@ -216,50 +216,42 @@ class ProfileViewSet(ViewSet):
     def me(self, request):
         user = request.user
 
-        # ---------------- Dealer ----------------
-        if user.role == "dealer":
-            dealer_profile = getattr(user.profile, "dealer_profile", None)
-            if not dealer_profile:
-                return Response(
-                    {"detail": "Dealer profile not found."},
-                    status=status.HTTP_404_NOT_FOUND
-                )
+        user = User.objects.select_related("profile").get(id=user.id)
 
+        # Dealer
+        dealer_profile = getattr(user.profile, "dealer_profile", None)
+        if dealer_profile:
+            dealer_profile = (
+                DealerProfile.objects
+                .select_related("profile__user")
+                .get(id=dealer_profile.id)
+            )
             return Response(DealerProfileSerializer(dealer_profile).data)
 
-        # ---------------- Staff ----------------
+        # Staff
         staff_profile = (
             DealerStaff.objects
-            .select_related("dealer", "user")
-            .filter(user=user)
+            .select_related(
+                "dealer",
+                "user",
+                "user__profile"
+            )
+            .filter(user_id=user.id)
             .first()
         )
 
         if staff_profile:
             return Response(DealerStaffSerializer(staff_profile).data)
 
-        return Response(
-            {"detail": "Not allowed."},
-            status=status.HTTP_403_FORBIDDEN
-        )
+        return Response({"detail": "Not allowed."}, status=403)
 
     @action(detail=False, methods=["patch"], url_path="me")
     def update_me(self, request):
         user = request.user
 
-        # Only dealer can update dealer profile
-        if user.role != "dealer":
-            return Response(
-                {"detail": "Only dealers can update profile."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
         dealer_profile = getattr(user.profile, "dealer_profile", None)
         if not dealer_profile:
-            return Response(
-                {"detail": "Dealer profile not found."},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Only dealers can update profile."}, status=403)
 
         serializer = DealerProfileSerializer(
             dealer_profile,
@@ -313,26 +305,24 @@ class DealerStaffViewSet(ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        profile = getattr(user, "profile", None)
 
+        profile = getattr(user, "profile", None)
         if not profile:
             return DealerStaff.objects.none()
 
-        # Dealer Owner
         dealer_profile = getattr(profile, "dealer_profile", None)
-        if dealer_profile:
-            return (
-                DealerStaff.objects
-                .select_related("user", "dealer")
-                .filter(dealer=dealer_profile)
-            )
 
-        # Staff
-        return (
-            DealerStaff.objects
-            .select_related("user", "dealer")
-            .filter(user=user)
+        base_qs = DealerStaff.objects.select_related(
+            "user",
+            "user__profile",
+            "dealer",
+            "dealer__profile"
         )
+
+        if dealer_profile:
+            return base_qs.filter(dealer=dealer_profile)
+
+        return base_qs.filter(user=user)
 
     def perform_create(self, serializer):
         """
@@ -380,16 +370,13 @@ class DealerStaffViewSet(ModelViewSet):
     def me(self, request):
         staff = (
             DealerStaff.objects
-            .select_related("dealer", "user")
-            .filter(user=request.user)
+            .select_related("dealer", "user", "user__profile")
+            .filter(user=request.user.id)
             .first()
         )
 
         if not staff:
-            return Response(
-                {"detail": "You are not registered as dealer staff."},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Not staff"}, status=404)
 
         return Response(self.get_serializer(staff).data)
 

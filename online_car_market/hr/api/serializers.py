@@ -8,6 +8,7 @@ from rolepermissions.checkers import has_role
 import bleach
 from ..models import Employee, Contract, Attendance, Leave, SalaryComponent, EmployeeSalary, OvertimeEntry
 from online_car_market.hr.utils.pdf import generate_and_upload_pdf
+from online_car_market.dealers.models import DealerStaff
 
 User = get_user_model()
 
@@ -33,8 +34,12 @@ class EmployeeSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "user_email_display", "full_name", "created_by", "created_at", "updated_at"]
 
-    def get_full_name(self, obj: Employee) -> str:
-        return f"{obj.user.profile.first_name} {obj.user.profile.last_name}".strip() or "Unknown"
+    def get_full_name(self, obj):
+        profile = getattr(obj.user, "profile", None)
+        if not profile:
+            return "Unknown"
+
+        return f"{profile.first_name} {profile.last_name}".strip()
 
     # Field-level validations
     def validate_hire_date(self, value: date) -> date:
@@ -65,17 +70,25 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data: dict) -> Employee:
         user = validated_data.pop("user_email")
+
         if "hire_date" not in validated_data:
             validated_data["hire_date"] = timezone.now().date()
 
-        # Assign created_by from request.user
         request_user = self.context["request"].user
-        return Employee.objects.create(user=user, created_by=request_user, **validated_data)
 
-    def update(self, instance: Employee, validated_data: dict) -> Employee:
-        # Never allow changing linked User
-        validated_data.pop("user_email", None)
-        return super().update(instance, validated_data)
+        dealer = getattr(request_user.profile, "dealer_profile", None)
+
+        if not dealer:
+            # staff case → must belong to dealer staff HR
+            staff = DealerStaff.objects.filter(user=request_user, role="hr").first()
+            if not staff:
+                raise serializers.ValidationError("Not allowed.")
+
+        return Employee.objects.create(
+            user=user,
+            created_by=request_user,
+            **validated_data
+        )
 
 class SignedUploadSerializer(serializers.Serializer):
     signed_document = serializers.FileField()

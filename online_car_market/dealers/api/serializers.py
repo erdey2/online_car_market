@@ -99,54 +99,50 @@ class DealerStaffSerializer(serializers.ModelSerializer):
         }
     })
     def get_user(self, obj):
-        """Return user info with profile data."""
-        if obj.user:
-            profile = getattr(obj.user, "profile", None)
-            return {
-                "id": obj.user.id,
-                "email": obj.user.email,
-                "first_name": getattr(profile, "first_name", ""),
-                "last_name": getattr(profile, "last_name", ""),
-            }
-        return None
+        user = obj.user
+        profile = getattr(user, "profile", None)
+
+        return {
+            "id": user.id,
+            "email": user.email,
+            "first_name": getattr(profile, "first_name", ""),
+            "last_name": getattr(profile, "last_name", ""),
+        }
 
     def validate_user_email(self, value):
         try:
             user = User.objects.get(email=value)
         except User.DoesNotExist:
-            raise serializers.ValidationError("User with this email does not exist.")
+            raise serializers.ValidationError("User does not exist.")
 
-        dealer = self.context['request'].user.profile.dealer_profile
+        request_user = self.context["request"].user
+        dealer = getattr(request_user.profile, "dealer_profile", None)
+
+        if not dealer:
+            raise serializers.ValidationError("Only dealers can assign staff.")
+
         if DealerStaff.objects.filter(dealer=dealer, user=user).exists():
-            raise serializers.ValidationError("This user is already assigned to this dealer.")
+            raise serializers.ValidationError("Already assigned to this dealer.")
 
-        return value
+        return user
 
     def create(self, validated_data):
-        user_email = validated_data.pop('user_email')
-        role = validated_data.pop('role')
+        user = validated_data.pop("user_email")
+        role = validated_data.pop("role")
 
-        # Get or create the user
-        user, created = User.objects.get_or_create(
-            email=user_email,
-            defaults={'password': 'default_password'}
+        request_user = self.context["request"].user
+        dealer = getattr(request_user.profile, "dealer_profile", None)
+
+        if not dealer:
+            raise serializers.ValidationError("Only dealers can assign staff.")
+
+        staff = DealerStaff.objects.create(
+            dealer=dealer,
+            user=user,
+            role=role
         )
 
-        # Ensure profile exists (signal handles this, but safe to double-check)
-        Profile.objects.get_or_create(user=user)
-
-        # Get dealer from the logged-in user
-        dealer = getattr(self.context['request'].user.profile, 'dealer_profile', None)
-        if not dealer:
-            raise serializers.ValidationError("You must be a dealer to assign staff.")
-
-        # Create the DealerStaff record
-        staff_member = DealerStaff.objects.create(dealer=dealer, user=user, role=role)
-
-        # Assign role permission
-        assign_role(user, role)
-
-        return staff_member
+        return staff
 
 class DealerRatingSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), default=serializers.CurrentUserDefault())
