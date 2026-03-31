@@ -118,6 +118,10 @@ class CanManageSales(BasePermission):
 class CanViewPayroll(BasePermission):
     def has_permission(self, request, view):
         user = request.user
+
+        if not user.is_authenticated:
+            return False
+
         return (
             user.role == "admin" or
             is_staff(user, ["hr", "accountant"])
@@ -126,6 +130,10 @@ class CanViewPayroll(BasePermission):
 class CanRunPayroll(BasePermission):
     def has_permission(self, request, view):
         user = request.user
+
+        if not user.is_authenticated:
+            return False
+
         return (
             user.role == "admin" or
             is_staff(user, ["hr"])
@@ -133,7 +141,12 @@ class CanRunPayroll(BasePermission):
 
 class CanApprovePayroll(BasePermission):
     def has_permission(self, request, view):
-        return request.user.role == "admin"
+        user = request.user
+
+        return (
+            user.is_authenticated and
+            user.role == "admin"
+        )
 
 class CanViewSalesData(BasePermission):
     def has_permission(self, request, view):
