@@ -67,18 +67,27 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             "created_by__profile__dealer_profile"
         )
 
-        dealer = getattr(user.profile, "dealer_profile", None)
+        profile = getattr(user, "profile", None)
+        dealer = getattr(profile, "dealer_profile", None)
 
+        # Dealer → only their employees
         if dealer:
             return base_qs.filter(created_by=user)
 
-        staff = DealerStaff.objects.filter(user=user, role="hr").first()
+        # HR staff → employees of their dealer
+        staff = (
+            DealerStaff.objects
+            .select_related("dealer")
+            .filter(user=user, role="hr")
+            .first()
+        )
+
         if staff:
             return base_qs.filter(
                 created_by__profile__dealer_profile=staff.dealer
             )
 
-        return Employee.objects.none()
+        return base_qs.none()
 
 @extend_schema_view(
     list=extend_schema(

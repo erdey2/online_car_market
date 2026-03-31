@@ -9,7 +9,6 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from rolepermissions.checkers import has_role
 from ..models import Expense, FinancialReport, DealerProfile, CarExpense, Revenue, ExchangeRate
 from .serializers import (ExpenseSerializer, FinancialReportSerializer, CarExpenseSerializer,
                           RevenueSerializer, ExchangeRateSerializer)

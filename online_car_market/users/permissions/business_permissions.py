@@ -3,11 +3,22 @@ from online_car_market.dealers.models import DealerStaff
 
 # HELPERS
 def is_staff(user, roles=None):
-    staff = DealerStaff.objects.filter(user=user).first()
+    if not user.is_authenticated:
+        return False
+
+    staff = (
+        DealerStaff.objects
+        .select_related("dealer")  # helps later usage
+        .filter(user=user)
+        .first()
+    )
+
     if not staff:
         return False
+
     if roles:
         return staff.role in roles
+
     return True
 
 def has_any_role(user, roles):
@@ -31,9 +42,13 @@ class IsHROrAdmin(BasePermission):
 class IsHRorDealer(BasePermission):
     def has_permission(self, request, view):
         user = request.user
+
+        if not user.is_authenticated:
+            return False
+
         return (
-            user.is_authenticated and
-            (user.role == "dealer" or is_staff(user, ["hr"]))
+            user.role == "dealer" or
+            is_staff(user, ["hr"])
         )
 
 class IsOwnerOrHR(BasePermission):

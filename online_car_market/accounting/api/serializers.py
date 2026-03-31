@@ -2,7 +2,6 @@ from rest_framework import serializers
 from rolepermissions.checkers import has_role
 from ..models import Expense, FinancialReport, CarExpense, Revenue, ExchangeRate
 from online_car_market.sales.models import Sale
-from online_car_market.dealers.models import DealerProfile
 import bleach
 
 class ExchangeRateSerializer(serializers.ModelSerializer):
@@ -256,7 +255,6 @@ class ExpenseSerializer(serializers.ModelSerializer):
                 "Only accountant, dealer, admins, or super admins can manage expenses."
             )
         return data
-
 
 class FinancialReportSerializer(serializers.ModelSerializer):
     # Explicitly define `type` field so schema shows enum
