@@ -1,10 +1,13 @@
 import logging
+
+from django.core.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
 from django.core.cache import cache
 
 from rest_framework import status, mixins, serializers
+from rest_framework.exceptions import NotFound
 from rest_framework.generics import get_object_or_404
 from rest_framework.mixins import CreateModelMixin, ListModelMixin, RetrieveModelMixin
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
@@ -449,17 +452,28 @@ class CarVerificationViewSet(GenericViewSet):
 )
 class UserCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewSet):
     permission_classes = [IsAuthenticated, CanViewInventory]
-    queryset = Car.objects.all()
 
     def get_serializer_class(self):
-        if self.action == "list":
-            return CarListSerializer
-        if self.action == "retrieve":
-            return CarDetailSerializer
-        return CarListSerializer
+        return CarDetailSerializer if self.action == "retrieve" else CarListSerializer
+
 
     def get_queryset(self):
         return UserCarService.get_user_visible_cars(self.request.user)
+
+    def retrieve(self, request, *args, **kwargs):
+        car_id = kwargs.get("pk")
+
+        try:
+            car = UserCarService.get_base_queryset().get(id=car_id)
+        except Car.DoesNotExist:
+            raise NotFound("Car not found.")
+
+            # Check access
+        if not UserCarService.can_user_access_car(request.user, car):
+            raise PermissionDenied("You do not have access to this car.")
+
+        serializer = self.get_serializer(car)
+        return Response(serializer.data)
 
 @extend_schema_view(
     list=extend_schema(

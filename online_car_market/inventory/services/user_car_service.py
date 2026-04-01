@@ -1,11 +1,20 @@
 from ..models import Car
 
+
 class UserCarService:
+
     @staticmethod
-    def get_user_visible_cars(user):
-        qs = Car.objects.select_related(
+    def get_base_queryset():
+        return Car.objects.select_related(
             "dealer", "broker", "posted_by"
         ).prefetch_related("images", "bids")
+
+    @staticmethod
+    def get_user_visible_cars(user):
+        qs = UserCarService.get_base_queryset()
+
+        if not user.is_authenticated:
+            return qs.none()
 
         if user.role in ["super_admin", "admin"]:
             return qs
@@ -23,11 +32,17 @@ class UserCarService:
             return qs.filter(broker=broker_profile)
 
         # Seller
-        seller_record = user.dealer_staff_assignments.filter(role="seller").first()
-        if seller_record:
-            return qs.filter(
-                dealer=seller_record.dealer,
-                posted_by=user
-            )
+        staff_qs = getattr(user, "dealer_staff_assignments", None)
+        if staff_qs:
+            seller_record = staff_qs.filter(role="seller").first()
+            if seller_record:
+                return qs.filter(
+                    dealer=seller_record.dealer,
+                    posted_by=user
+                )
 
         return qs.none()
+
+    @staticmethod
+    def can_user_access_car(user, car):
+        return UserCarService.get_user_visible_cars(user).filter(id=car.id).exists()
