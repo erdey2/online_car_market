@@ -2,13 +2,14 @@ import logging
 from django_filters.rest_framework import DjangoFilterBackend
 from django.views.decorators.cache import cache_page
 from django.utils.decorators import method_decorator
+from django.core.cache import cache
+
+from rest_framework import status, mixins, serializers
 from rest_framework.generics import get_object_or_404
 from rest_framework.mixins import CreateModelMixin, ListModelMixin, RetrieveModelMixin
-
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework import status, mixins, serializers
 from rest_framework.viewsets import ModelViewSet, GenericViewSet
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.filters import SearchFilter, OrderingFilter
@@ -160,6 +161,8 @@ class CarViewSet(ModelViewSet):
     permission_classes = [IsAuthenticatedOrReadOnly]
     parser_classes = [MultiPartParser, FormParser]
 
+    CACHE_TIMEOUT = 60 * 5  # 5 minutes
+
     def get_serializer_class(self):
         mapping = {
             "list": CarListSerializer,
@@ -187,17 +190,96 @@ class CarViewSet(ModelViewSet):
             return [IsAuthenticated(), CanPostCar()]
         return super().get_permissions()
 
+    # ROLE-BASED CACHE KEY
+    def _build_cache_key(self, request):
+        user = request.user
+
+        role = user.role if user.is_authenticated else "anon"
+        dealer_id = self._get_dealer_id(user)
+
+        query_params = request.GET.urlencode()
+
+        return f"car_list_role_{role}_dealer_{dealer_id}_{query_params}"
+
+    def list(self, request, *args, **kwargs):
+        cache_key = self._build_cache_key(request)
+
+        # Try cache
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+
+        # Query DB
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        data = serializer.data
+
+        # Store cache
+        cache.set(cache_key, data, timeout=self.CACHE_TIMEOUT)
+
+        return Response(data)
+
+    def _get_dealer_id(self, user):
+        if not user.is_authenticated:
+            return "none"
+
+        if hasattr(user, "profile") and hasattr(user.profile, "dealer_profile"):
+            return user.profile.dealer_profile.id
+
+        staff = getattr(user, "dealer_staff_assignments", None)
+        if staff:
+            staff_obj = staff.first()
+            if staff_obj:
+                return staff_obj.dealer.id
+
+        return "none"
+
+    def retrieve(self, request, *args, **kwargs):
+        car_id = kwargs.get("pk")
+        user = request.user
+
+        role = user.role if user.is_authenticated else "anon"
+        dealer_id = self._get_dealer_id(user)
+
+        cache_key = f"car_detail_{car_id}_role_{role}_dealer_{dealer_id}"
+
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return Response(cached_data)
+
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        data = serializer.data
+
+        cache.set(cache_key, data, timeout=self.CACHE_TIMEOUT)
+
+        return Response(data)
+
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # Call service layer
         car = CarService.create_car_with_images(serializer, request)
 
-        # Return detailed response
-        response_serializer = CarDetailSerializer(car, context={"request": request})
+        # Invalidate cache (all car lists)
+        cache.delete_pattern("car_list_role_*")
+        cache.delete_pattern(f"car_detail_{car.id}_*")
 
+        response_serializer = CarDetailSerializer(car, context={"request": request})
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+
+        cache.delete_pattern("car_list_role_*")
+        cache.delete_pattern(f"car_detail_{instance.id}_*")
+
+    def perform_destroy(self, instance):
+        car_id = instance.id
+        instance.delete()
+
+        cache.delete_pattern("car_list_role_*")
+        cache.delete_pattern(f"car_detail_{car_id}_*")
 
     @action(detail=False, methods=["get"], url_path="filter")
     def filter(self, request):
