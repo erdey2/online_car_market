@@ -13,8 +13,9 @@ class UserCarService:
     def get_user_visible_cars(user):
         qs = UserCarService.get_base_queryset()
 
+        # Anonymous → like buyer
         if not user.is_authenticated:
-            return qs.filter(status="verified")  # anonymous behaves like buyer
+            return qs.filter(verification_status="verified")
 
         role = user.role
         profile = getattr(user, "profile", None)
@@ -23,11 +24,14 @@ class UserCarService:
         if role in ["admin", "super_admin"]:
             return qs
 
-        # Buyer → all VERIFIED cars
-        if role == "buyer":
-            return qs.filter(status="verified")
+        # SELLER
+        staff_qs = getattr(user, "dealer_staff_assignments", None)
+        if staff_qs:
+            seller_record = staff_qs.filter(role="seller").first()
+            if seller_record:
+                return qs.filter(dealer=seller_record.dealer)
 
-        # Dealer → own dealer cars
+        # Dealer → own cars
         dealer_profile = getattr(profile, "dealer_profile", None)
         if role == "dealer" and dealer_profile:
             return qs.filter(dealer=dealer_profile)
@@ -37,45 +41,48 @@ class UserCarService:
         if role == "broker" and broker_profile:
             return qs.filter(broker=broker_profile)
 
-        # Seller → dealer cars (NOT only posted_by anymore)
-        staff_qs = getattr(user, "dealer_staff_assignments", None)
-        if role == "seller" and staff_qs:
-            seller_record = staff_qs.filter(role="seller").first()
-            if seller_record:
-                return qs.filter(dealer=seller_record.dealer)
+        # Buyer → only verified cars
+        if role == "buyer":
+            return qs.filter(verification_status="verified")
 
         return qs.none()
 
     @staticmethod
     def can_user_access_car(user, car):
         """
-        Optimized access check (faster than queryset.exists())
+        Optimized access check (no DB hit)
         """
 
+        # Anonymous
         if not user.is_authenticated:
-            return car.status == "verified"
+            return car.verification_status == "verified"
 
         role = user.role
         profile = getattr(user, "profile", None)
 
+        # Admins
         if role in ["admin", "super_admin"]:
             return True
 
-        if role == "buyer":
-            return car.status == "verified"
+        # SELLER
+        staff_qs = getattr(user, "dealer_staff_assignments", None)
+        if staff_qs:
+            seller_record = staff_qs.filter(role="seller").first()
+            if seller_record:
+                return car.dealer_id == seller_record.dealer_id
 
+        # Dealer
         dealer_profile = getattr(profile, "dealer_profile", None)
         if role == "dealer" and dealer_profile:
             return car.dealer_id == dealer_profile.id
 
+        # Broker
         broker_profile = getattr(profile, "broker_profile", None)
         if role == "broker" and broker_profile:
             return car.broker_id == broker_profile.id
 
-        staff_qs = getattr(user, "dealer_staff_assignments", None)
-        if role == "seller" and staff_qs:
-            seller_record = staff_qs.filter(role="seller").first()
-            if seller_record:
-                return car.dealer_id == seller_record.dealer_id
+        # Buyer
+        if role == "buyer":
+            return car.verification_status == "verified"
 
         return False

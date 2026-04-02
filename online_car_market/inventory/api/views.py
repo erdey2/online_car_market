@@ -456,7 +456,6 @@ class UserCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericV
     def get_serializer_class(self):
         return CarDetailSerializer if self.action == "retrieve" else CarListSerializer
 
-
     def get_queryset(self):
         return UserCarService.get_user_visible_cars(self.request.user)
 

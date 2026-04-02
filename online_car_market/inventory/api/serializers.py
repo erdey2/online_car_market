@@ -1,10 +1,7 @@
 from django.utils import timezone
-from datetime import timedelta
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from ..models import Car, CarImage, CarMake, CarModel, FavoriteCar, CarView
-from online_car_market.dealers.models import DealerProfile
-from online_car_market.brokers.models import BrokerProfile
 from online_car_market.inventory.models import Contact
 from online_car_market.bids.models import Bid
 from django.contrib.auth import get_user_model
