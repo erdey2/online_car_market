@@ -540,8 +540,8 @@ class CarWriteSerializer(serializers.ModelSerializer):
         make_ref = data.get("make_ref") or getattr(self.instance, "make_ref", None)
         model_ref = data.get("model_ref") or getattr(self.instance, "model_ref", None)
 
-        dealer = data.get("dealer") or getattr(self.instance, "dealer", None)
-        broker = data.get("broker") or getattr(self.instance, "broker", None)
+        dealer = data.get("dealer")
+        broker = data.get("broker")
 
         sale_type = data.get("sale_type") or getattr(self.instance, "sale_type", None)
         price = data.get("price") or getattr(self.instance, "price", None)
@@ -558,21 +558,35 @@ class CarWriteSerializer(serializers.ModelSerializer):
         if model_ref:
             data["model"] = model_ref.name
 
-        # Dealer / Broker Rule
-        if (dealer and broker) or (not dealer and not broker):
-            raise serializers.ValidationError(
-                "Exactly one of 'dealer' or 'broker' must be provided."
-            )
-
-        # SELLER LOGIC (CORRECT WAY)
+        # ROLE-BASED Dealer/Broker Logic
         from online_car_market.dealers.models import DealerStaff
 
         seller_record = DealerStaff.objects.filter(user=user, role="seller").first()
 
-        if seller_record:
-            # Force dealer assignment
+        if user.role in ["admin", "super_admin"]:
+            # Admin must provide one
+            if (dealer and broker) or (not dealer and not broker):
+                raise serializers.ValidationError(
+                    "Admin must provide exactly one of 'dealer' or 'broker'."
+                )
+
+        elif user.role == "dealer":
+            # Ignore input → force own dealer
+            data["dealer"] = user.profile.dealer_profile
+            data["broker"] = None
+
+        elif user.role == "broker":
+            # Ignore input → force own broker
+            data["broker"] = user.profile.broker_profile
+            data["dealer"] = None
+
+        elif seller_record:
+            # Seller → assign dealer automatically
             data["dealer"] = seller_record.dealer
-            data["broker"] = None  # seller cannot post as broker
+            data["broker"] = None
+
+        else:
+            raise serializers.ValidationError("You are not allowed to create cars.")
 
         # Auction Rules
         if sale_type == "auction" and price is not None:
@@ -589,9 +603,7 @@ class CarWriteSerializer(serializers.ModelSerializer):
             is_broker_owner = car.broker and car.broker.profile.user == user
             is_dealer_owner = car.dealer and car.dealer.profile.user == user
 
-            is_seller_under_dealer = False
-            if seller_record and car.dealer:
-                is_seller_under_dealer = car.dealer == seller_record.dealer
+            is_seller_under_dealer = seller_record and car.dealer == seller_record.dealer
 
             if not (is_admin or is_broker_owner or is_dealer_owner or is_seller_under_dealer):
                 raise serializers.ValidationError(
