@@ -621,31 +621,28 @@ class CarWriteSerializer(serializers.ModelSerializer):
         dealer = None
         broker = None
 
-        # ADMIN → can pass anything
+        # ADMIN
         if user.role in ["admin", "super_admin"]:
             dealer = validated_data.get("dealer")
             broker = validated_data.get("broker")
 
-        # DEALER → assign own dealer
+        # DEALER
         elif user.role == "dealer":
             dealer = user.profile.dealer_profile
 
-        # SELLER → assign dealer automatically
-        elif user.role == "seller":
-            from online_car_market.dealers.models import DealerStaff
-
-            staff = DealerStaff.objects.filter(user=user, role="seller").first()
-            if not staff:
-                raise serializers.ValidationError("Seller is not assigned to any dealer.")
-
-            dealer = staff.dealer
-
-        # BROKER → assign own broker
-        elif user.role == "broker":
-            broker = user.profile.broker_profile
-
+        # SELLER (FIXED)
         else:
-            raise serializers.ValidationError("You are not allowed to create cars.")
+            seller_record = user.dealer_staff_assignments.filter(role="seller").first()
+
+            if seller_record:
+                dealer = seller_record.dealer
+
+            # BROKER
+            elif user.role == "broker":
+                broker = user.profile.broker_profile
+
+            else:
+                raise serializers.ValidationError("You are not allowed to create cars.")
 
         return Car.objects.create(
             dealer=dealer,
