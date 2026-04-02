@@ -366,6 +366,7 @@ class CarDetailSerializer(serializers.ModelSerializer):
 class CarWriteSerializer(serializers.ModelSerializer):
     dealer = serializers.PrimaryKeyRelatedField(read_only=True)
     broker = serializers.PrimaryKeyRelatedField(read_only=True)
+    posted_by = serializers.PrimaryKeyRelatedField(read_only=True)
     make_ref = serializers.PrimaryKeyRelatedField(
         queryset=CarMake.objects.all(),
         required=False,
