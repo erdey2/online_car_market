@@ -364,16 +364,8 @@ class CarDetailSerializer(serializers.ModelSerializer):
         }
 
 class CarWriteSerializer(serializers.ModelSerializer):
-    dealer = serializers.PrimaryKeyRelatedField(
-        queryset=DealerProfile.objects.all(),
-        required=False,
-        allow_null=True
-    )
-    broker = serializers.PrimaryKeyRelatedField(
-        queryset=BrokerProfile.objects.all(),
-        required=False,
-        allow_null=True
-    )
+    dealer = serializers.PrimaryKeyRelatedField(read_only=True)
+    broker = serializers.PrimaryKeyRelatedField(read_only=True)
     posted_by = serializers.HiddenField(
         default=serializers.CurrentUserDefault()
     )
@@ -540,54 +532,6 @@ class CarWriteSerializer(serializers.ModelSerializer):
             )
         return value
 
-    def validate_dealer(self, value):
-        user = self.context["request"].user
-
-        if not value:
-            return value
-
-        if user.role in ["admin", "super_admin"]:
-            return value
-
-        if value.profile.user.role != "dealer":
-            raise serializers.ValidationError("Invalid dealer.")
-
-        if user.role == "dealer":
-            if value.profile.user != user:
-                raise serializers.ValidationError("Dealers can only assign themselves.")
-            return value
-
-        if user.role == "seller":
-            from online_car_market.dealers.models import DealerStaff
-            if DealerStaff.objects.filter(
-                user=user,
-                dealer=value,
-                role="seller"
-            ).exists():
-                return value
-
-        raise serializers.ValidationError("Permission denied.")
-
-    def validate_broker(self, value):
-        user = self.context["request"].user
-
-        if not value:
-            return value
-
-        if value.profile.user.role != "broker":
-            raise serializers.ValidationError("Selected user is not a broker.")
-
-        if not value.is_verified:
-            raise serializers.ValidationError("Broker is not approved.")
-
-        if user.role not in ["admin", "super_admin"]:
-            if value.profile.user != user:
-                raise serializers.ValidationError(
-                    "You can only use your own broker account."
-                )
-
-        return value
-
     def validate(self, data):
         user = self.context["request"].user
 
@@ -603,7 +547,7 @@ class CarWriteSerializer(serializers.ModelSerializer):
         price = data.get("price") or getattr(self.instance, "price", None)
         auction_end = data.get("auction_end") or getattr(self.instance, "auction_end", None)
 
-        # Make/model rule
+        # Make / Model Validation
         if not (make and model) and not (make_ref and model_ref):
             raise serializers.ValidationError(
                 "Either 'make and model' or 'make_ref and model_ref' must be provided."
@@ -614,36 +558,40 @@ class CarWriteSerializer(serializers.ModelSerializer):
         if model_ref:
             data["model"] = model_ref.name
 
-        # Dealer/Broker rule
+        # Dealer / Broker Rule
         if (dealer and broker) or (not dealer and not broker):
             raise serializers.ValidationError(
                 "Exactly one of 'dealer' or 'broker' must be provided."
             )
 
-        # Auction rules
+        # SELLER LOGIC (CORRECT WAY)
+        from online_car_market.dealers.models import DealerStaff
+
+        seller_record = DealerStaff.objects.filter(user=user, role="seller").first()
+
+        if seller_record:
+            # Force dealer assignment
+            data["dealer"] = seller_record.dealer
+            data["broker"] = None  # seller cannot post as broker
+
+        # Auction Rules
         if sale_type == "auction" and price is not None:
             raise serializers.ValidationError("Auction cars cannot have a fixed price.")
 
         if sale_type == "auction" and not auction_end:
             raise serializers.ValidationError("Auction end time is required.")
 
+        # Update Permission Check
         if self.instance:
-            from online_car_market.dealers.models import DealerStaff
-
             car = self.instance
 
             is_admin = user.role in ["admin", "super_admin"]
-
             is_broker_owner = car.broker and car.broker.profile.user == user
             is_dealer_owner = car.dealer and car.dealer.profile.user == user
 
             is_seller_under_dealer = False
-            if user.role == "seller" and car.dealer:
-                is_seller_under_dealer = DealerStaff.objects.filter(
-                    user=user,
-                    dealer=car.dealer,
-                    role="seller"
-                ).exists()
+            if seller_record and car.dealer:
+                is_seller_under_dealer = car.dealer == seller_record.dealer
 
             if not (is_admin or is_broker_owner or is_dealer_owner or is_seller_under_dealer):
                 raise serializers.ValidationError(
@@ -658,7 +606,41 @@ class CarWriteSerializer(serializers.ModelSerializer):
 
         validated_data.pop("uploaded_images", None)
 
-        return Car.objects.create(**validated_data)
+        dealer = None
+        broker = None
+
+        # ADMIN → can pass anything
+        if user.role in ["admin", "super_admin"]:
+            dealer = validated_data.get("dealer")
+            broker = validated_data.get("broker")
+
+        # DEALER → assign own dealer
+        elif user.role == "dealer":
+            dealer = user.profile.dealer_profile
+
+        # SELLER → assign dealer automatically
+        elif user.role == "seller":
+            from online_car_market.dealers.models import DealerStaff
+
+            staff = DealerStaff.objects.filter(user=user, role="seller").first()
+            if not staff:
+                raise serializers.ValidationError("Seller is not assigned to any dealer.")
+
+            dealer = staff.dealer
+
+        # BROKER → assign own broker
+        elif user.role == "broker":
+            broker = user.profile.broker_profile
+
+        else:
+            raise serializers.ValidationError("You are not allowed to create cars.")
+
+        return Car.objects.create(
+            dealer=dealer,
+            broker=broker,
+            posted_by=user,
+            **validated_data
+        )
 
     def update(self, instance, validated_data):
         validated_data.pop("uploaded_images", None)
