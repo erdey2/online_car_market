@@ -616,26 +616,27 @@ class CarWriteSerializer(serializers.ModelSerializer):
 
         validated_data.pop("uploaded_images", None)
 
+        # REMOVE duplicates
+        validated_data.pop("dealer", None)
+        validated_data.pop("broker", None)
+        validated_data.pop("posted_by", None)
+
         dealer = None
         broker = None
 
-        # ADMIN
         if user.role in ["admin", "super_admin"]:
             dealer = validated_data.get("dealer")
             broker = validated_data.get("broker")
 
-        # DEALER
         elif user.role == "dealer":
             dealer = user.profile.dealer_profile
 
-        # SELLER (FIXED)
         else:
             seller_record = user.dealer_staff_assignments.filter(role="seller").first()
 
             if seller_record:
                 dealer = seller_record.dealer
 
-            # BROKER
             elif user.role == "broker":
                 broker = user.profile.broker_profile
 
