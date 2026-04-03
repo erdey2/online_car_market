@@ -1,11 +1,12 @@
+from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema_view, extend_schema, OpenApiParameter
-from ..models import Notification, Device
-from .serializers import NotificationSerializer, DeviceSerializer
+from ..models import Notification, Device, NotificationPreference
+from .serializers import NotificationSerializer, DeviceSerializer, NotificationPreferenceSerializer
 
 @extend_schema_view(
     list=extend_schema(
@@ -67,4 +68,22 @@ class DeviceViewSet(ModelViewSet):
         return Device.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        token = serializer.validated_data["fcm_token"]
+
+        Device.objects.update_or_create(
+            fcm_token=token,
+            defaults={
+                "user": self.request.user,
+                "platform": serializer.validated_data["platform"]
+            }
+        )
+
+class NotificationPreferenceView(RetrieveUpdateAPIView):
+    serializer_class = NotificationPreferenceSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        obj, created = NotificationPreference.objects.get_or_create(
+            user=self.request.user
+        )
+        return obj

@@ -20,10 +20,9 @@ class Notification(models.Model):
     def __str__(self):
         return f"Notification to {self.recipient}: {self.message[:50]}"
 
-
 class Device(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='devices')
-    fcm_token = models.CharField(max_length=512)
+    fcm_token = models.CharField(max_length=512, unique=True)
     platform = models.CharField(max_length=32, choices=(('web','web'),('android','android'),('ios','ios')))
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+from .firebase import init_firebase
 
 class NotificationsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
@@ -6,3 +7,4 @@ class NotificationsConfig(AppConfig):
 
     def ready(self):
         import online_car_market.notifications.signals
+        init_firebase()
