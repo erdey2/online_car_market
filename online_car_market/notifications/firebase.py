@@ -1,20 +1,30 @@
 import os
+import json
 import firebase_admin
 from firebase_admin import credentials
 
 
 def init_firebase():
-    cred_env = os.getenv("FIREBASE_CREDENTIALS_PATH")
+    firebase_json = os.getenv("FIREBASE_CREDENTIALS_JSON")
 
-    if not cred_env:
-        raise ValueError("FIREBASE_CREDENTIALS_PATH is not set!")
+    if not firebase_json:
+        print("Firebase not configured")
+        return
 
-    cred_path = os.path.join(os.getcwd(), cred_env)
+    try:
+        # Convert JSON string → dict
+        cred_dict = json.loads(firebase_json)
 
-    if not os.path.exists(cred_path):
-        raise FileNotFoundError(f"Firebase credentials not found at {cred_path}")
+        # Create temp file
+        temp_path = "/tmp/firebase.json"
 
-    cred = credentials.Certificate(cred_path)
+        with open(temp_path, "w") as f:
+            json.dump(cred_dict, f)
 
-    if not firebase_admin._apps:
-        firebase_admin.initialize_app(cred)
+        cred = credentials.Certificate(temp_path)
+
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(cred)
+
+    except Exception as e:
+        print(f"Firebase init failed: {e}")
