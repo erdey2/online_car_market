@@ -7,6 +7,39 @@ on:
     branches: [ "main" ]
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.test
+      DJANGO_SECRET_KEY: ci-secret-key
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_db
+      CLOUDINARY_CLOUD_NAME: test
+      CLOUDINARY_API_KEY: test
+      CLOUDINARY_API_SECRET: test
+      BREVO_API_KEY: test
+      FIREBASE_CREDENTIALS_B64: ""
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements/local.txt
+          pip install ruff mypy django-stubs
+
+      - name: Lint (Ruff)
+        run: ruff check .
+
+      - name: Type check (Mypy)
+        run: mypy .
+
   test:
     runs-on: ubuntu-latest
 
@@ -26,8 +59,14 @@ jobs:
           --health-retries=5
 
     env:
-      # Django environment
-      DJANGO_SETTINGS_MODULE: config.settings.production
+      DJANGO_SETTINGS_MODULE: config.settings.test
+      DJANGO_SECRET_KEY: ci-secret-key
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_db
+      CLOUDINARY_CLOUD_NAME: test
+      CLOUDINARY_API_KEY: test
+      CLOUDINARY_API_SECRET: test
+      BREVO_API_KEY: test
+      FIREBASE_CREDENTIALS_B64: ""
       DEBUG: "0"
 
     steps:
@@ -43,17 +82,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements/local.txt
-          pip install pytest pytest-django psycopg2-binary
-
-      - name: Load environment variables
-        run: |
-          echo "DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}" >> $GITHUB_ENV
-          echo "EMAIL_PORT=${{ secrets.EMAIL_PORT }}" >> $GITHUB_ENV
-          echo "DJANGO_ADMIN_URL=${{ secrets.DJANGO_ADMIN_URL }}" >> $GITHUB_ENV
-          echo "CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }}" >> $GITHUB_ENV
-          echo "CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }}" >> $GITHUB_ENV
-          echo "CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }}" >> $GITHUB_ENV
-          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> $GITHUB_ENV
 
       - name: Set PYTHONPATH
         run: echo "PYTHONPATH=\$PYTHONPATH:$PWD/online_car_market" >> $GITHUB_ENV
@@ -67,8 +95,6 @@ jobs:
 
       - name: Run migrations
         run: python manage.py migrate --noinput
-        working-directory: ./online_car_market
 
       - name: Run tests
         run: pytest -v
-        working-directory: ./online_car_market
