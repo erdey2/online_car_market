@@ -11,8 +11,7 @@ def deliver_notification(notification_id, channels):
     n = Notification.objects.get(id=notification_id)
     payload = {
         'id': n.id,
-        'verb': n.verb,
-        'description': n.description,
+        'message': n.message,
         'data': n.data,
         'created_at': n.created_at.isoformat(),
     }
@@ -22,8 +21,8 @@ def deliver_notification(notification_id, channels):
         channel_layer = get_channel_layer()
         group_name = f'user_{n.recipient_id}'
         async_to_sync(channel_layer.group_send)(group_name, {
-            'type':'notification.message',
-            'notification': payload,
+            'type': 'notify',
+            'payload': payload,
         })
 
     # push
@@ -35,4 +34,10 @@ def deliver_notification(notification_id, channels):
 
     # email
     if 'email' in channels and n.recipient.email:
-        send_mail(...)
+        send_mail(
+            subject="Online Car Market notification",
+            message=n.message or "You have a new notification.",
+            from_email=None,
+            recipient_list=[n.recipient.email],
+            fail_silently=True,
+        )

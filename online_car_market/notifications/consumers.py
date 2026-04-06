@@ -20,3 +20,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
     async def send_notification(self, event):
         await self.send(text_data=json.dumps(event["data"]))
 
+    async def notify(self, event):
+        # Backward-compatible alias for payloads sent by utils.send_user_notification.
+        await self.send(text_data=json.dumps(event["payload"]))
+

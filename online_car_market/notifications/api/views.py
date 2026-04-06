@@ -70,13 +70,14 @@ class DeviceViewSet(ModelViewSet):
     def perform_create(self, serializer):
         token = serializer.validated_data["fcm_token"]
 
-        Device.objects.update_or_create(
+        device, _ = Device.objects.update_or_create(
             fcm_token=token,
             defaults={
                 "user": self.request.user,
                 "platform": serializer.validated_data["platform"]
             }
         )
+        serializer.instance = device
 
 class NotificationPreferenceView(RetrieveUpdateAPIView):
     serializer_class = NotificationPreferenceSerializer
