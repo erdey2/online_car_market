@@ -368,7 +368,10 @@ class CarVerificationViewSet(GenericViewSet):
     def verify(self, request, pk=None):
         car = self.get_object()
 
-        serializer = VerifyCarSerializer(data=request.data)
+        serializer = VerifyCarSerializer(
+            data=request.data,
+            context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
 
         car = CarVerificationService.verify_car(
