@@ -125,6 +125,7 @@ class AdminDealerViewSet(ReadOnlyModelViewSet):
     @extend_schema(
         tags=["Admin - Dealer Management"],
         summary="Approve dealer application",
+        request=None,
         responses={200: OpenApiResponse(description="Dealer approved successfully")},
     )
     @action(detail=True, methods=["post"])
@@ -158,6 +159,7 @@ class AdminDealerViewSet(ReadOnlyModelViewSet):
     @extend_schema(
         tags=["Admin - Dealer Management"],
         summary="Suspend dealer",
+        request=None,
         responses={200: OpenApiResponse(description="Dealer suspended successfully")},
     )
     @action(detail=True, methods=["post"])
@@ -169,6 +171,7 @@ class AdminDealerViewSet(ReadOnlyModelViewSet):
     @extend_schema(
         tags=["Admin - Dealer Management"],
         summary="Reactivate dealer",
+        request=None,
         responses={200: OpenApiResponse(description="Dealer reactivated successfully")},
     )
     @action(detail=True, methods=["post"])

@@ -151,6 +151,7 @@ class AdminBrokerViewSet(viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         tags=["Admin - Broker Management"],
         summary="Approve broker application",
+        request=None,
         responses={200: OpenApiResponse(description="Broker approved successfully")},
     )
     @action(detail=True, methods=["post"])
@@ -197,6 +198,7 @@ class AdminBrokerViewSet(viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         tags=["Admin - Broker Management"],
         summary="Suspend broker",
+        request=None,
         responses={200: OpenApiResponse(description="Broker suspended successfully")},
     )
     @action(detail=True, methods=["post"])
@@ -213,6 +215,7 @@ class AdminBrokerViewSet(viewsets.ReadOnlyModelViewSet):
     @extend_schema(
         tags=["Admin - Broker Management"],
         summary="Reactivate broker",
+        request=None,
         responses={200: OpenApiResponse(description="Broker reactivated successfully")},
     )
     @action(detail=True, methods=["post"])
