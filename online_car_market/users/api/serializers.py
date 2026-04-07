@@ -167,16 +167,40 @@ class CustomRegisterSerializer(RegisterSerializer):
 class ProfileSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(read_only=True)
     buyer_profile = BuyerProfileSerializer(read_only=True)
-    dealer_profile = DealerProfileSerializer(required=False)
-    broker_profile = BrokerProfileSerializer(required=False)
+    dealer_profile = DealerProfileSerializer(read_only=True)
+    broker_profile = BrokerProfileSerializer(read_only=True)
+
     image = serializers.ImageField(required=False, allow_null=True)
     image_url = serializers.SerializerMethodField(read_only=True)
     role = serializers.SerializerMethodField(read_only=True)
 
+    class Meta:
+        model = Profile
+        fields = [
+            'id', 'user', 'first_name', 'last_name', 'contact', 'address', 'role',
+            'image', 'image_url', 'created_at', 'updated_at',
+            'buyer_profile', 'dealer_profile', 'broker_profile'
+        ]
+        read_only_fields = [
+            'id', 'user', 'role', 'created_at', 'updated_at', 'buyer_profile', 'image_url'
+        ]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        role = instance.user.role
+
+        if role != "dealer":
+            data.pop("dealer_profile", None)
+        if role != "broker":
+            data.pop("broker_profile", None)
+        if role != "buyer":
+            data.pop("buyer_profile", None)
+
+        return data
+
     @extend_schema_field(serializers.CharField())
     def get_role(self, obj) -> str:
-        roles = get_user_roles(obj.user)
-        return roles[0].get_name() if roles else None
+        return obj.user.role if obj.user else None
 
     def get_dealer_profile(self, obj):
         dealer_profile = getattr(obj, "dealer_profile", None)
@@ -189,17 +213,6 @@ class ProfileSerializer(serializers.ModelSerializer):
         if broker_profile:
             return BrokerProfileSerializer(broker_profile).data
         return None
-
-    class Meta:
-        model = Profile
-        fields = [
-            'id', 'user', 'first_name', 'last_name', 'contact', 'address', 'role',
-            'image', 'image_url', 'created_at', 'updated_at',
-            'buyer_profile', 'dealer_profile', 'broker_profile'
-        ]
-        read_only_fields = [
-            'id', 'user', 'role', 'created_at', 'updated_at', 'buyer_profile', 'image_url'
-        ]
 
     def get_image_url(self, obj):
         if obj.image:
