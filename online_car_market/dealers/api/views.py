@@ -308,11 +308,9 @@ class DealerStaffViewSet(ModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
-        profile = getattr(user, "profile", None)
-        if not profile:
-            return DealerStaff.objects.none()
-
-        dealer_profile = getattr(profile, "dealer_profile", None)
+        # /me endpoint
+        if self.action == "me":
+            return DealerStaff.objects.filter(user=user)
 
         base_qs = DealerStaff.objects.select_related(
             "user",
@@ -321,9 +319,17 @@ class DealerStaffViewSet(ModelViewSet):
             "dealer__profile"
         )
 
+        # If user is dealer → see their staff
+        dealer_profile = getattr(user.profile, "dealer_profile", None)
         if dealer_profile:
             return base_qs.filter(dealer=dealer_profile)
 
+        # If user is HR staff → see staff of their dealer
+        staff = DealerStaff.objects.filter(user=user).select_related("dealer").first()
+        if staff and staff.role == "hr":
+            return base_qs.filter(dealer=staff.dealer)
+
+        # fallback → only self
         return base_qs.filter(user=user)
 
     def perform_create(self, serializer):
