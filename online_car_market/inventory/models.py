@@ -113,6 +113,9 @@ class Car(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     sold_at = models.DateTimeField(null=True, blank=True, db_index=True)
 
+    reviewed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="reviewed_cars")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
     # Extra
     bluetooth = models.BooleanField(default=False)
     heated_seats = models.BooleanField(default=False)
