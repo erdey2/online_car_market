@@ -353,13 +353,6 @@ class CarVerificationViewSet(GenericViewSet):
             verification_status=verification_status
         )
 
-        # ensure optimization
-        queryset = queryset.select_related(
-            "dealer__profile__user",
-            "broker__profile__user",
-            "posted_by"
-        )
-
         serializer = self.get_serializer(
             queryset,
             many=True,

@@ -4,6 +4,7 @@ from firebase_admin.exceptions import FirebaseError
 import logging
 
 from .models import Notification, NotificationPreference, Device
+from .tasks import deliver_notification
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +26,17 @@ def notify_user(user, message: str, data: dict = None, title: str = None):
             data=data,
         )
 
-    # Send push notification (outside transaction - non-critical)
+    # Send push asynchronously so request latency stays DB-bound.
     try:
-        _send_fcm_push(user, title, message, data, notification.id)
+        deliver_notification.delay(notification.id, ["push"])
     except Exception as e:
-        # Never let push failure break the business flow
-        logger.error(f"FCM push failed for user {user.id}: {e}", exc_info=True)
+        # Fallback to sync push if broker is unavailable.
+        logger.warning("Celery dispatch failed, falling back to sync push: %s", e, exc_info=True)
+        try:
+            _send_fcm_push(user, title, message, data, notification.id)
+        except Exception as push_error:
+            # Never let push failure break the business flow
+            logger.error("FCM push failed for user %s: %s", user.id, push_error, exc_info=True)
 
     return notification
 

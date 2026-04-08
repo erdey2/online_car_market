@@ -140,4 +140,22 @@ class CarQueryService:
         if verification_status:
             qs = qs.filter(verification_status=verification_status)
 
-        return CarQueryService._prefetch_featured_image(qs).order_by("-created_at")
+        return (
+            qs.select_related("dealer", "broker__profile", "posted_by")
+            .only(
+                "id",
+                "make",
+                "model",
+                "year",
+                "price",
+                "sale_type",
+                "verification_status",
+                "priority",
+                "created_at",
+                "dealer__company_name",
+                "broker__profile__first_name",
+                "broker__profile__last_name",
+                "posted_by__email",
+            )
+            .order_by("-created_at")
+        )
