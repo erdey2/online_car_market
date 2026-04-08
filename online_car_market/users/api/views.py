@@ -108,6 +108,49 @@ class AuthViewSet(ViewSet):
         serializer.save()
         return Response({"detail": "Dealer registered. Awaiting approval"}, status=201)
 
+    @extend_schema(
+        tags=["Authentication"],
+        summary="Create Admin (Super Admin only)",
+        description="Only super admins can create admin users.",
+        request=inline_serializer(
+            name="AdminRegisterRequest",
+            fields={
+                "email": serializers.EmailField(),
+                "password": serializers.CharField(),
+            },
+        ),
+        responses={201: OpenApiResponse(description="Admin created successfully")},
+    )
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated])
+    def create_admin(self, request):
+
+        if not (request.user.is_superuser or request.user.role == "super_admin"):
+            return Response(
+                {"detail": "Only super admins can create admins."},
+                status=403
+            )
+
+        email = request.data.get("email")
+        password = request.data.get("password")
+
+        if not email or not password:
+            return Response(
+                {"detail": "Email and password are required."},
+                status=400
+            )
+
+        user = User.objects.create_user(
+            email=email,
+            password=password,
+            role="admin",
+            is_staff=True
+        )
+
+        return Response(
+            {"detail": "Admin created successfully"},
+            status=201
+        )
+
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
