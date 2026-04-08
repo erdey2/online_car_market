@@ -310,34 +310,40 @@ class CarViewSet(ModelViewSet):
         )
 
 @extend_schema_view(
-list=extend_schema(
-    tags=["Admin - Car Verification"],
-    summary="List Car Verification Records",
-    description=(
-        "Retrieve car verification records.\n\n"
-        "### Role-based visibility:\n"
-        "- Super Admin/Admin: Can view all records\n"
-        "- Dealer: Can view only their own records\n"
-        "- Broker: Can view only their own records\n\n"
-        "Optional filtering by verification status."
-    ),
-    parameters=[
-        OpenApiParameter(
-            name="verification_status",
-            type=OpenApiTypes.STR,
-            location="query",
-            description="Filter by status: pending, verified, rejected",
-            required=False,
+    list=extend_schema(
+        tags=["Admin - Car Verification"],
+        summary="List Car Verification Records",
+        description=(
+            "Retrieve car verification records.\n\n"
+            "### Role-based visibility:\n"
+            "- Super Admin/Admin: Can view all records\n"
+            "- Dealer: Can view only their own records\n"
+            "- Broker: Can view only their own records\n\n"
+            "Optional filtering by verification status."
         ),
-    ],
-    responses={200: CarVerificationListSerializer(many=True)},
-)
+        parameters=[
+            OpenApiParameter(
+                name="verification_status",
+                type=OpenApiTypes.STR,
+                location="query",
+                description="Filter by status: pending, verified, rejected",
+                required=False,
+            ),
+        ],
+        responses={200: CarVerificationListSerializer(many=True)},
+    )
 )
 class CarVerificationViewSet(GenericViewSet):
 
     permission_classes = [IsAuthenticated]
-    queryset = Car.objects.all()
     serializer_class = CarVerificationListSerializer
+
+    def get_queryset(self):
+        return Car.objects.select_related(
+            "dealer__profile__user",
+            "broker__profile__user",
+            "posted_by"
+        )
 
     def list(self, request):
         verification_status = request.query_params.get("verification_status")
@@ -345,6 +351,13 @@ class CarVerificationViewSet(GenericViewSet):
         queryset = CarQueryService.get_verification_cars_for_user(
             user=request.user,
             verification_status=verification_status
+        )
+
+        # ensure optimization
+        queryset = queryset.select_related(
+            "dealer__profile__user",
+            "broker__profile__user",
+            "posted_by"
         )
 
         serializer = self.get_serializer(
@@ -363,9 +376,12 @@ class CarVerificationViewSet(GenericViewSet):
         responses={200: VerifyCarSerializer},
     )
     @action(
-        detail=True, methods=["patch"], permission_classes=[IsAuthenticated, IsSuperAdminOrAdmin],
+        detail=True,
+        methods=["patch"],
+        permission_classes=[IsAuthenticated, IsSuperAdminOrAdmin],
     )
     def verify(self, request, pk=None):
+        # uses optimized queryset automatically
         car = self.get_object()
 
         serializer = VerifyCarSerializer(
@@ -377,6 +393,7 @@ class CarVerificationViewSet(GenericViewSet):
         car = CarVerificationService.verify_car(
             car=car,
             verification_status=serializer.validated_data["verification_status"],
+            reviewed_by=request.user
         )
 
         return Response(

@@ -695,8 +695,8 @@ class CarViewSerializer(serializers.ModelSerializer):
         read_only_fields = ['viewed_at', 'ip_address']
 
 class CarVerificationListSerializer(serializers.ModelSerializer):
-    dealer_name = serializers.CharField(source="dealer.profile.business_name", read_only=True)
-    broker_name = serializers.CharField(source="broker.profile.business_name", read_only=True)
+    dealer_name = serializers.SerializerMethodField()
+    broker_name = serializers.SerializerMethodField()
     posted_by = serializers.CharField(source="posted_by.email", read_only=True)
 
     class Meta:
@@ -715,6 +715,12 @@ class CarVerificationListSerializer(serializers.ModelSerializer):
             "priority",
             "created_at",
         ]
+
+    def get_dealer_name(self, obj):
+        return obj.dealer.get_display_name() if obj.dealer else None
+
+    def get_broker_name(self, obj):
+        return obj.broker.get_display_name() if obj.broker else None
 
 class CarVerificationAnalyticsSerializer(serializers.Serializer):
     total = serializers.IntegerField()

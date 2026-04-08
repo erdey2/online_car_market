@@ -11,23 +11,26 @@ class CarVerificationService:
     @staticmethod
     @transaction.atomic
     def verify_car(car, verification_status, reviewed_by=None):
+
         if verification_status is None:
             raise ValidationError("verification_status is required.")
 
-        car = (
-            car.__class__.objects
-            .select_for_update()
-            .get(pk=car.pk)
-        )
-
-        # Idempotency protection
         if car.verification_status == verification_status:
             return car
 
-        # Apply update
         car.verification_status = verification_status
         car.priority = verification_status == "verified"
-        car.save(update_fields=["verification_status", "priority"])
+
+        if reviewed_by:
+            car.reviewed_by = reviewed_by
+            car.reviewed_at = timezone.now()
+
+        car.save(update_fields=[
+            "verification_status",
+            "priority",
+            "reviewed_by",
+            "reviewed_at"
+        ])
 
         owner = None
         role = None
@@ -50,17 +53,12 @@ class CarVerificationService:
                 if role == "dealer"
                 else f"Your listed car '{car_name}' has been approved."
             )
-            notif_type = "car_verified"
-
         elif verification_status == "rejected":
             message = f"Your car '{car_name}' was rejected. Please review and update."
-            notif_type = "car_rejected"
-
         else:
             message = f"Your car '{car_name}' status updated to {verification_status}."
-            notif_type = "car_status_update"
 
-        notify_user(
+        transaction.on_commit(lambda: notify_user(
             user=owner,
             message=message,
             data={
@@ -68,7 +66,7 @@ class CarVerificationService:
                 "status": verification_status,
                 "type": "car_verification",
             }
-        )
+        ))
 
         return car
 
