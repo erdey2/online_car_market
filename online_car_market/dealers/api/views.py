@@ -14,8 +14,7 @@ from ..models import DealerStaff
 from online_car_market.dealers.models import DealerProfile, DealerRating
 
 from online_car_market.users.permissions.drf_permissions import IsSuperAdmin
-from online_car_market.users.permissions.business_permissions import ( IsRatingOwnerOrAdmin,
-                                                                       IsDealerWithManageStaff, IsDealerOrStaff)
+from online_car_market.users.permissions.business_permissions import IsRatingOwnerOrAdmin, IsHRorDealer, IsDealerOrStaff
 from ..services import approve_dealer, reactivate_dealer, suspend_dealer, reject_dealer
 
 import logging
@@ -304,7 +303,7 @@ class ProfileViewSet(ViewSet):
 )
 class DealerStaffViewSet(ModelViewSet):
     serializer_class = DealerStaffSerializer
-    permission_classes = [IsAuthenticated, IsDealerOrStaff]
+    permission_classes = [IsAuthenticated, IsHRorDealer]
 
     def get_queryset(self):
         user = self.request.user
