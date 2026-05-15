@@ -4,11 +4,16 @@ from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.decorators import action
+
 from ..models import Bid, Auction
 from .serializers import BidSerializer, AuctionSerializer
-from online_car_market.users.permissions.drf_permissions import IsBuyer, IsSuperAdminOrAdmin
+from online_car_market.users.permissions.drf_permissions import (
+    IsBuyer,
+    IsSuperAdminOrAdmin
+)
 from online_car_market.users.models import User
-from online_car_market.bids.services import bid_service, auction_service
+from online_car_market.bids.services.bid_service import BidService
+from online_car_market.bids.services.auction_service import AuctionService
 
 
 @extend_schema_view(
@@ -36,14 +41,16 @@ class BidViewSet(ModelViewSet):
         user = self.request.user
 
         qs = Bid.objects.select_related(
-            "user", "user__profile", "car"
+            "user",
+            "user__profile",
+            "car"
         )
 
-        # Admins see all bids
+        # Admins can see all bids
         if user.role in [User.Role.ADMIN, User.Role.SUPER_ADMIN]:
             return qs.order_by("-created_at")
 
-        # Regular users see only their own bids
+        # Buyers see only their own bids
         return qs.filter(user=user).order_by("-created_at")
 
     def get_permissions(self):
@@ -55,7 +62,7 @@ class BidViewSet(ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        bid = bid_service.place_bid(
+        bid = BidService.place_bid(
             user=request.user,
             car_id=serializer.validated_data["auction"].car.id,
             amount=serializer.validated_data["amount"],
@@ -70,23 +77,38 @@ class BidViewSet(ModelViewSet):
         tags=["Bids"],
         summary="Bid history per car"
     )
-    @action(detail=False, methods=["get"], url_path="car/(?P<car_id>[^/.]+)/history")
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="car/(?P<car_id>[^/.]+)/history"
+    )
     def car_bid_history(self, request, car_id=None):
         bids = (
             Bid.objects
             .filter(car_id=car_id)
-            .select_related("user", "user__profile", "car")
+            .select_related(
+                "user",
+                "user__profile",
+                "car"
+            )
             .order_by("-created_at")
         )
 
         ranked = bids.order_by("-amount")
 
         return Response({
-            "all_bids": BidSerializer(bids, many=True).data,
-            "highest_bid": BidSerializer(ranked.first()).data if ranked.exists() else None,
-            "top_3_bids": BidSerializer(ranked[:3], many=True).data,
+            "all_bids": BidSerializer(
+                bids,
+                many=True
+            ).data,
+            "highest_bid": BidSerializer(
+                ranked.first()
+            ).data if ranked.exists() else None,
+            "top_3_bids": BidSerializer(
+                ranked[:3],
+                many=True
+            ).data,
         })
-
 
 @extend_schema_view(
     list=extend_schema(tags=["Auctions"]),
@@ -95,7 +117,10 @@ class BidViewSet(ModelViewSet):
 class AuctionViewSet(ModelViewSet):
     serializer_class = AuctionSerializer
     queryset = Auction.objects.all()
-    permission_classes = [IsAuthenticated, IsSuperAdminOrAdmin]
+    permission_classes = [
+        IsAuthenticated,
+        IsSuperAdminOrAdmin
+    ]
     http_method_names = ["get", "post"]
 
     @extend_schema(
@@ -104,12 +129,12 @@ class AuctionViewSet(ModelViewSet):
     )
     @action(detail=True, methods=["post"])
     def close(self, request, pk=None):
-        highest_bid = auction_service.close_auction(pk)
+        highest_bid = AuctionService.close_auction(pk)
 
         return Response({
             "status": "closed",
             "winner": highest_bid.user.id if highest_bid else None,
-            "amount": highest_bid.amount if highest_bid else None
+            "amount": highest_bid.amount if highest_bid else None,
         })
 
     @extend_schema(
@@ -118,7 +143,7 @@ class AuctionViewSet(ModelViewSet):
     )
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
-        auction_service.cancel_auction(pk)
+        AuctionService.cancel_auction(pk)
 
         return Response(
             {"detail": "Auction cancelled"},
