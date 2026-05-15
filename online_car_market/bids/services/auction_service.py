@@ -10,7 +10,7 @@ class AuctionService:
     def is_active(auction: Auction) -> bool:
         now = timezone.now()
         return (
-            auction.status == "open"
+            auction.status == "active"
             and auction.start_at <= now <= auction.end_at
         )
 
@@ -23,19 +23,29 @@ class AuctionService:
             .get(id=auction_id)
         )
 
-        if auction.status != "open":
-            raise ValidationError("Auction is not open")
+        if auction.status != "active":
+            raise ValidationError(
+                "Auction is not active"
+            )
 
         highest_bid = (
             Bid.objects
-            .filter(auction=auction)
-            .order_by("-amount", "created_at")
+            .filter(car=auction.car)
+            .order_by(
+                "-amount",
+                "created_at"
+            )
             .first()
         )
 
         auction.status = "closed"
         auction.closed_at = timezone.now()
-        auction.save(update_fields=["status", "closed_at"])
+        auction.save(
+            update_fields=[
+                "status",
+                "closed_at"
+            ]
+        )
 
         return highest_bid
 
@@ -48,8 +58,16 @@ class AuctionService:
             .get(id=auction_id)
         )
 
-        if auction.status != "open":
-            raise ValidationError("Only open auctions can be cancelled")
+        if auction.status != "active":
+            raise ValidationError(
+                "Only active auctions can be cancelled"
+            )
 
-        auction.status = "cancelled"
-        auction.save(update_fields=["status"])
+        auction.status = "closed"
+        auction.closed_at = timezone.now()
+        auction.save(
+            update_fields=[
+                "status",
+                "closed_at"
+            ]
+        )
