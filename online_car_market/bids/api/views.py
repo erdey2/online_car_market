@@ -64,14 +64,15 @@ class BidViewSet(ModelViewSet):
 
         bid = BidService.place_bid(
             user=request.user,
-            car_id=serializer.validated_data["auction"].car.id,
+            car_id=serializer.validated_data["car"].id,
             amount=serializer.validated_data["amount"],
         )
 
         return Response(
-            BidSerializer(bid).data,
+            self.get_serializer(bid).data,
             status=status.HTTP_201_CREATED
         )
+
 
     @extend_schema(
         tags=["Bids"],
