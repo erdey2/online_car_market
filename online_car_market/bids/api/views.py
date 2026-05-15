@@ -113,17 +113,28 @@ class BidViewSet(ModelViewSet):
 
 
 @extend_schema_view(
-    list=extend_schema(tags=["Auctions"]),
+    list=extend_schema(
+        tags=["Auctions"],
+        summary="List Auctions",
+        description="Admins can list all auctions."
+    ),
+    create=extend_schema(
+        tags=["Auctions"],
+        summary="Create Auction",
+        description="Create a new auction for a car. Admins only."
+    ),
     retrieve=extend_schema(tags=["Auctions"]),
 )
 class AuctionViewSet(ModelViewSet):
     serializer_class = AuctionSerializer
     queryset = Auction.objects.all()
-    permission_classes = [
-        IsAuthenticated,
-        IsSuperAdminOrAdmin
-    ]
+    permission_classes = [IsAuthenticated]
     http_method_names = ["get", "post"]
+
+    def get_permissions(self):
+        if self.action in ["list", "create", "retrieve", "close", "cancel"]:
+            return [IsAuthenticated(), IsSuperAdminOrAdmin()]
+        return super().get_permissions()
 
     @extend_schema(
         tags=["Auctions"],
