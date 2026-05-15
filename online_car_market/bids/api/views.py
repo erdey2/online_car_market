@@ -110,6 +110,7 @@ class BidViewSet(ModelViewSet):
             ).data,
         })
 
+
 @extend_schema_view(
     list=extend_schema(tags=["Auctions"]),
     retrieve=extend_schema(tags=["Auctions"]),
