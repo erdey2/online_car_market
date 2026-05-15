@@ -7,6 +7,13 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         components = [
             {
+                "name": "Basic Salary",
+                "component_type": SalaryComponent.EARNING,
+                "is_taxable": True,
+                "is_pensionable": True,
+                "is_system": True,
+            },
+            {
                 "name": "Overtime",
                 "component_type": SalaryComponent.EARNING,
                 "is_taxable": True,

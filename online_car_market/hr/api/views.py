@@ -11,6 +11,7 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from online_car_market.users.permissions.drf_permissions import IsHR, IsDealerOrHR, IsFinance
 from online_car_market.users.permissions.business_permissions import IsHRorDealer
 from online_car_market.dealers.models import DealerStaff
@@ -452,9 +453,53 @@ class SalaryComponentViewSet(viewsets.ModelViewSet):
     )
 )
 class EmployeeSalaryViewSet(ModelViewSet):
-    queryset = EmployeeSalary.objects.select_related("employee", "component")
     serializer_class = EmployeeSalarySerializer
     permission_classes = [IsAuthenticated, IsDealerOrHR]
+
+    def _allowed_employees(self):
+        user = self.request.user
+
+        base_qs = Employee.objects.select_related(
+            "created_by",
+            "created_by__profile",
+            "created_by__profile__dealer_profile",
+        )
+
+        profile = getattr(user, "profile", None)
+        dealer = getattr(profile, "dealer_profile", None)
+
+        if dealer:
+            return base_qs.filter(created_by=user)
+
+        staff = (
+            DealerStaff.objects
+            .select_related("dealer")
+            .filter(user=user, role="hr")
+            .first()
+        )
+        if staff:
+            return base_qs.filter(created_by__profile__dealer_profile=staff.dealer)
+
+        return base_qs.none()
+
+    def get_queryset(self):
+        return (
+            EmployeeSalary.objects
+            .select_related("employee", "employee__user", "component")
+            .filter(employee__in=self._allowed_employees())
+        )
+
+    def _ensure_employee_access(self, employee):
+        if not self._allowed_employees().filter(pk=employee.pk).exists():
+            raise PermissionDenied("You can only manage salaries for employees in your dealer scope.")
+
+    def perform_create(self, serializer):
+        self._ensure_employee_access(serializer.validated_data["employee"])
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._ensure_employee_access(serializer.validated_data.get("employee", serializer.instance.employee))
+        serializer.save()
 
 @extend_schema(
     tags=["Dealers - Human Resource Management"],

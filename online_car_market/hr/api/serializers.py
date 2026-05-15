@@ -1,6 +1,5 @@
 from __future__ import annotations
 from datetime import date
-from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
@@ -16,6 +15,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(write_only=True, required=True)
     user_email_display = serializers.EmailField(source="user.email", read_only=True)
     full_name = serializers.SerializerMethodField(read_only=True)
+    salary = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Employee
@@ -32,7 +32,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "user_email_display", "full_name", "created_by", "created_at", "updated_at"]
+        read_only_fields = ["id", "user_email_display", "full_name", "salary", "created_by", "created_at", "updated_at"]
 
     def get_full_name(self, obj):
         profile = getattr(obj.user, "profile", None)
@@ -41,15 +41,19 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
         return f"{profile.first_name} {profile.last_name}".strip()
 
+    def get_salary(self, obj):
+        basic_salary = (
+            EmployeeSalary.objects
+            .select_related("component")
+            .filter(employee=obj, component__name__iexact="Basic Salary")
+            .first()
+        )
+        return basic_salary.amount if basic_salary else None
+
     # Field-level validations
     def validate_hire_date(self, value: date) -> date:
         if value > date.today():
             raise serializers.ValidationError("Hire date cannot be in the future.")
-        return value
-
-    def validate_salary(self, value: Decimal | None) -> Decimal | None:
-        if value is not None and value < 0:
-            raise serializers.ValidationError("Salary cannot be negative.")
         return value
 
     def validate_user_email(self, email: str) -> User:
@@ -333,19 +337,24 @@ class SalaryComponentSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
 class EmployeeSalarySerializer(serializers.ModelSerializer):
-    employee_id = serializers.CharField(
-        source="employee.employee_id", read_only=True
+    employee_email = serializers.EmailField(
+        source="employee.user.email", read_only=True
     )
     component_name = serializers.CharField(
         source="component.name", read_only=True
     )
+
+    def validate_amount(self, value: Decimal) -> Decimal:
+        if value < 0:
+            raise serializers.ValidationError("Amount cannot be negative.")
+        return value
 
     class Meta:
         model = EmployeeSalary
         fields = [
             "id",
             "employee",
-            "employee_id",
+            "employee_email",
             "component",
             "component_name",
             "amount",
