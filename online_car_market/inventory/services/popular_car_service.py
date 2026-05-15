@@ -10,7 +10,11 @@ class PopularCarService:
         Base queryset for popular cars.
         Only verified cars are publicly visible.
         """
-        return Car.objects.filter(verification_status="verified")
+        return (
+            Car.objects
+            .filter(verification_status="verified")
+            .select_related("make_ref", "model_ref", "dealer", "broker", "posted_by")
+        )
 
     @staticmethod
     def apply_price_filters(queryset, min_price=None, max_price=None):
@@ -20,6 +24,7 @@ class PopularCarService:
             if max_price:
                 queryset = queryset.filter(price__lte=Decimal(max_price))
         except (InvalidOperation, TypeError):
+            # Silently ignore invalid price parameters
             pass
 
         return queryset
@@ -31,15 +36,15 @@ class PopularCarService:
         """
         qs = PopularCarService.base_queryset()
         qs = PopularCarService.apply_price_filters(qs, min_price, max_price)
-        return qs.order_by("-views")
+        return qs.order_by("-views_count")
 
     @staticmethod
     def increment_views(car):
         """
-        Safely increment car view count.
+        Safely increment car view count using views_count field.
         """
-        car.views = F("views") + 1
-        car.save(update_fields=["views"])
+        car.views_count = F("views_count") + 1
+        car.save(update_fields=["views_count"])
         car.refresh_from_db()
         return car
 

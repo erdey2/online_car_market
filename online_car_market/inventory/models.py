@@ -112,6 +112,7 @@ class Car(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     sold_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    views_count = models.IntegerField(default=0, db_index=True)
 
     reviewed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="reviewed_cars")
     reviewed_at = models.DateTimeField(null=True, blank=True)
@@ -280,7 +281,3 @@ class Contact(models.Model):
     car = models.ForeignKey(Car, on_delete=models.CASCADE, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
-
-
-
-

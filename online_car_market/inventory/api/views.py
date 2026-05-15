@@ -7,6 +7,7 @@ from django.conf import settings
 
 from rest_framework import status, mixins, serializers
 from rest_framework.exceptions import NotFound
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.generics import get_object_or_404
 from rest_framework.mixins import CreateModelMixin, ListModelMixin, RetrieveModelMixin
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
@@ -748,16 +749,21 @@ class CarViewViewSet(ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         return Response({"error": "Deleting views is not allowed."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
+class PopularCarsPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
 @extend_schema_view(
     list=extend_schema(
         tags=["Popular Cars"],
         description="List popular cars based on view count. Accessible to all users, including buyers and unauthenticated users.",
         parameters=[
             OpenApiParameter(
-                name='status',
+                name='verification_status',
                 type=str,
                 location="query",
-                description='Filter by car status (pending, verified, rejected)',
+                description='Filter by verification status (pending, verified, rejected)',
                 enum=['pending', 'verified', 'rejected']
             ),
             OpenApiParameter(
@@ -822,10 +828,11 @@ class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Gener
     permission_classes = [AllowAny]
     serializer_class = CarListSerializer
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['status', 'sale_type', 'make_ref']
+    filterset_fields = ['verification_status', 'sale_type', 'make_ref']
     search_fields = ['make', 'model', 'description']
-    ordering_fields = ['views', 'price', 'created_at']
-    ordering = ['-views']
+    ordering_fields = ['views_count', 'price', 'created_at']
+    ordering = ['-views_count']
+    pagination_class = PopularCarsPagination
 
     def get_queryset(self):
         min_price = self.request.query_params.get("min_price")
