@@ -24,7 +24,29 @@ class PayrollRun(models.Model):
         ]
 
     def is_editable(self):
-        return self.status != self.POSTED
+        return self.status == self.DRAFT
+
+    def approve(self, by=None):
+        if self.status == self.POSTED:
+            raise ValueError("Posted payroll cannot be modified")
+
+        if self.status != self.DRAFT:
+            raise ValueError("Payroll is already approved")
+
+        self.status = self.APPROVED
+        self.save(update_fields=["status"])
+        return self
+
+    def post(self, by=None):
+        if self.status == self.POSTED:
+            raise ValueError("Payroll is already posted")
+
+        if self.status != self.APPROVED:
+            raise ValueError("Only approved payroll can be posted")
+
+        self.status = self.POSTED
+        self.save(update_fields=["status"])
+        return self
 
 class PayrollItem(models.Model):
     payroll_run = models.ForeignKey(

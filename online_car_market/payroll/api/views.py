@@ -3,7 +3,7 @@ from online_car_market.payroll.models import PayrollItem
 from online_car_market.payroll.api.serializers import PayslipSerializer, PayrollRunSerializer
 from online_car_market.payroll.selectors.payroll_queries import get_latest_payslip
 from rest_framework.permissions import IsAuthenticated
-from online_car_market.users.permissions.business_permissions import CanViewPayroll, CanRunPayroll, CanApprovePayroll
+from online_car_market.users.permissions.business_permissions import CanViewPayroll, CanRunPayroll, CanApprovePayroll, CanPostPayroll
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -90,8 +90,35 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanApprovePayroll])
     def approve(self, request, pk=None):
         payroll_run = self.get_object()
-        payroll_run.approve(by=request.user)
+        try:
+            payroll_run.approve(by=request.user)
+        except (ValidationError, ValueError) as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
         return Response({"detail": "Payroll approved"})
+
+    @extend_schema(
+        tags=["Payroll – Payroll Runs"],
+        summary="Post payroll",
+        description=(
+            "Post an approved payroll run. "
+            "This is the final workflow step and makes the payroll immutable."
+        ),
+        responses={
+            200: dict,
+            400: dict,
+        }
+    )
+    @action(detail=True, methods=["post"], url_path="post", permission_classes=[IsAuthenticated, CanPostPayroll])
+    def post_payroll(self, request, pk=None):
+        payroll_run = self.get_object()
+
+        try:
+            payroll_run.post(by=request.user)
+        except (ValidationError, ValueError) as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({"detail": "Payroll posted"})
 
 @extend_schema(
     tags=["Payroll – Payslips"],

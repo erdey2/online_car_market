@@ -2,7 +2,7 @@ def build_payslip_json(payroll_item):
     earnings = []
     deductions = []
 
-    for line in payroll_item.payrollline_set.all():
+    for line in payroll_item.lines.all():
         item = {
             "name": line.component.name,
             "amount": str(line.amount),

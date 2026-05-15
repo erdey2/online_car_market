@@ -111,7 +111,7 @@ class CanManageSales(BasePermission):
     def has_permission(self, request, view):
         user = request.user
         return (
-            has_any_role(user, ["admin", "dealer", "broker"]) or
+            user.is_authenticated and user.role in ["admin", "dealer", "broker"] or
             is_staff(user, ["seller"])
         )
 
@@ -146,6 +146,18 @@ class CanApprovePayroll(BasePermission):
         return (
             user.is_authenticated and
             user.role == "admin"
+        )
+
+class CanPostPayroll(BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+
+        if not user.is_authenticated:
+            return False
+
+        return (
+            user.role == "admin" or
+            is_staff(user, ["finance"])
         )
 
 class CanViewSalesData(BasePermission):

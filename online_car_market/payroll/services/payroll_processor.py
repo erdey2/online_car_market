@@ -1,4 +1,6 @@
 from decimal import Decimal
+import calendar
+from datetime import date
 from django.db import transaction
 
 from online_car_market.payroll.models import PayrollItem, PayrollLine, SalaryComponent
@@ -91,13 +93,23 @@ def process_payroll_for_employee(employee, payroll_run, year, month):
     }
 
     try:
-        overtime_component = SalaryComponent.objects.get(name__iexact="Overtime")
+        overtime_component = SalaryComponent.objects.get(name="Overtime")
     except SalaryComponent.DoesNotExist:
-        overtime_component = None
+        overtime_component = SalaryComponent.objects.create(
+            name="Overtime",
+            component_type=SalaryComponent.EARNING,
+            is_taxable=True,
+            is_pensionable=False,
+            is_system=True,
+        )
+
+    start_date = date(year, month, 1)
+    end_date = date(year, month, calendar.monthrange(year, month)[1])
 
     overtime_entries = OvertimeEntry.objects.filter(
         employee=employee,
-        payroll_run=payroll_run,
+        approved=True,
+        date__range=(start_date, end_date),
     )
 
     basic_salary = salaries.filter(
@@ -118,17 +130,16 @@ def process_payroll_for_employee(employee, payroll_run, year, month):
 
         overtime_amount = calculate_overtime_amount(
             basic_salary=basic_salary_amount,
-            expected_hours=expected_hours,
+            total_hours_worked=expected_hours,
             overtime_hours=overtime_hours,
             overtime_type=ot.overtime_type,
         )
 
-        if overtime_component:
-            PayrollLine.objects.create(
-                payroll_item=payroll_item,
-                component=overtime_component,
-                amount=overtime_amount,
-            )
+        PayrollLine.objects.create(
+            payroll_item=payroll_item,
+            component=overtime_component,
+            amount=overtime_amount,
+        )
 
         gross_earnings += overtime_amount
 
