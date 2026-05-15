@@ -81,6 +81,32 @@ class CarMakeViewSet(ModelViewSet):
             return [AllowAny()]   # No authentication required
         return [IsSuperAdminOrAdmin()]   # Only admins for create/update/delete
 
+    def perform_create(self, serializer):
+        instance = serializer.save()
+        # Invalidate cached makes list so newly created makes appear immediately
+        try:
+            cache.delete_pattern('car_makes_list*')
+        except AttributeError:
+            # Fallback for cache backends without delete_pattern
+            cache.clear()
+        return instance
+
+    def perform_update(self, serializer):
+        instance = serializer.save()
+        try:
+            cache.delete_pattern('car_makes_list*')
+        except AttributeError:
+            cache.clear()
+        return instance
+
+    def perform_destroy(self, instance):
+        pk = instance.pk
+        instance.delete()
+        try:
+            cache.delete_pattern('car_makes_list*')
+        except AttributeError:
+            cache.clear()
+        return None
 @extend_schema_view(
     list=extend_schema(
         tags=["Cars - Models"],
