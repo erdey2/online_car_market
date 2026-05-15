@@ -2,9 +2,8 @@ import logging
 
 from django.core.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
-from django.views.decorators.cache import cache_page
-from django.utils.decorators import method_decorator
 from django.core.cache import cache
+from django.conf import settings
 
 from rest_framework import status, mixins, serializers
 from rest_framework.exceptions import NotFound
@@ -72,9 +71,17 @@ class CarMakeViewSet(ModelViewSet):
     queryset = CarMake.objects.all()
     serializer_class = CarMakeSerializer
 
-    @method_decorator(cache_page(60 * 60 * 12, key_prefix='car_makes_list'))
     def list(self, request, *args, **kwargs):
-        return super().list(request, *args, **kwargs)
+        cache_key = "car_makes_list"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
+        resp = super().list(request, *args, **kwargs)
+        # 5 minutes for better freshness
+        timeout = getattr(settings, "CAR_MAKES_CACHE_TIMEOUT", 60 * 5)
+        cache.set(cache_key, resp.data, timeout=timeout)
+        return resp
 
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
@@ -84,29 +91,20 @@ class CarMakeViewSet(ModelViewSet):
     def perform_create(self, serializer):
         instance = serializer.save()
         # Invalidate cached makes list so newly created makes appear immediately
-        try:
-            cache.delete_pattern('car_makes_list*')
-        except AttributeError:
-            # Fallback for cache backends without delete_pattern
-            cache.clear()
+        cache.delete("car_makes_list")
         return instance
 
     def perform_update(self, serializer):
         instance = serializer.save()
-        try:
-            cache.delete_pattern('car_makes_list*')
-        except AttributeError:
-            cache.clear()
+        cache.delete("car_makes_list")
         return instance
 
     def perform_destroy(self, instance):
         pk = instance.pk
         instance.delete()
-        try:
-            cache.delete_pattern('car_makes_list*')
-        except AttributeError:
-            cache.clear()
+        cache.delete("car_makes_list")
         return None
+
 @extend_schema_view(
     list=extend_schema(
         tags=["Cars - Models"],
