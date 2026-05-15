@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
+from django.db.models import Q
 from online_car_market.users.permissions.drf_permissions import IsHR, IsDealerOrHR, IsFinance
 from online_car_market.users.permissions.business_permissions import IsHRorDealer
 from online_car_market.dealers.models import DealerStaff
@@ -21,6 +22,13 @@ from ..services.leave_service import LeaveService
 from ..services.attendance_service import AttendanceService
 
 logger = logging.getLogger(__name__)
+
+
+def _scope_employees_to_dealer(base_qs, dealer):
+    return base_qs.filter(
+        Q(created_by__profile__dealer_profile=dealer) |
+        Q(created_by__dealer_staff_assignments__dealer=dealer)
+    ).distinct()
 
 @extend_schema_view(
     list=extend_schema(
@@ -73,7 +81,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         # Dealer → only their employees
         if dealer:
-            return base_qs.filter(created_by=user)
+            return _scope_employees_to_dealer(base_qs, dealer)
 
         # HR staff → employees of their dealer
         staff = (
@@ -84,9 +92,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         )
 
         if staff:
-            return base_qs.filter(
-                created_by__profile__dealer_profile=staff.dealer
-            )
+            return _scope_employees_to_dealer(base_qs, staff.dealer)
 
         return base_qs.none()
 
@@ -469,7 +475,7 @@ class EmployeeSalaryViewSet(ModelViewSet):
         dealer = getattr(profile, "dealer_profile", None)
 
         if dealer:
-            return base_qs.filter(created_by=user)
+            return _scope_employees_to_dealer(base_qs, dealer)
 
         staff = (
             DealerStaff.objects
@@ -478,7 +484,7 @@ class EmployeeSalaryViewSet(ModelViewSet):
             .first()
         )
         if staff:
-            return base_qs.filter(created_by__profile__dealer_profile=staff.dealer)
+            return _scope_employees_to_dealer(base_qs, staff.dealer)
 
         return base_qs.none()
 
