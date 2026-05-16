@@ -16,19 +16,26 @@ from online_car_market.payroll.services.payroll_runner import run_payroll
     list=extend_schema(
         tags=["Payroll – Payroll Runs"],
         summary="List payroll runs",
-        description="Retrieve all payroll runs ordered by creation date (latest first)."
+        description=(
+            "Retrieve all payroll runs ordered by creation date (latest first). "
+            "Allowed roles: admin, HR staff, and accountant staff (CanViewPayroll)."
+        )
     ),
     retrieve=extend_schema(
         tags=["Payroll – Payroll Runs"],
         summary="Retrieve a payroll run",
-        description="Get detailed information about a specific payroll run."
+        description=(
+            "Get detailed information about a specific payroll run. "
+            "Allowed roles: admin, HR staff, and accountant staff (CanViewPayroll)."
+        )
     ),
     create=extend_schema(
         tags=["Payroll – Payroll Runs"],
         summary="Create a payroll run",
         description=(
             "Create a new payroll run for a specific period. "
-            "This does not process payroll until the run action is executed."
+            "This does not process payroll until the run action is executed. "
+            "Allowed roles: admin, HR staff, and accountant staff (CanViewPayroll)."
         )
     ),
 )
@@ -44,7 +51,8 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
         description=(
             "Execute payroll processing for the selected payroll run. "
             "Calculates salaries, overtime, deductions, and generates payroll items. "
-            "Fails if payroll was already processed or required data is missing."
+            "Fails if payroll was already processed or required data is missing. "
+            "Allowed roles: admin and HR staff (CanRunPayroll)."
         ),
         responses={
             200: dict,
@@ -80,7 +88,8 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
         summary="Approve payroll",
         description=(
             "Approve a processed payroll run. "
-            "Once approved, payroll data becomes final and immutable."
+            "Once approved, payroll data becomes final and immutable. "
+            "Allowed roles: admin only (CanApprovePayroll)."
         ),
         responses={
             200: dict,
@@ -102,7 +111,8 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
         summary="Post payroll",
         description=(
             "Post an approved payroll run. "
-            "This is the final workflow step and makes the payroll immutable."
+            "This is the final workflow step and makes the payroll immutable. "
+            "Allowed roles: admin and finance staff (CanPostPayroll)."
         ),
         responses={
             200: dict,
