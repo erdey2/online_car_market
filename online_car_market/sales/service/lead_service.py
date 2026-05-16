@@ -41,7 +41,7 @@ class LeadService:
 
     @staticmethod
     def total_leads(user=None):
-        qs = Lead.objects.all()
+        qs = Lead.objects.select_related('car', 'buyer').all()
         if user and hasattr(user, "dealer"):
             qs = qs.filter(car__dealer=user.dealer)
         elif user and hasattr(user, "broker"):
@@ -52,7 +52,7 @@ class LeadService:
 
     @staticmethod
     def leads_by_status(user=None):
-        qs = Lead.objects.all()
+        qs = Lead.objects.select_related('car', 'buyer').all()
         if user and hasattr(user, "dealer"):
             qs = qs.filter(car__dealer=user.dealer)
         elif user and hasattr(user, "broker"):
@@ -63,7 +63,7 @@ class LeadService:
 
     @staticmethod
     def conversion_rate(user=None):
-        qs = Lead.objects.all()
+        qs = Lead.objects.select_related('car', 'buyer').all()
         if user and hasattr(user, "dealer"):
             qs = qs.filter(car__dealer=user.dealer)
         elif user and hasattr(user, "broker"):
@@ -76,7 +76,7 @@ class LeadService:
 
     @staticmethod
     def avg_time_to_close(user=None):
-        qs = Lead.objects.filter(status=Lead.LeadStatus.CLOSED)
+        qs = Lead.objects.filter(status=Lead.LeadStatus.CLOSED).select_related('car', 'buyer')
         if user and hasattr(user, "dealer"):
             qs = qs.filter(car__dealer=user.dealer)
         elif user and hasattr(user, "broker"):

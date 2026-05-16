@@ -112,39 +112,52 @@ class CarExpenseViewSet(ModelViewSet):
     @action(detail=False, methods=["get"], url_path="per-dealer-car")
     def expenses_per_dealer_car(self, request):
         """Aggregate total expenses per car per dealer."""
-        dealers = (
-            CarExpense.objects.values("dealer_id", "dealer__company_name").distinct()
+        # Get distinct dealers that have expenses
+        dealers = list(CarExpense.objects.values("dealer_id", "dealer__company_name").distinct())
+
+        if not dealers:
+            return Response([])
+
+        dealer_ids = [d["dealer_id"] for d in dealers]
+
+        # Aggregate totals per dealer/car in a single query
+        car_totals = list(
+            CarExpense.objects
+            .filter(dealer_id__in=dealer_ids)
+            .values("dealer_id", "car_id", "car__model")
+            .annotate(total_expenses_etb=Sum("converted_amount"))
+            .order_by("dealer_id", "-total_expenses_etb")
         )
+
+        # Fetch all expense rows for the selected dealer/car pairs in one query
+        car_ids = [ct["car_id"] for ct in car_totals]
+        expenses_qs = CarExpense.objects.filter(dealer_id__in=dealer_ids, car_id__in=car_ids).select_related("car")
+
+        from collections import defaultdict
+
+        expenses_map = defaultdict(list)
+        for e in expenses_qs:
+            expenses_map[(e.dealer_id, e.car_id)].append({
+                "description": e.description,
+                "amount": float(e.amount),
+                "currency": e.currency,
+                "converted_amount": float(e.converted_amount or 0),
+                "date": e.date,
+            })
+
+        # Group car totals by dealer to build final payload
+        cars_by_dealer = {}
+        for ct in car_totals:
+            cars_by_dealer.setdefault(ct["dealer_id"], []).append(ct)
 
         results = []
         for dealer in dealers:
             dealer_id = dealer["dealer_id"]
             dealer_name = dealer["dealer__company_name"]
 
-            # Cars under this dealer
-            cars = (
-                CarExpense.objects.filter(dealer_id=dealer_id)
-                .values("car_id", "car__model")
-                .annotate(total_expenses_etb=Sum("converted_amount"))
-                .order_by("-total_expenses_etb")
-            )
-
             car_data = []
-            for car in cars:
-                car_expenses = CarExpense.objects.filter(
-                    dealer_id=dealer_id, car_id=car["car_id"]
-                )
-                expense_list = [
-                    {
-                        "description": e.description,
-                        "amount": float(e.amount),
-                        "currency": e.currency,
-                        "converted_amount": float(e.converted_amount or 0),
-                        "date": e.date,
-                    }
-                    for e in car_expenses
-                ]
-
+            for car in cars_by_dealer.get(dealer_id, []):
+                expense_list = expenses_map.get((dealer_id, car["car_id"]), [])
                 car_data.append({
                     "car_id": car["car_id"],
                     "car_model": car["car__model"],

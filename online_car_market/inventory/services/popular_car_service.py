@@ -14,6 +14,7 @@ class PopularCarService:
             Car.objects
             .filter(verification_status="verified")
             .select_related("make_ref", "model_ref", "dealer", "broker", "posted_by")
+            .prefetch_related("images")
         )
 
     @staticmethod

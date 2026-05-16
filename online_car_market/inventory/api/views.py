@@ -42,6 +42,14 @@ from ..services.contact_service import ContactService
 
 logger = logging.getLogger(__name__)
 
+
+# Pagination used by popular cars endpoint
+class PopularCarsPagination(PageNumberPagination):
+    """Pagination for popular cars list to avoid large payloads."""
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
 @extend_schema_view(
     list=extend_schema(
         tags=["Cars - Makes"],
@@ -749,81 +757,14 @@ class CarViewViewSet(ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         return Response({"error": "Deleting views is not allowed."}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
+# OpenAPI schema for popular cars is provided via method-level schemas where needed.
 class PopularCarsPagination(PageNumberPagination):
+    """Pagination for popular cars list to avoid large payloads."""
     page_size = 20
     page_size_query_param = 'page_size'
     max_page_size = 100
 
-@extend_schema_view(
-    list=extend_schema(
-        tags=["Popular Cars"],
-        description="List popular cars based on view count. Accessible to all users, including buyers and unauthenticated users.",
-        parameters=[
-            OpenApiParameter(
-                name='verification_status',
-                type=str,
-                location="query",
-                description='Filter by verification status (pending, verified, rejected)',
-                enum=['pending', 'verified', 'rejected']
-            ),
-            OpenApiParameter(
-                name='sale_type',
-                type=str,
-                location="query",
-                description='Filter by sale type (direct, auction)',
-                enum=['direct', 'auction']
-            ),
-            OpenApiParameter(
-                name='make_ref',
-                type=int,
-                location="query",
-                description='Filter by car make ID'
-            ),
-            OpenApiParameter(
-                name='min_price',
-                type=float,
-                location="query",
-                description='Filter by minimum price'
-            ),
-            OpenApiParameter(
-                name='max_price',
-                type=float,
-                location="query",
-                description='Filter by maximum price'
-            ),
-            OpenApiParameter(
-                name='search',
-                type=str,
-                location="query",
-                description='Search by make, model, or description'
-            ),
-            OpenApiParameter(
-                name='ordering',
-                type=str,
-                location="query",
-                description='Order by views, price, or created_at (prefix with - for descending)',
-                enum=['views', '-views', 'price', '-price', 'created_at', '-created_at']
-            )
-        ],
-        responses={
-            200: CarListSerializer(many=True),
-        }
-    ),
-    retrieve=extend_schema(
-        tags=["Popular Cars"],
-        description="Retrieve details of a specific popular car. Increments view count. Accessible to all users, including buyers and unauthenticated users.",
-        responses={
-            200: CarListSerializer,
-            404: OpenApiResponse(
-                response={"type": "object", "properties": {"detail": {"type": "string"}}},
-                description="Car not found.",
-                examples=[
-                    OpenApiExample("Not Found", value={"detail": "Car not found."})
-                ]
-            )
-        }
-    )
-)
+
 class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewSet ):
     permission_classes = [AllowAny]
     serializer_class = CarListSerializer
@@ -834,6 +775,15 @@ class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Gener
     ordering = ['-views_count']
     pagination_class = PopularCarsPagination
 
+    @extend_schema(
+        tags=["Popular Cars"],
+        summary="List popular cars",
+        description="Return verified cars ordered by popularity, with optional price filters.",
+        responses={200: CarListSerializer(many=True)},
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
     def get_queryset(self):
         min_price = self.request.query_params.get("min_price")
         max_price = self.request.query_params.get("max_price")
@@ -843,6 +793,12 @@ class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Gener
             max_price=max_price,
         )
 
+    @extend_schema(
+        tags=["Popular Cars"],
+        summary="Retrieve a popular car",
+        description="Return a popular car and increment its view count.",
+        responses={200: CarListSerializer, 404: OpenApiResponse(description="Not found")},
+    )
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         instance = PopularCarService.increment_views(instance)
