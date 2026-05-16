@@ -79,17 +79,28 @@ class PopularCarsPagination(PageNumberPagination):
 class CarMakeViewSet(ModelViewSet):
     queryset = CarMake.objects.all()
     serializer_class = CarMakeSerializer
+    CACHE_KEY = "car_makes_list"
 
     def list(self, request, *args, **kwargs):
-        cache_key = "car_makes_list"
-        cached = cache.get(cache_key)
+        # Try to get from cache
+        cached = cache.get(self.CACHE_KEY)
         if cached is not None:
+            logger.debug(f"Serving car makes from cache")
             return Response(cached)
 
+        # Fetch fresh data
+        logger.debug(f"Cache miss for car makes; fetching from DB")
         resp = super().list(request, *args, **kwargs)
-        # 5 minutes for better freshness
-        timeout = getattr(settings, "CAR_MAKES_CACHE_TIMEOUT", 60 * 5)
-        cache.set(cache_key, resp.data, timeout=timeout)
+
+        # Cache for configurable duration (default: 1 minute for freshness)
+        timeout = getattr(settings, "CAR_MAKES_CACHE_TIMEOUT", 60)
+        cache.set(self.CACHE_KEY, resp.data, timeout=timeout)
+        logger.debug(f"Cached car makes list for {timeout}s")
+
+        # Add cache headers to client to prevent browser-level caching
+        resp['Cache-Control'] = 'public, max-age=60'
+        resp['Vary'] = 'Accept'
+
         return resp
 
     def get_permissions(self):
@@ -97,22 +108,34 @@ class CarMakeViewSet(ModelViewSet):
             return [AllowAny()]   # No authentication required
         return [IsSuperAdminOrAdmin()]   # Only admins for create/update/delete
 
+    def create(self, request, *args, **kwargs):
+        """Override create to ensure cache invalidation fires."""
+        response = super().create(request, *args, **kwargs)
+        self._invalidate_makes_cache()
+        return response
+
     def perform_create(self, serializer):
         instance = serializer.save()
-        # Invalidate cached makes list so newly created makes appear immediately
-        cache.delete("car_makes_list")
+        self._invalidate_makes_cache()
         return instance
 
     def perform_update(self, serializer):
         instance = serializer.save()
-        cache.delete("car_makes_list")
+        self._invalidate_makes_cache()
         return instance
 
     def perform_destroy(self, instance):
         pk = instance.pk
         instance.delete()
-        cache.delete("car_makes_list")
-        return None
+        self._invalidate_makes_cache()
+
+    def _invalidate_makes_cache(self):
+        """Centralized cache invalidation to ensure it always fires."""
+        try:
+            cache.delete(self.CACHE_KEY)
+            logger.info(f"Invalidated car makes cache")
+        except Exception as e:
+            logger.error(f"Failed to invalidate car makes cache: {e}")
 
 @extend_schema_view(
     list=extend_schema(
