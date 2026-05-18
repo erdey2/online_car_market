@@ -74,7 +74,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
             "created_by",
             "created_by__profile",
             "created_by__profile__dealer_profile"
-        )
+        ).prefetch_related("employeesalary_set__component")
 
         profile = getattr(user, "profile", None)
         dealer = getattr(profile, "dealer_profile", None)

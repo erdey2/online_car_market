@@ -1,5 +1,6 @@
 from __future__ import annotations
 from datetime import date
+from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
@@ -16,6 +17,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
     user_email_display = serializers.EmailField(source="user.email", read_only=True)
     full_name = serializers.SerializerMethodField(read_only=True)
     salary = serializers.SerializerMethodField(read_only=True)
+    components = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Employee
@@ -27,12 +29,13 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "hire_date",
             "position",
             "salary",
+            "components",
             "is_active",
             "created_by",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "user_email_display", "full_name", "salary", "created_by", "created_at", "updated_at"]
+        read_only_fields = ["id", "user_email_display", "full_name", "salary", "components", "created_by", "created_at", "updated_at"]
 
     def get_full_name(self, obj):
         profile = getattr(obj.user, "profile", None)
@@ -49,6 +52,14 @@ class EmployeeSerializer(serializers.ModelSerializer):
             .first()
         )
         return basic_salary.amount if basic_salary else None
+
+    def get_components(self, obj):
+        """
+        Return nested salary components assigned to this employee.
+        Each row: {id, employee, employee_email, component, component_name, amount}
+        """
+        qs = EmployeeSalary.objects.select_related("component").filter(employee=obj)
+        return EmployeeSalarySerializer(qs, many=True).data
 
     # Field-level validations
     def validate_hire_date(self, value: date) -> date:
