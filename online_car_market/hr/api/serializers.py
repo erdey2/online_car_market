@@ -59,7 +59,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
         Each row: {id, employee, employee_email, component, component_name, amount}
         """
         qs = EmployeeSalary.objects.select_related("component").filter(employee=obj)
-        return EmployeeSalarySerializer(qs, many=True).data
+        return SimpleEmployeeSerializer(qs, many=True).data
 
     # Field-level validations
     def validate_hire_date(self, value: date) -> date:
@@ -346,6 +346,13 @@ class SalaryComponentSerializer(serializers.ModelSerializer):
         model = SalaryComponent
         fields = ["id", "name", "component_type"]
         read_only_fields = ["id"]
+
+class SimpleEmployeeSerializer(serializers.ModelSerializer):
+    component_name = serializers.CharField(source="component.name", read_only=True)
+
+    class Meta:
+        model = EmployeeSalary
+        fields = ["id", "component_name", "amount"]
 
 class EmployeeSalarySerializer(serializers.ModelSerializer):
     employee_email = serializers.EmailField(
