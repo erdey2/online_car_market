@@ -3,14 +3,22 @@ from online_car_market.payroll.models import PayrollItem
 from online_car_market.payroll.api.serializers import PayslipSerializer, PayrollRunSerializer
 from online_car_market.payroll.selectors.payroll_queries import get_latest_payslip
 from rest_framework.permissions import IsAuthenticated
-from online_car_market.users.permissions.business_permissions import CanViewPayroll, CanRunPayroll, CanApprovePayroll, CanPostPayroll
-from rest_framework import viewsets, status
+from online_car_market.users.permissions.business_permissions import (
+    CanViewPayroll, CanRunPayroll, CanApprovePayroll, CanPostPayroll)
+from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 from online_car_market.payroll.models import PayrollRun
 from online_car_market.payroll.services.payroll_runner import run_payroll
+
+PayrollActionResponse = inline_serializer(
+    name="PayrollActionResponse",
+    fields={
+        "detail": serializers.CharField(),
+    },
+)
 
 @extend_schema_view(
     list=extend_schema(
@@ -18,25 +26,29 @@ from online_car_market.payroll.services.payroll_runner import run_payroll
         summary="List payroll runs",
         description=(
             "Retrieve all payroll runs ordered by creation date (latest first). "
-            "Allowed roles: admin, HR staff, and accountant staff (CanViewPayroll)."
-        )
+            "Accessible to admin, HR staff, accountant staff, and finance staff."
+        ),
+        responses={200: PayrollRunSerializer(many=True)},
     ),
     retrieve=extend_schema(
         tags=["Payroll – Payroll Runs"],
         summary="Retrieve a payroll run",
         description=(
             "Get detailed information about a specific payroll run. "
-            "Allowed roles: admin, HR staff, and accountant staff (CanViewPayroll)."
-        )
+            "Accessible to admin, HR staff, accountant staff, and finance staff."
+        ),
+        responses={200: PayrollRunSerializer},
     ),
     create=extend_schema(
         tags=["Payroll – Payroll Runs"],
         summary="Create a payroll run",
         description=(
             "Create a new payroll run for a specific period. "
-            "This does not process payroll until the run action is executed. "
-            "Allowed roles: admin, HR staff, and accountant staff (CanViewPayroll)."
-        )
+            "This creates the run record only; payroll is processed later using the run action. "
+            "Accessible to users allowed by `CanViewPayroll` in the current code."
+        ),
+        request=PayrollRunSerializer,
+        responses={201: PayrollRunSerializer},
     ),
 )
 class PayrollRunViewSet(viewsets.ModelViewSet):
@@ -52,11 +64,11 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
             "Execute payroll processing for the selected payroll run. "
             "Calculates salaries, overtime, deductions, and generates payroll items. "
             "Fails if payroll was already processed or required data is missing. "
-            "Allowed roles: admin and HR staff (CanRunPayroll)."
+            "Allowed roles: admin and HR staff."
         ),
         responses={
-            200: dict,
-            400: dict,
+            200: PayrollActionResponse,
+            400: PayrollActionResponse,
         }
     )
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanRunPayroll])
@@ -89,11 +101,11 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
         description=(
             "Approve a processed payroll run. "
             "Once approved, payroll data becomes final and immutable. "
-            "Allowed roles: admin only (CanApprovePayroll)."
+            "Allowed roles: admin only."
         ),
         responses={
-            200: dict,
-            400: dict,
+            200: PayrollActionResponse,
+            400: PayrollActionResponse,
         }
     )
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanApprovePayroll])
@@ -112,11 +124,11 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
         description=(
             "Post an approved payroll run. "
             "This is the final workflow step and makes the payroll immutable. "
-            "Allowed roles: admin and finance staff (CanPostPayroll)."
+            "Allowed roles: admin and finance staff."
         ),
         responses={
-            200: dict,
-            400: dict,
+            200: PayrollActionResponse,
+            400: PayrollActionResponse,
         }
     )
     @action(detail=True, methods=["post"], url_path="post", permission_classes=[IsAuthenticated, CanPostPayroll])
@@ -135,8 +147,11 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
     summary="View latest payslip",
     description=(
         "Retrieve the latest payslip for the authenticated employee. "
+        "The response includes employee, gross earnings, total deductions, net salary, "
+        "and detailed earnings and deduction line items. "
         "If no payslip exists, an empty response is returned."
-    )
+    ),
+    responses={200: PayslipSerializer},
 )
 class PayslipAPIView(ListAPIView):
     serializer_class = PayslipSerializer
