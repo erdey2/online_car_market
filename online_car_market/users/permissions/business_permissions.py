@@ -124,7 +124,7 @@ class CanViewPayroll(BasePermission):
 
         return (
             user.role == "admin" or
-            is_staff(user, ["hr", "accountant"])
+            is_staff(user, ["hr", "accountant", "finance"])
         )
 
 class CanRunPayroll(BasePermission):
