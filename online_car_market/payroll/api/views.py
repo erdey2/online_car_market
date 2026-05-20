@@ -1,4 +1,4 @@
-from rest_framework.generics import ListAPIView
+from rest_framework.generics import ListAPIView, RetrieveAPIView
 from online_car_market.payroll.models import PayrollItem
 from online_car_market.payroll.api.serializers import PayslipSerializer, PayrollRunSerializer
 from online_car_market.payroll.selectors.payroll_queries import get_latest_payslip
@@ -145,19 +145,28 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
 @extend_schema(
     tags=["Payroll – Payslips"],
     summary="List payslips / get my latest payslip",
-    description=(
-        "List payslips.\n\n"
-        "- If the authenticated user is admin, HR staff, accountant or finance staff, "
-        "this endpoint returns all payslips (paginated if you have pagination).\n\n"
-        "- Otherwise (regular employee) it returns only the employee's latest payslip."
-    ),
+    description="""
+List payslips.
+
+### Behavior by role
+
+#### Admin / HR / Accountant / Finance
+Returns **all payslips**, ordered by newest payroll run first.
+
+#### Regular employee
+Returns only the authenticated employee's **latest payslip**.
+
+### Permissions
+Requires authentication.
+""",
     responses={200: PayslipSerializer(many=True)},
 )
 class PayslipAPIView(ListAPIView):
     """
-    GET /api/payroll/payslips/:
-     - Admin/HR/Accountant/Finance => returns all payslips.
-     - Employee => returns that employee's latest payslip (same behavior as before).
+    GET /api/payroll/payslips/
+
+    - Admin / HR / Accountant / Finance → all payslips
+    - Employee → latest own payslip
     """
     serializer_class = PayslipSerializer
     permission_classes = [IsAuthenticated]
@@ -165,56 +174,89 @@ class PayslipAPIView(ListAPIView):
     def get_queryset(self):
         user = self.request.user
 
-        # Admin or payroll ops staff should see all payslips
-        if user.is_authenticated and (user.role == "admin" or is_staff(user, ["hr", "accountant", "finance"])):
-            # use select_related to reduce DB hits
-            return PayrollItem.objects.select_related("employee", "employee__user").all().order_by("-created_at")
+        # Payroll staff can view all payslips
+        if user.role == "admin" or is_staff(
+            user,
+            ["hr", "accountant", "finance"]
+        ):
+            return PayrollItem.objects.select_related(
+                "employee",
+                "employee__user",
+                "payroll_run"
+            ).order_by("-payroll_run__created_at")
 
-        # Non-staff: only employees can access their own latest payslip
+        # Employee can only see own latest payslip
         if not hasattr(user, "employee_profile"):
             return PayrollItem.objects.none()
 
         payslip = get_latest_payslip(user.employee_profile)
+
         if not payslip:
             return PayrollItem.objects.none()
 
-        return PayrollItem.objects.filter(id=payslip.id)
+        return PayrollItem.objects.filter(
+            id=payslip.id
+        ).select_related(
+            "employee",
+            "employee__user",
+            "payroll_run"
+        )
 
 @extend_schema(
     tags=["Payroll – Payslips"],
     summary="Get my latest payslip",
-    description=(
-        "Retrieve the authenticated employee's latest payslip. "
-        "Returns 404 if the authenticated user is not an employee or if no payslip exists."
-    ),
+    description="""
+Retrieve the authenticated employee's latest payslip.
+
+### Returns
+The most recent payslip for the logged-in employee.
+
+### Failure conditions
+Returns **404** if:
+
+- User is not an employee
+- No payslip exists
+
+### Permissions
+Requires authentication.
+""",
     responses={
         200: PayslipSerializer,
         404: inline_serializer(
             name="PayslipNotFoundResponse",
-            fields={"detail": serializers.CharField()}
+            fields={
+                "detail": serializers.CharField()
+            }
         ),
     },
 )
-class PayslipMeAPIView(ListAPIView):
+class PayslipMeAPIView(RetrieveAPIView):
     """
-    GET /api/payroll/payslips/me/:
-      - Returns the latest payslip for the authenticated employee.
-      - This endpoint is a convenience path for clients that want just 'my' payslip.
+    GET /api/payroll/payslips/me/
+
+    Returns latest payslip for authenticated employee.
     """
     serializer_class = PayslipSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
+    def get_object(self):
         user = self.request.user
 
         if not hasattr(user, "employee_profile"):
-            return PayrollItem.objects.none()
+            from django.http import Http404
+            raise Http404("User is not an employee.")
 
         payslip = get_latest_payslip(user.employee_profile)
-        if not payslip:
-            return PayrollItem.objects.none()
 
-        return PayrollItem.objects.filter(id=payslip.id)
+        if not payslip:
+            from django.http import Http404
+            raise Http404("No payslip found.")
+
+        return PayrollItem.objects.select_related(
+            "employee",
+            "employee__user",
+            "payroll_run"
+        ).get(id=payslip.id)
 
 
 
