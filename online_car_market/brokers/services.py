@@ -18,16 +18,16 @@ def approve_broker(broker: BrokerProfile, admin_user):
     # Assign role
     user = broker.profile.user
     user.role = user.Role.BROKER
-    user.save()
+    user.save(update_fields=["role"])
 
-    # CREATE NOTIFICATION
+    # Notification
     notify_user(
         user=user,
-        message="Your dealer application has been approved!",
+        message="Your broker application has been approved!",
         data={
-            "type": "dealer_approved",
-            "dealer_id": broker.id,
-            "company_name": broker.company_name,
+            "type": "broker_approved",
+            "broker_id": broker.id,
+            "broker_name": broker.get_display_name(),
         }
     )
 
