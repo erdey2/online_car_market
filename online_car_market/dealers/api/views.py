@@ -374,7 +374,7 @@ class DealerStaffViewSet(ModelViewSet):
         description="Returns the dealer staff profile of the currently authenticated user.",
         responses={200: DealerStaffSerializer}
     )
-    @action(detail=False, methods=["get"], url_path="me")
+    @action(detail=False, methods=["get"], url_path="me", permission_classes=[IsAuthenticated])
     def me(self, request):
         staff = (
             DealerStaff.objects
