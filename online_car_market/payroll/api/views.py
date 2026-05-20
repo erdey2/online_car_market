@@ -4,7 +4,7 @@ from online_car_market.payroll.api.serializers import PayslipSerializer, Payroll
 from online_car_market.payroll.selectors.payroll_queries import get_latest_payslip
 from rest_framework.permissions import IsAuthenticated
 from online_car_market.users.permissions.business_permissions import (
-    CanViewPayroll, CanRunPayroll, CanApprovePayroll, CanPostPayroll)
+    CanViewPayroll, CanRunPayroll, CanApprovePayroll, CanPostPayroll, is_staff)
 from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -45,7 +45,7 @@ PayrollActionResponse = inline_serializer(
         description=(
             "Create a new payroll run for a specific period. "
             "This creates the run record only; payroll is processed later using the run action. "
-            "Accessible to users allowed by `CanViewPayroll` in the current code."
+            "Accessible to users admin, hr staff, accountant staff, and finance staff."
         ),
         request=PayrollRunSerializer,
         responses={201: PayrollRunSerializer},
@@ -144,28 +144,73 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
 
 @extend_schema(
     tags=["Payroll – Payslips"],
-    summary="View latest payslip",
+    summary="List payslips / get my latest payslip",
     description=(
-        "Retrieve the latest payslip for the authenticated employee. "
-        "The response includes employee, gross earnings, total deductions, net salary, "
-        "and detailed earnings and deduction line items. "
-        "If no payslip exists, an empty response is returned."
+        "List payslips.\n\n"
+        "- If the authenticated user is admin, HR staff, accountant or finance staff, "
+        "this endpoint returns all payslips (paginated if you have pagination).\n\n"
+        "- Otherwise (regular employee) it returns only the employee's latest payslip."
     ),
-    responses={200: PayslipSerializer},
+    responses={200: PayslipSerializer(many=True)},
 )
 class PayslipAPIView(ListAPIView):
+    """
+    GET /api/payroll/payslips/:
+     - Admin/HR/Accountant/Finance => returns all payslips.
+     - Employee => returns that employee's latest payslip (same behavior as before).
+    """
     serializer_class = PayslipSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
 
-        # User is not an employee (admin, dealer, HR, finance, etc.)
+        # Admin or payroll ops staff should see all payslips
+        if user.is_authenticated and (user.role == "admin" or is_staff(user, ["hr", "accountant", "finance"])):
+            # use select_related to reduce DB hits
+            return PayrollItem.objects.select_related("employee", "employee__user").all().order_by("-created_at")
+
+        # Non-staff: only employees can access their own latest payslip
         if not hasattr(user, "employee_profile"):
             return PayrollItem.objects.none()
 
         payslip = get_latest_payslip(user.employee_profile)
+        if not payslip:
+            return PayrollItem.objects.none()
 
+        return PayrollItem.objects.filter(id=payslip.id)
+
+@extend_schema(
+    tags=["Payroll – Payslips"],
+    summary="Get my latest payslip",
+    description=(
+        "Retrieve the authenticated employee's latest payslip. "
+        "Returns 404 if the authenticated user is not an employee or if no payslip exists."
+    ),
+    responses={
+        200: PayslipSerializer,
+        404: inline_serializer(
+            name="PayslipNotFoundResponse",
+            fields={"detail": serializers.CharField()}
+        ),
+    },
+)
+class PayslipMeAPIView(ListAPIView):
+    """
+    GET /api/payroll/payslips/me/:
+      - Returns the latest payslip for the authenticated employee.
+      - This endpoint is a convenience path for clients that want just 'my' payslip.
+    """
+    serializer_class = PayslipSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+
+        if not hasattr(user, "employee_profile"):
+            return PayrollItem.objects.none()
+
+        payslip = get_latest_payslip(user.employee_profile)
         if not payslip:
             return PayrollItem.objects.none()
 
