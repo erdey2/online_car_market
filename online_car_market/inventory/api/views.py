@@ -801,7 +801,7 @@ class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Gener
     @extend_schema(
         tags=["Popular Cars"],
         summary="List popular cars",
-        description="Return verified cars ordered by popularity, with optional price filters.",
+        description="Return verified cars ordered by popularity, including total views and optional price filters.",
         responses={200: CarListSerializer(many=True)},
     )
     def list(self, request, *args, **kwargs):
