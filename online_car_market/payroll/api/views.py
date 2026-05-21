@@ -26,7 +26,7 @@ PayrollActionResponse = inline_serializer(
         summary="List payroll runs",
         description=(
             "Retrieve all payroll runs ordered by creation date (latest first). "
-            "Accessible to admin, HR staff, accountant staff, and finance staff."
+            "Accessible to dealer, HR staff, accountant staff, and finance staff."
         ),
         responses={200: PayrollRunSerializer(many=True)},
     ),
