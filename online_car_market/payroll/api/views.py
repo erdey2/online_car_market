@@ -35,7 +35,7 @@ PayrollActionResponse = inline_serializer(
         summary="Retrieve a payroll run",
         description=(
             "Get detailed information about a specific payroll run. "
-            "Accessible to admin, HR staff, accountant staff, and finance staff."
+            "Accessible to dealer, HR staff, accountant staff, and finance staff."
         ),
         responses={200: PayrollRunSerializer},
     ),
@@ -45,7 +45,7 @@ PayrollActionResponse = inline_serializer(
         description=(
             "Create a new payroll run for a specific period. "
             "This creates the run record only; payroll is processed later using the run action. "
-            "Accessible to users admin, hr staff, accountant staff, and finance staff."
+            "Accessible to users dealer, hr staff, accountant staff, and finance staff."
         ),
         request=PayrollRunSerializer,
         responses={201: PayrollRunSerializer},
@@ -64,7 +64,7 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
             "Execute payroll processing for the selected payroll run. "
             "Calculates salaries, overtime, deductions, and generates payroll items. "
             "Fails if payroll was already processed or required data is missing. "
-            "Allowed roles: admin and HR staff."
+            "Allowed roles: dealer and HR staff."
         ),
         responses={
             200: PayrollActionResponse,
@@ -101,7 +101,7 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
         description=(
             "Approve a processed payroll run. "
             "Once approved, payroll data becomes final and immutable. "
-            "Allowed roles: admin only."
+            "Allowed roles: dealer only."
         ),
         responses={
             200: PayrollActionResponse,
@@ -124,7 +124,7 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
         description=(
             "Post an approved payroll run. "
             "This is the final workflow step and makes the payroll immutable. "
-            "Allowed roles: admin and finance staff."
+            "Allowed roles: dealer and finance staff."
         ),
         responses={
             200: PayrollActionResponse,
@@ -150,7 +150,7 @@ List payslips.
 
 ### Behavior by role
 
-#### Admin / HR / Accountant / Finance
+#### Dealer / HR / Accountant / Finance
 Returns **all payslips**, ordered by newest payroll run first.
 
 #### Regular employee
@@ -175,7 +175,7 @@ class PayslipAPIView(ListAPIView):
         user = self.request.user
 
         # Payroll staff can view all payslips
-        if user.role == "admin" or is_staff(
+        if user.role == "dealer" or is_staff(
             user,
             ["hr", "accountant", "finance"]
         ):
