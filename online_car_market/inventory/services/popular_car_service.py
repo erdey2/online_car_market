@@ -1,4 +1,4 @@
-from django.db.models import F, Max, Value, IntegerField
+from django.db.models import F, Max, Value, IntegerField, DecimalField
 from django.db.models.functions import Coalesce
 from decimal import Decimal, InvalidOperation
 from online_car_market.inventory.models import Car
@@ -10,7 +10,9 @@ class PopularCarService:
     def base_queryset():
         return (
             Car.objects
-            .filter(verification_status="verified")
+            .filter(
+                verification_status="verified"
+            )
             .select_related(
                 "make_ref",
                 "model_ref",
@@ -21,16 +23,22 @@ class PopularCarService:
                 "broker__profile__user",
                 "posted_by__profile__user",
             )
-            .prefetch_related("images")
+            .prefetch_related(
+                "images"
+            )
             .annotate(
                 highest_bid=Coalesce(
                     Max("bids__amount"),
-                    Value(0)
+                    Value(0),
+                    output_field=DecimalField(
+                        max_digits=10,
+                        decimal_places=2,
+                    ),
                 ),
                 views_count_coalesced=Coalesce(
                     "views_count",
                     Value(0),
-                    output_field=IntegerField()
+                    output_field=IntegerField(),
                 ),
             )
         )
