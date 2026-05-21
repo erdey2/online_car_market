@@ -123,7 +123,7 @@ class CanViewPayroll(BasePermission):
             return False
 
         return (
-            user.role == "admin" or
+            user.role == "dealer" or
             is_staff(user, ["hr", "accountant", "finance"])
         )
 
@@ -135,7 +135,7 @@ class CanRunPayroll(BasePermission):
             return False
 
         return (
-            user.role == "admin" or
+            user.role == "dealer" or
             is_staff(user, ["hr"])
         )
 
@@ -145,7 +145,7 @@ class CanApprovePayroll(BasePermission):
 
         return (
             user.is_authenticated and
-            user.role == "admin"
+            user.role == "dealer"
         )
 
 class CanPostPayroll(BasePermission):
@@ -156,7 +156,7 @@ class CanPostPayroll(BasePermission):
             return False
 
         return (
-            user.role == "admin" or
+            user.role == "dealer" or
             is_staff(user, ["finance"])
         )
 
