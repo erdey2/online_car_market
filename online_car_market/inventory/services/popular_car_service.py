@@ -1,3 +1,4 @@
+from math import ceil
 from django.db.models import F, Max, Value, IntegerField
 from django.db.models.functions import Coalesce
 from decimal import Decimal, InvalidOperation
@@ -43,7 +44,12 @@ class PopularCarService:
     def get_popular_cars(min_price=None, max_price=None):
         qs = PopularCarService.base_queryset()
         qs = PopularCarService.apply_price_filters(qs, min_price, max_price)
-        return qs.order_by("-views_count_coalesced")
+        qs = qs.order_by("-views_count_coalesced")
+
+        total = qs.count()
+        limit = max(1, ceil(total * 0.05)) if total else 0
+
+        return qs[:limit]
 
     @staticmethod
     def increment_views(car):
@@ -51,6 +57,3 @@ class PopularCarService:
         car.save(update_fields=["views_count"])
         car.refresh_from_db()
         return car
-
-
-
