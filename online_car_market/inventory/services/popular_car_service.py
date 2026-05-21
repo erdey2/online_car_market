@@ -1,4 +1,4 @@
-from django.db.models import F
+from django.db.models import F, Max
 from online_car_market.inventory.models import Car
 from decimal import Decimal, InvalidOperation
 
@@ -15,6 +15,9 @@ class PopularCarService:
             .filter(verification_status="verified")
             .select_related("make_ref", "model_ref", "dealer", "broker", "posted_by")
             .prefetch_related("images")
+            .annotate(
+                highest_bid=Max("bids__amount")
+            )
         )
 
     @staticmethod

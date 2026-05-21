@@ -194,13 +194,14 @@ class CarMiniSerializer(serializers.ModelSerializer):
 class CarListSerializer(serializers.ModelSerializer):
     featured_image = serializers.SerializerMethodField()
     seller = serializers.SerializerMethodField()
+    highest_bid = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = Car
         fields = [
             "id", "make", "model", "year", "price", "mileage", "fuel_type",
             "drivetrain", "interior_color", "model_ref", "make_ref",
-            "body_type", "sale_type", "status", "verification_status",
+            "body_type", "sale_type", "status", "verification_status", "highest_bid",
             "featured_image", "seller", "created_at",
         ]
 
