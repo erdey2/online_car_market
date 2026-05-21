@@ -7,10 +7,7 @@ from rest_framework.decorators import action
 
 from ..models import Bid, Auction
 from .serializers import BidSerializer, AuctionSerializer
-from online_car_market.users.permissions.drf_permissions import (
-    IsBuyer,
-    IsSuperAdminOrAdmin
-)
+from online_car_market.users.permissions.drf_permissions import (IsBuyer, IsSuperAdminOrAdmin)
 from online_car_market.users.models import User
 from online_car_market.bids.services.bid_service import BidService
 from online_car_market.bids.services.auction_service import AuctionService
@@ -73,7 +70,6 @@ class BidViewSet(ModelViewSet):
             status=status.HTTP_201_CREATED
         )
 
-
     @extend_schema(
         tags=["Bids"],
         summary="Bid history per car"
@@ -110,7 +106,6 @@ class BidViewSet(ModelViewSet):
                 many=True
             ).data,
         })
-
 
 @extend_schema_view(
     list=extend_schema(
