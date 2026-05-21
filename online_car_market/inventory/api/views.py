@@ -1,5 +1,5 @@
 import logging
-
+from math import ceil
 from django.core.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.cache import cache
@@ -788,15 +788,50 @@ class PopularCarsPagination(PageNumberPagination):
     max_page_size = 100
 
 
-class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewSet ):
+
+class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewSet):
     permission_classes = [AllowAny]
     serializer_class = CarListSerializer
-    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['verification_status', 'sale_type', 'make_ref']
-    search_fields = ['make', 'model', 'description']
-    ordering_fields = ['views_count', 'price', 'created_at']
-    ordering = ['-views_count']
+    filter_backends = [
+        DjangoFilterBackend,
+        SearchFilter,
+        OrderingFilter
+    ]
+
+    filterset_fields = [
+        "verification_status",
+        "sale_type",
+        "make_ref"
+    ]
+
+    search_fields = [
+        "make",
+        "model",
+        "description"
+    ]
+
+    ordering_fields = [
+        "views_count",
+        "price",
+        "created_at"
+    ]
+
+    ordering = ["-views_count"]
+
     pagination_class = PopularCarsPagination
+
+    def get_queryset(self):
+        min_price = self.request.query_params.get(
+            "min_price"
+        )
+        max_price = self.request.query_params.get(
+            "max_price"
+        )
+
+        return PopularCarService.get_popular_cars(
+            min_price=min_price,
+            max_price=max_price,
+        )
 
     @extend_schema(
         tags=["Popular Cars"],
@@ -805,16 +840,36 @@ class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Gener
         responses={200: CarListSerializer(many=True)},
     )
     def list(self, request, *args, **kwargs):
-        return super().list(request, *args, **kwargs)
-
-    def get_queryset(self):
-        min_price = self.request.query_params.get("min_price")
-        max_price = self.request.query_params.get("max_price")
-
-        return PopularCarService.get_popular_cars(
-            min_price=min_price,
-            max_price=max_price,
+        queryset = self.filter_queryset(
+            self.get_queryset()
         )
+
+        total = queryset.count()
+        limit = max(
+            1,
+            ceil(total * 0.05)
+        ) if total else 0
+
+        queryset = queryset[:limit]
+
+        page = self.paginate_queryset(
+            queryset
+        )
+
+        if page is not None:
+            serializer = self.get_serializer(
+                page,
+                many=True
+            )
+            return self.get_paginated_response(
+                serializer.data
+            )
+
+        serializer = self.get_serializer(
+            queryset,
+            many=True
+        )
+        return Response(serializer.data)
 
     @extend_schema(
         tags=["Popular Cars"],

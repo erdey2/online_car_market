@@ -1,4 +1,3 @@
-from math import ceil
 from django.db.models import F, Max, Value, IntegerField
 from django.db.models.functions import Coalesce
 from decimal import Decimal, InvalidOperation
@@ -24,8 +23,15 @@ class PopularCarService:
             )
             .prefetch_related("images")
             .annotate(
-                highest_bid=Coalesce(Max("bids__amount"), Value(0)),
-                views_count_coalesced=Coalesce("views_count", Value(0), output_field=IntegerField()),
+                highest_bid=Coalesce(
+                    Max("bids__amount"),
+                    Value(0)
+                ),
+                views_count_coalesced=Coalesce(
+                    "views_count",
+                    Value(0),
+                    output_field=IntegerField()
+                ),
             )
         )
 
@@ -33,27 +39,26 @@ class PopularCarService:
     def apply_price_filters(queryset, min_price=None, max_price=None):
         try:
             if min_price:
-                queryset = queryset.filter(price__gte=Decimal(min_price))
+                queryset = queryset.filter(
+                    price__gte=Decimal(min_price)
+                )
+
             if max_price:
-                queryset = queryset.filter(price__lte=Decimal(max_price))
+                queryset = queryset.filter(
+                    price__lte=Decimal(max_price)
+                )
+
         except (InvalidOperation, TypeError):
             pass
+
         return queryset
 
     @staticmethod
     def get_popular_cars(min_price=None, max_price=None):
         qs = PopularCarService.base_queryset()
-        qs = PopularCarService.apply_price_filters(qs, min_price, max_price)
-        qs = qs.order_by("-views_count_coalesced")
-
-        total = qs.count()
-        limit = max(1, ceil(total * 0.05)) if total else 0
-
-        return qs[:limit]
-
-    @staticmethod
-    def increment_views(car):
-        car.views_count = F("views_count") + 1
-        car.save(update_fields=["views_count"])
-        car.refresh_from_db()
-        return car
+        qs = PopularCarService.apply_price_filters(
+            qs,
+            min_price,
+            max_price
+        )
+        return qs
