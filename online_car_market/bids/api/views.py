@@ -7,7 +7,7 @@ from rest_framework.decorators import action
 
 from ..models import Bid, Auction
 from .serializers import BidSerializer, AuctionSerializer
-from online_car_market.users.permissions.drf_permissions import (IsBuyer, IsSuperAdminOrAdmin)
+from online_car_market.users.permissions.drf_permissions import IsBuyerOrBroker, IsSuperAdminOrAdmin
 from online_car_market.users.models import User
 from online_car_market.bids.services.bid_service import BidService
 from online_car_market.bids.services.auction_service import AuctionService
@@ -31,7 +31,7 @@ from online_car_market.bids.services.auction_service import AuctionService
 )
 class BidViewSet(ModelViewSet):
     serializer_class = BidSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsBuyerOrBroker]
     http_method_names = ["get", "post"]
 
     def get_queryset(self):
@@ -52,7 +52,7 @@ class BidViewSet(ModelViewSet):
 
     def get_permissions(self):
         if self.action == "create":
-            return [IsAuthenticated(), IsBuyer()]
+            return [IsAuthenticated()]
         return [IsAuthenticated()]
 
     def create(self, request, *args, **kwargs):

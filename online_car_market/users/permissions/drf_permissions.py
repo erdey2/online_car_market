@@ -36,6 +36,11 @@ class IsFinance(BasePermission):
         return request.user.is_authenticated and is_staff(request.user, ["finance"])
 
 # MIXED ROLES
+
+class IsBuyerOrBroker(BasePermission):
+    def has_permission(self, request, view):
+        return has_any_role(request.user, ["buyer", "broker"])
+
 class IsSuperAdminOrAdmin(BasePermission):
     def has_permission(self, request, view):
         return has_any_role(request.user, ["super_admin", "admin"])
