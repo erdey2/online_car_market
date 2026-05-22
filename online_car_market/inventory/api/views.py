@@ -14,7 +14,7 @@ from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnl
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet, GenericViewSet
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.filters import SearchFilter, OrderingFilter
 
 from drf_spectacular.utils import (extend_schema, extend_schema_view, OpenApiParameter,
@@ -217,7 +217,7 @@ class CarModelViewSet(ModelViewSet):
 )
 class CarViewSet(ModelViewSet):
     permission_classes = [IsAuthenticatedOrReadOnly]
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     CACHE_TIMEOUT = 60 * 5  # 5 minutes
 
@@ -336,8 +336,20 @@ class CarViewSet(ModelViewSet):
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
     def _invalidate_car_cache(self, car_id):
-        cache.delete_pattern("car_list_role_*")
-        cache.delete_pattern(f"car_detail_{car_id}_*")
+        """Invalidate list/detail caches; never fail the request if cache backend lacks pattern delete."""
+        try:
+            delete_pattern = getattr(cache, "delete_pattern", None)
+            if callable(delete_pattern):
+                delete_pattern("car_list_role_*")
+                delete_pattern(f"car_detail_{car_id}_*")
+            else:
+                cache.clear()
+        except Exception:
+            logger.warning(
+                "Car cache invalidation skipped for car_id=%s",
+                car_id,
+                exc_info=True,
+            )
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
@@ -348,7 +360,11 @@ class CarViewSet(ModelViewSet):
         car = CarService.update_car_with_images(serializer, request)
         self._invalidate_car_cache(car.id)
 
-        detail = CarQueryService.for_detail().get(pk=car.pk)
+        detail_qs = CarQueryService.get_visible_cars_for_user(
+            request.user,
+            CarQueryService.for_detail(),
+        )
+        detail = detail_qs.filter(pk=car.pk).first() or car
         return Response(
             CarDetailSerializer(detail, context={"request": request}).data,
             status=status.HTTP_200_OK,

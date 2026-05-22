@@ -532,81 +532,105 @@ class CarWriteSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         user = self.context["request"].user
+        instance = self.instance
+        is_update = instance is not None
 
-        make = data.get("make") or getattr(self.instance, "make", None)
-        model = data.get("model") or getattr(self.instance, "model", None)
-        make_ref = data.get("make_ref") or getattr(self.instance, "make_ref", None)
-        model_ref = data.get("model_ref") or getattr(self.instance, "model_ref", None)
+        from online_car_market.dealers.models import DealerStaff
 
-        dealer = data.get("dealer")
-        broker = data.get("broker")
+        seller_record = DealerStaff.objects.filter(user=user, role="seller").first()
 
-        sale_type = data.get("sale_type") or getattr(self.instance, "sale_type", None)
-        price = data.get("price") or getattr(self.instance, "price", None)
-        auction_end = data.get("auction_end") or getattr(self.instance, "auction_end", None)
+        make_ref = data.get("make_ref", getattr(instance, "make_ref", None) if instance else None)
+        model_ref = data.get("model_ref", getattr(instance, "model_ref", None) if instance else None)
+        make = (
+            (make_ref.name if make_ref else None)
+            or (getattr(instance, "make", None) if instance else None)
+            or data.get("make")
+        )
+        model = (
+            (model_ref.name if model_ref else None)
+            or (getattr(instance, "model", None) if instance else None)
+            or data.get("model")
+        )
 
-        # Make / Model Validation
         if not (make and model) and not (make_ref and model_ref):
             raise serializers.ValidationError(
                 "Either 'make and model' or 'make_ref and model_ref' must be provided."
             )
 
-        if make_ref:
-            data["make"] = make_ref.name
-        if model_ref:
-            data["model"] = model_ref.name
+        sale_type = data.get("sale_type") or (instance.sale_type if instance else None)
+        price = data.get("price") if "price" in data else (instance.price if instance else None)
+        auction_end = data.get("auction_end") or (
+            instance.auction_end if instance else None
+        )
 
-        # ROLE-BASED Dealer/Broker Logic
-        from online_car_market.dealers.models import DealerStaff
+        if is_update:
+            car = instance
+            is_admin = user.role in ["admin", "super_admin"]
+            broker_profile = getattr(
+                getattr(user, "profile", None), "broker_profile", None
+            )
+            dealer_profile = getattr(
+                getattr(user, "profile", None), "dealer_profile", None
+            )
+            is_broker_owner = bool(
+                broker_profile and car.broker_id == broker_profile.id
+            )
+            is_dealer_owner = bool(
+                dealer_profile and car.dealer_id == dealer_profile.id
+            )
+            is_seller_under_dealer = bool(
+                seller_record and car.dealer_id == seller_record.dealer_id
+            )
 
-        seller_record = DealerStaff.objects.filter(user=user, role="seller").first()
-
-        if user.role in ["admin", "super_admin"]:
-            # Admin must provide one
-            if (dealer and broker) or (not dealer and not broker):
+            if not (
+                is_admin
+                or is_broker_owner
+                or is_dealer_owner
+                or is_seller_under_dealer
+            ):
                 raise serializers.ValidationError(
-                    "Admin must provide exactly one of 'dealer' or 'broker'."
+                    "You do not have permission to update this car."
                 )
-
-        elif user.role == "dealer":
-            # Ignore input → force own dealer
-            data["dealer"] = user.profile.dealer_profile
-            data["broker"] = None
-
-        elif user.role == "broker":
-            # Ignore input → force own broker
-            data["broker"] = user.profile.broker_profile
-            data["dealer"] = None
-
-        elif seller_record:
-            # Seller → assign dealer automatically
-            data["dealer"] = seller_record.dealer
-            data["broker"] = None
-
         else:
-            raise serializers.ValidationError("You are not allowed to create cars.")
+            dealer = data.get("dealer")
+            broker = data.get("broker")
 
-        # Auction Rules
+            if user.role in ["admin", "super_admin"]:
+                if (dealer and broker) or (not dealer and not broker):
+                    raise serializers.ValidationError(
+                        "Admin must provide exactly one of 'dealer' or 'broker'."
+                    )
+
+            elif user.role == "dealer":
+                dealer_profile = getattr(
+                    getattr(user, "profile", None), "dealer_profile", None
+                )
+                if not dealer_profile:
+                    raise serializers.ValidationError("Dealer profile not found.")
+                data["dealer"] = dealer_profile
+                data["broker"] = None
+
+            elif user.role == "broker":
+                broker_profile = getattr(
+                    getattr(user, "profile", None), "broker_profile", None
+                )
+                if not broker_profile:
+                    raise serializers.ValidationError("Broker profile not found.")
+                data["broker"] = broker_profile
+                data["dealer"] = None
+
+            elif seller_record:
+                data["dealer"] = seller_record.dealer
+                data["broker"] = None
+
+            else:
+                raise serializers.ValidationError("You are not allowed to create cars.")
+
         if sale_type == "auction" and price is not None:
             raise serializers.ValidationError("Auction cars cannot have a fixed price.")
 
         if sale_type == "auction" and not auction_end:
             raise serializers.ValidationError("Auction end time is required.")
-
-        # Update Permission Check
-        if self.instance:
-            car = self.instance
-
-            is_admin = user.role in ["admin", "super_admin"]
-            is_broker_owner = car.broker and car.broker.profile.user == user
-            is_dealer_owner = car.dealer and car.dealer.profile.user == user
-
-            is_seller_under_dealer = seller_record and car.dealer == seller_record.dealer
-
-            if not (is_admin or is_broker_owner or is_dealer_owner or is_seller_under_dealer):
-                raise serializers.ValidationError(
-                    "You do not have permission to update this car."
-                )
 
         return data
 
@@ -653,6 +677,13 @@ class CarWriteSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         validated_data.pop("uploaded_images", None)
         validated_data.pop("images", None)
+
+        make_ref = validated_data.get("make_ref")
+        model_ref = validated_data.get("model_ref")
+        if make_ref is not None:
+            instance.make = make_ref.name
+        if model_ref is not None:
+            instance.model = model_ref.name
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)

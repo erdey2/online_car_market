@@ -1,3 +1,5 @@
+import re
+
 from django.db import transaction
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from online_car_market.inventory.models import CarImage
@@ -9,20 +11,24 @@ class CarService:
     @staticmethod
     def _collect_uploaded_images(request):
         uploaded_images = {}
+        bracket_pattern = re.compile(
+            r"^uploaded_images\[(\d+)\](?:\.|\[)([a-zA-Z_]+)\]?$"
+        )
+
+        def _ingest(key, value):
+            match = bracket_pattern.match(key)
+            if match:
+                index, field_name = match.group(1), match.group(2)
+                uploaded_images.setdefault(index, {})
+                uploaded_images[index][field_name] = value
 
         for key in request.data:
-            if key.startswith("uploaded_images") and "]." in key:
-                index = key.split("[")[1].split("]")[0]
-                field_name = key.split("].")[1]
-                uploaded_images.setdefault(index, {})
-                uploaded_images[index][field_name] = request.data.get(key)
+            if key.startswith("uploaded_images"):
+                _ingest(key, request.data.get(key))
 
         for key, file in request.FILES.items():
-            if key.startswith("uploaded_images") and "]." in key:
-                index = key.split("[")[1].split("]")[0]
-                field_name = key.split("].")[1]
-                uploaded_images.setdefault(index, {})
-                uploaded_images[index][field_name] = file
+            if key.startswith("uploaded_images"):
+                _ingest(key, file)
 
         return uploaded_images
 

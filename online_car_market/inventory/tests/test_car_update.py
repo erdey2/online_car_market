@@ -116,12 +116,17 @@ class CarUpdatePermissionTests(TestCase):
         url = reverse("cars-detail", kwargs={"pk": car.pk})
         return self.client.patch(url, {"price": price}, format="json")
 
-    def test_dealer_can_patch_own_car(self):
+    def test_dealer_can_patch_own_car_json(self):
+        """JSON PATCH must work (JSONParser is required on CarViewSet)."""
         response = self._patch_price(self.dealer_user, self.dealer_car)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("images", response.data)
         self.dealer_car.refresh_from_db()
         self.assertEqual(str(self.dealer_car.price), "21000.00")
+
+    def test_admin_can_patch_without_dealer_broker_in_body(self):
+        response = self._patch_price(self.admin_user, self.dealer_car, "20500")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_dealer_cannot_patch_other_dealers_car(self):
         response = self._patch_price(self.dealer_user, self.other_dealer_car)

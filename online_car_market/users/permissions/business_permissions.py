@@ -94,14 +94,14 @@ class CanPostCar(BasePermission):
 
         # Dealer → own cars
         if user.role == "dealer":
-            return (
-                hasattr(user.profile, "dealer_profile") and
-                obj.dealer == user.profile.dealer_profile
+            dealer_profile = getattr(
+                getattr(user, "profile", None), "dealer_profile", None
             )
+            return bool(dealer_profile and obj.dealer_id == dealer_profile.id)
 
         # Seller → dealer cars
         staff = DealerStaff.objects.filter(user=user, role="seller").first()
-        return staff and obj.dealer == staff.dealer
+        return bool(staff and obj.dealer_id == staff.dealer_id)
 
 # ACCOUNTING / FINANCE
 class CanManageAccounting(BasePermission):
