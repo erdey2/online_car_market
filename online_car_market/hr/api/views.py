@@ -233,7 +233,11 @@ class ContractViewSet(viewsets.ModelViewSet):
     ),
 )
 class AttendanceViewSet(viewsets.ModelViewSet):
-    queryset = Attendance.objects.all()
+    queryset = Attendance.objects.select_related(
+        "employee",
+        "employee__user",
+        "employee__user__profile",
+    )
     serializer_class = AttendanceSerializer
     permission_classes = [IsHR]
 
@@ -328,7 +332,12 @@ class LeaveViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        qs = Leave.objects.select_related("employee__user", "approved_by")
+        qs = Leave.objects.select_related(
+            "employee",
+            "employee__user",
+            "employee__user__profile",
+            "approved_by",
+        )
 
         # HR → all
         if user.role == "hr":

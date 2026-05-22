@@ -16,7 +16,10 @@ class UserService:
 
     @staticmethod
     def get_buyers():
-        return [user for user in User.objects.all() if has_role(user, 'buyer')]
+        return User.objects.filter(role=User.Role.BUYER).select_related(
+            "profile",
+            "profile__buyer_profile",
+        )
 
     @staticmethod
     def register_user(validated_data):

@@ -1,5 +1,6 @@
+from django.db.models import Prefetch
 from rest_framework.generics import ListAPIView, RetrieveAPIView
-from online_car_market.payroll.models import PayrollItem
+from online_car_market.payroll.models import PayrollItem, PayrollLine
 from online_car_market.payroll.api.serializers import PayslipSerializer, PayrollRunSerializer
 from online_car_market.payroll.selectors.payroll_queries import get_latest_payslip
 from rest_framework.permissions import IsAuthenticated
@@ -12,6 +13,19 @@ from django.core.exceptions import ValidationError
 from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 from online_car_market.payroll.models import PayrollRun
 from online_car_market.payroll.services.payroll_runner import run_payroll
+
+def payslip_queryset():
+    return PayrollItem.objects.select_related(
+        "employee",
+        "employee__user",
+        "payroll_run",
+    ).prefetch_related(
+        Prefetch(
+            "lines",
+            queryset=PayrollLine.objects.select_related("component"),
+        )
+    )
+
 
 PayrollActionResponse = inline_serializer(
     name="PayrollActionResponse",
@@ -179,11 +193,7 @@ class PayslipAPIView(ListAPIView):
             user,
             ["hr", "accountant", "finance"]
         ):
-            return PayrollItem.objects.select_related(
-                "employee",
-                "employee__user",
-                "payroll_run"
-            ).order_by("-payroll_run__created_at")
+            return payslip_queryset().order_by("-payroll_run__created_at")
 
         # Employee can only see own latest payslip
         if not hasattr(user, "employee_profile"):
@@ -194,13 +204,7 @@ class PayslipAPIView(ListAPIView):
         if not payslip:
             return PayrollItem.objects.none()
 
-        return PayrollItem.objects.filter(
-            id=payslip.id
-        ).select_related(
-            "employee",
-            "employee__user",
-            "payroll_run"
-        )
+        return payslip_queryset().filter(id=payslip.id)
 
 @extend_schema(
     tags=["Payroll – Payslips"],
@@ -252,11 +256,7 @@ class PayslipMeAPIView(RetrieveAPIView):
             from django.http import Http404
             raise Http404("No payslip found.")
 
-        return PayrollItem.objects.select_related(
-            "employee",
-            "employee__user",
-            "payroll_run"
-        ).get(id=payslip.id)
+        return payslip_queryset().get(id=payslip.id)
 
 
 

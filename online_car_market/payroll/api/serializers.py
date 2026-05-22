@@ -31,20 +31,20 @@ class PayslipSerializer(serializers.ModelSerializer):
         )
 
     def get_earnings(self, obj):
-        return PayrollLineSerializer(
-            obj.lines.filter(
-                component__component_type=SalaryComponent.EARNING
-            ),
-            many=True
-        ).data
+        lines = [
+            line
+            for line in obj.lines.all()
+            if line.component.component_type == SalaryComponent.EARNING
+        ]
+        return PayrollLineSerializer(lines, many=True).data
 
     def get_deductions(self, obj):
-        return PayrollLineSerializer(
-            obj.lines.filter(
-                component__component_type=SalaryComponent.DEDUCTION
-            ),
-            many=True
-        ).data
+        lines = [
+            line
+            for line in obj.lines.all()
+            if line.component.component_type == SalaryComponent.DEDUCTION
+        ]
+        return PayrollLineSerializer(lines, many=True).data
 
 
 class PayrollRunSerializer(serializers.ModelSerializer):

@@ -2,6 +2,7 @@ from decimal import Decimal
 import calendar
 from datetime import date, timedelta
 from django.db import transaction
+from django.db.models import Prefetch
 from django.core.exceptions import ValidationError
 
 from online_car_market.hr.models import Employee, EmployeeSalary, OvertimeEntry
@@ -51,8 +52,19 @@ def run_payroll(payroll_run):
     start_date = date(year, month, 1)
     end_date = date(year, month, last_day)
 
-    # ACTIVE EMPLOYEES
-    employees = Employee.objects.filter(is_active=True).only("id")
+    salaries_qs = EmployeeSalary.objects.select_related("component")
+    overtime_qs = (
+        OvertimeEntry.objects.filter(
+            approved=True,
+            date__range=(start_date, end_date),
+        )
+        .order_by("date", "id")
+    )
+
+    employees = Employee.objects.filter(is_active=True).prefetch_related(
+        Prefetch("employeesalary_set", queryset=salaries_qs),
+        Prefetch("overtime_entries", queryset=overtime_qs),
+    )
 
     overtime_component = _get_system_component(
         "Overtime",
@@ -76,7 +88,7 @@ def run_payroll(payroll_run):
     processed = []
 
     for emp in employees:
-        salaries = EmployeeSalary.objects.select_related("component").filter(employee=emp)
+        salaries = list(emp.employeesalary_set.all())
 
         gross_earnings = Decimal("0.00")
         total_deductions = Decimal("0.00")
@@ -94,7 +106,10 @@ def run_payroll(payroll_run):
 
         line_items = []
 
-        basic_salary = salaries.filter(component__name__iexact="Basic Salary").first()
+        basic_salary = next(
+            (s for s in salaries if s.component.name.lower() == "basic salary"),
+            None,
+        )
         basic_salary_amount = basic_salary.amount if basic_salary else Decimal("0.00")
 
         total_days_in_month = (end_date - start_date).days + 1
@@ -133,13 +148,7 @@ def run_payroll(payroll_run):
             else:
                 total_deductions += amount
 
-        overtime_entries = OvertimeEntry.objects.filter(
-            employee=emp,
-            approved=True,
-            date__range=(start_date, end_date),
-        ).order_by("date", "id")
-
-        for ot in overtime_entries:
+        for ot in emp.overtime_entries.all():
             overtime_hours = ot.hours if isinstance(ot.hours, Decimal) else Decimal(str(ot.hours))
             overtime_amount = calculate_overtime_amount(
                 basic_salary=basic_salary_amount,

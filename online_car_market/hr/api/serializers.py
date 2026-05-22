@@ -44,22 +44,27 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
         return f"{profile.first_name} {profile.last_name}".strip()
 
+    def _employee_salaries(self, obj):
+        """Use prefetched salaries when available (see EmployeeViewSet.get_queryset)."""
+        if (
+            hasattr(obj, "_prefetched_objects_cache")
+            and "employeesalary_set" in obj._prefetched_objects_cache
+        ):
+            return obj.employeesalary_set.all()
+        return EmployeeSalary.objects.select_related("component").filter(employee=obj)
+
     def get_salary(self, obj):
-        basic_salary = (
-            EmployeeSalary.objects
-            .select_related("component")
-            .filter(employee=obj, component__name__iexact="Basic Salary")
-            .first()
-        )
-        return basic_salary.amount if basic_salary else None
+        for salary in self._employee_salaries(obj):
+            if salary.component.name.lower() == "basic salary":
+                return salary.amount
+        return None
 
     def get_components(self, obj):
         """
         Return nested salary components assigned to this employee.
         Each row: {id, employee, employee_email, component, component_name, amount}
         """
-        qs = EmployeeSalary.objects.select_related("component").filter(employee=obj)
-        return SimpleEmployeeSerializer(qs, many=True).data
+        return SimpleEmployeeSerializer(self._employee_salaries(obj), many=True).data
 
     # Field-level validations
     def validate_hire_date(self, value: date) -> date:

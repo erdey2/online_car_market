@@ -12,7 +12,14 @@ class SaleService:
         """
         Base optimized queryset for sales.
         """
-        return Sale.objects.select_related("car", "broker", "buyer", "car__dealer")
+        return Sale.objects.select_related(
+            "car",
+            "broker",
+            "buyer",
+            "buyer__profile",
+            "buyer__profile__buyer_profile",
+            "car__dealer",
+        )
 
     @staticmethod
     def get_sales_for_user(user) -> QuerySet:

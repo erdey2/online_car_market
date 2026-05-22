@@ -1,4 +1,4 @@
-from django.db.models import F, Max, Value, IntegerField, DecimalField
+from django.db.models import Max, Value, IntegerField, DecimalField
 from django.db.models.functions import Coalesce
 from decimal import Decimal, InvalidOperation
 from online_car_market.inventory.models import Car

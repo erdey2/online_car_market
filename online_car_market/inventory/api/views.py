@@ -532,7 +532,7 @@ class UserCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericV
         car_id = kwargs.get("pk")
 
         try:
-            car = UserCarService.get_base_queryset().get(id=car_id)
+            car = CarQueryService.for_detail().get(id=car_id)
         except Car.DoesNotExist:
             raise NotFound("Car not found.")
 
@@ -847,7 +847,7 @@ class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Gener
         total = queryset.count()
         limit = max(
             1,
-            ceil(total * 0.05)
+            ceil(total * 0.1)
         ) if total else 0
 
         queryset = queryset[:limit]
