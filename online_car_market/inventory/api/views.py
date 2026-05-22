@@ -42,7 +42,6 @@ from ..services.contact_service import ContactService
 
 logger = logging.getLogger(__name__)
 
-
 # Pagination used by popular cars endpoint
 class PopularCarsPagination(PageNumberPagination):
     """Pagination for popular cars list to avoid large payloads."""
@@ -240,7 +239,16 @@ class CarViewSet(ModelViewSet):
             return CarQueryService.get_visible_cars_for_user(self.request.user, base_qs)
 
         elif self.action == "retrieve":
-            return CarQueryService.for_detail()
+            return CarQueryService.get_visible_cars_for_user(
+                self.request.user,
+                CarQueryService.for_detail(),
+            )
+
+        if self.action in ("update", "partial_update", "destroy"):
+            return CarQueryService.get_visible_cars_for_user(
+                self.request.user,
+                CarQueryService.base_queryset(),
+            )
 
         return CarQueryService.base_queryset()
 
@@ -321,24 +329,39 @@ class CarViewSet(ModelViewSet):
         car = CarService.create_car_with_images(serializer, request)
 
         # Invalidate cache (all car lists)
-        cache.delete_pattern("car_list_role_*")
-        cache.delete_pattern(f"car_detail_{car.id}_*")
+        self._invalidate_car_cache(car.id)
 
-        response_serializer = CarDetailSerializer(car, context={"request": request})
+        detail = CarQueryService.for_detail().get(pk=car.pk)
+        response_serializer = CarDetailSerializer(detail, context={"request": request})
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
-    def perform_update(self, serializer):
-        instance = serializer.save()
-
+    def _invalidate_car_cache(self, car_id):
         cache.delete_pattern("car_list_role_*")
-        cache.delete_pattern(f"car_detail_{instance.id}_*")
+        cache.delete_pattern(f"car_detail_{car_id}_*")
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        car = CarService.update_car_with_images(serializer, request)
+        self._invalidate_car_cache(car.id)
+
+        detail = CarQueryService.for_detail().get(pk=car.pk)
+        return Response(
+            CarDetailSerializer(detail, context={"request": request}).data,
+            status=status.HTTP_200_OK,
+        )
+
+    def partial_update(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
 
     def perform_destroy(self, instance):
         car_id = instance.id
         instance.delete()
-
-        cache.delete_pattern("car_list_role_*")
-        cache.delete_pattern(f"car_detail_{car_id}_*")
+        self._invalidate_car_cache(car_id)
 
     @action(detail=False, methods=["get"], url_path="filter")
     def filter(self, request):
@@ -786,8 +809,6 @@ class PopularCarsPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = 'page_size'
     max_page_size = 100
-
-
 
 class PopularCarsViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewSet):
     permission_classes = [AllowAny]

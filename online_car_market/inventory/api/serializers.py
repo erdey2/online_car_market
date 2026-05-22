@@ -652,6 +652,7 @@ class CarWriteSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         validated_data.pop("uploaded_images", None)
+        validated_data.pop("images", None)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)

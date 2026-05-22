@@ -7,65 +7,44 @@ from .favorite_car_service import FavoriteCarService
 class CarService:
 
     @staticmethod
-    def validate_broker_can_post(user):
-
-        if user.role == "broker":
-            return  # allowed
-
-        # Optional: restrict others
-        elif user.role in ["super_admin", "admin", "dealer"]:
-            return  # allowed
-
-        raise PermissionDenied("You are not allowed to post cars.")
-
-    @staticmethod
-    @transaction.atomic
-    def create_car_with_images(serializer, request):
-
-        # Save car first
-        car = serializer.save()
-
+    def _collect_uploaded_images(request):
         uploaded_images = {}
 
-        # Collect text fields (caption, is_featured)
         for key in request.data:
             if key.startswith("uploaded_images") and "]." in key:
                 index = key.split("[")[1].split("]")[0]
                 field_name = key.split("].")[1]
-
                 uploaded_images.setdefault(index, {})
                 uploaded_images[index][field_name] = request.data.get(key)
 
-        # Attach files
         for key, file in request.FILES.items():
             if key.startswith("uploaded_images") and "]." in key:
                 index = key.split("[")[1].split("]")[0]
                 field_name = key.split("].")[1]
-
                 uploaded_images.setdefault(index, {})
                 uploaded_images[index][field_name] = file
 
+        return uploaded_images
+
+    @staticmethod
+    def _attach_images_to_car(car, uploaded_images, *, require_at_least_one=False):
         if not uploaded_images:
-            raise ValidationError("At least one image is required.")
+            if require_at_least_one:
+                raise ValidationError("At least one image is required.")
+            return
 
         created_images = []
-        featured_exists = False
+        featured_exists = CarImage.objects.filter(car=car, is_featured=True).exists()
 
-        # Create images
         for index in sorted(uploaded_images.keys(), key=int):
             img_data = uploaded_images[index]
-
             image_file = img_data.get("image_file")
 
-            # Validate image existence
             if not image_file:
                 raise ValidationError("Each image must include an image_file.")
 
-            is_featured = str(
-                img_data.get("is_featured", "false")
-            ).lower() == "true"
+            is_featured = str(img_data.get("is_featured", "false")).lower() == "true"
 
-            # Ensure only ONE featured
             if is_featured and featured_exists:
                 is_featured = False
 
@@ -81,11 +60,42 @@ class CarService:
 
             created_images.append(image)
 
-        # If none marked featured make first one featured
         if not featured_exists and created_images:
             first_image = created_images[0]
             first_image.is_featured = True
             first_image.save(update_fields=["is_featured"])
+
+    @staticmethod
+    def validate_broker_can_post(user):
+
+        if user.role == "broker":
+            return  # allowed
+
+        # Optional: restrict others
+        elif user.role in ["super_admin", "admin", "dealer"]:
+            return  # allowed
+
+        raise PermissionDenied("You are not allowed to post cars.")
+
+    @staticmethod
+    @transaction.atomic
+    def create_car_with_images(serializer, request):
+
+        car = serializer.save()
+        uploaded_images = CarService._collect_uploaded_images(request)
+        CarService._attach_images_to_car(car, uploaded_images, require_at_least_one=True)
+        return car
+
+    @staticmethod
+    @transaction.atomic
+    def update_car_with_images(serializer, request):
+        old_price = serializer.instance.price
+        car = serializer.save()
+        uploaded_images = CarService._collect_uploaded_images(request)
+        CarService._attach_images_to_car(car, uploaded_images, require_at_least_one=False)
+
+        if car.price < old_price:
+            CarService.notify_price_drop(car, old_price, car.price)
 
         return car
 

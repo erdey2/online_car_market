@@ -71,7 +71,7 @@ class CanPostCar(BasePermission):
             return False
 
         # Dealer / Broker / Admin
-        if user.role in ["dealer", "broker", "admin"]:
+        if user.role in ["dealer", "broker", "admin", "super_admin"]:
             return True
 
         # Seller staff
@@ -83,8 +83,14 @@ class CanPostCar(BasePermission):
         if request.method in SAFE_METHODS:
             return True
 
-        if user.role in ["admin", "broker"]:
+        if user.role in ["admin", "super_admin"]:
             return True
+
+        if user.role == "broker":
+            broker_profile = getattr(
+                getattr(user, "profile", None), "broker_profile", None
+            )
+            return bool(broker_profile and obj.broker_id == broker_profile.id)
 
         # Dealer → own cars
         if user.role == "dealer":
