@@ -13,18 +13,18 @@ from rest_framework.mixins import CreateModelMixin, ListModelMixin, RetrieveMode
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.viewsets import ModelViewSet, GenericViewSet
+from rest_framework.viewsets import ModelViewSet, GenericViewSet, ReadOnlyModelViewSet
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.filters import SearchFilter, OrderingFilter
 
 from drf_spectacular.utils import (extend_schema, extend_schema_view, OpenApiParameter,
                                    OpenApiTypes, OpenApiExample, OpenApiResponse, inline_serializer)
-from ..models import Car, CarMake, CarModel, FavoriteCar, CarView, Contact
+from ..models import Car, CarMake, CarModel, FavoriteCar, CarView, Contact, CarImage
 from .serializers import (
                           VerifyCarSerializer, CarMakeSerializer, ContactSerializer,
                           CarModelSerializer, FavoriteCarSerializer, CarViewSerializer,
                           CarWriteSerializer, CarListSerializer, CarDetailSerializer,
-                          CarVerificationListSerializer, CarVerificationAnalyticsSerializer
+                          CarVerificationListSerializer, CarVerificationAnalyticsSerializer, CarImageSerializer
                           )
 from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, IsSuperAdminOrAdminOrBuyer
 from online_car_market.users.permissions.business_permissions import CanPostCar, CanViewInventory
@@ -176,6 +176,39 @@ class CarModelViewSet(ModelViewSet):
         if self.action in ["list", "retrieve"]:
             return [AllowAny()]
         return [IsSuperAdminOrAdmin()]
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Cars - Images"],
+        summary="List car images",
+        description="Retrieve images for a car (supports ?car={car_id} filter).",
+        parameters=[
+            OpenApiParameter(
+                name="car",
+                type=int,
+                location="query",
+                description="Filter by car ID (optional).",
+            )
+        ],
+    ),
+    retrieve=extend_schema(
+        tags=["Cars - Images"],
+        summary="Retrieve a car image",
+        description="Get details and URL of a specific car image.",
+    ),
+)
+class CarImageViewSet(ReadOnlyModelViewSet):
+    """Read-only access to car images (list and retrieve only)."""
+    serializer_class = CarImageSerializer
+    queryset = CarImage.objects.select_related("car").all()
+    permission_classes = [AllowAny]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        car_id = self.request.query_params.get("car")
+        if car_id:
+            qs = qs.filter(car_id=car_id)
+        return qs
 
 @extend_schema_view(
     list=extend_schema(
