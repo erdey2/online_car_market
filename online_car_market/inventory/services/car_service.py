@@ -77,7 +77,6 @@ class CarService:
         - New image: uploaded_images[n].image_file (no id)
         - Edit existing: uploaded_images[n].id + optional image_file, caption, is_featured
         """
-        print(uploaded_images)
         if not uploaded_images:
             if require_at_least_one and not car.images.exists():
                 raise ValidationError("At least one image is required.")

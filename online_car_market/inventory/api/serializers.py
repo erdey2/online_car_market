@@ -379,7 +379,7 @@ class CarWriteSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
-    images = CarImageSerializer(many=True, required=False)
+    images = CarImageSerializer(many=True, read_only=True)
 
     class Meta:
         model = Car
