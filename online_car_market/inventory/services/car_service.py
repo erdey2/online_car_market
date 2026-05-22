@@ -1,5 +1,6 @@
 import json
 import re
+import cloudinary.uploader
 
 from django.db import transaction
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -206,9 +207,21 @@ class CarService:
             )
 
             # delete physical file
-            if image.image:
+            ''' if image.image:
                 image.image.delete(save=False)
+            image.delete() '''
 
+            # delete from Cloudinary
+            if image.image:
+                try:
+                    cloudinary.uploader.destroy(
+                        image.image.public_id
+                    )
+                except Exception:
+                    # optional: log failure, but continue
+                    pass
+
+            # delete DB record
             image.delete()
 
         # ensure one featured image remains
