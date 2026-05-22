@@ -219,3 +219,42 @@ class CarUpdateImageUploadTests(TestCase):
 
         self.car.refresh_from_db()
         self.assertEqual(str(self.car.price), "29500.00")
+
+    @patch("cloudinary.uploader.upload")
+    def test_patch_with_image_id_updates_existing_not_duplicate(self, mock_upload):
+        mock_upload.return_value = {
+            "public_id": "car-images/existing",
+            "secure_url": "https://res.cloudinary.com/demo/image/upload/existing.jpg",
+        }
+
+        existing = CarImage.objects.create(
+            car=self.car,
+            caption="Original",
+            is_featured=True,
+        )
+        before_count = CarImage.objects.filter(car=self.car).count()
+
+        response = self.client.patch(
+            self.url,
+            {
+                "uploaded_images[0].id": str(existing.id),
+                "uploaded_images[0].caption": "Updated caption",
+                "uploaded_images[0].is_featured": "true",
+                "uploaded_images[0].image_file": SimpleUploadedFile(
+                    "updated.jpg",
+                    MINIMAL_JPEG,
+                    content_type="image/jpeg",
+                ),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            CarImage.objects.filter(car=self.car).count(),
+            before_count,
+        )
+
+        existing.refresh_from_db()
+        self.assertEqual(existing.caption, "Updated caption")
+        self.assertTrue(existing.is_featured)

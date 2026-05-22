@@ -117,7 +117,9 @@ class CarImageSerializer(serializers.ModelSerializer):
             if value.size > max_size:
                 raise serializers.ValidationError("Image file size cannot exceed 5MB.")
             return value
-        raise serializers.ValidationError("Image file is required.")
+        if self.instance is None:
+            raise serializers.ValidationError("Image file is required.")
+        return value
 
     def validate(self, data):
         user = self.context["request"].user
