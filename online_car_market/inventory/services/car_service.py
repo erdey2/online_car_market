@@ -183,6 +183,10 @@ class CarService:
         old_price = serializer.instance.price
         car = serializer.save()
         uploaded_images = CarService._collect_uploaded_images(request)
+
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.debug("uploaded_images parsed: %r", uploaded_images)
         CarService._upsert_images_for_car(car, uploaded_images, require_at_least_one=False)
 
         images_payload = request.data.get("images")
