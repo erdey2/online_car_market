@@ -7,6 +7,7 @@ from online_car_market.bids.models import Bid
 from django.contrib.auth import get_user_model
 import re, bleach, logging
 from datetime import datetime
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -629,7 +630,7 @@ class CarWriteSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("You are not allowed to create cars.")
 
         if sale_type == "auction":
-            data["price"] = None
+            data["price"] = Decimal("0.00")
 
             if not auction_end:
                 raise serializers.ValidationError(
@@ -684,13 +685,21 @@ class CarWriteSerializer(serializers.ModelSerializer):
 
         make_ref = validated_data.get("make_ref")
         model_ref = validated_data.get("model_ref")
+
         if make_ref is not None:
             instance.make = make_ref.name
+
         if model_ref is not None:
             instance.model = model_ref.name
 
+        if validated_data.get("price") is None:
+            validated_data.pop("price", None)
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+
+        if instance.sale_type == "auction":
+            instance.price = Decimal("0.00")
 
         instance.save()
         return instance
