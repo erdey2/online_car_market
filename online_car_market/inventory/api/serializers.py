@@ -628,11 +628,13 @@ class CarWriteSerializer(serializers.ModelSerializer):
             else:
                 raise serializers.ValidationError("You are not allowed to create cars.")
 
-        if sale_type == "auction" and price is not None:
-            raise serializers.ValidationError("Auction cars cannot have a fixed price.")
+        if sale_type == "auction":
+            data["price"] = None
 
-        if sale_type == "auction" and not auction_end:
-            raise serializers.ValidationError("Auction end time is required.")
+            if not auction_end:
+                raise serializers.ValidationError(
+                    "Auction end time is required."
+                )
 
         return data
 
