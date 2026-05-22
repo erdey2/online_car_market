@@ -34,6 +34,28 @@ class CarService:
         return uploaded_images
 
     @staticmethod
+    def _collect_delete_images(request):
+        """
+        Parse multipart fields like:
+        delete_images[0]=36
+        delete_images[1]=40
+        """
+        delete_ids = []
+
+        pattern = re.compile(
+            r"^delete_images\[(\d+)\]$"
+        )
+
+        for key in request.data:
+            match = pattern.match(key)
+            if match:
+                image_id = request.data.get(key)
+                if image_id not in (None, ""):
+                    delete_ids.append(image_id)
+
+        return delete_ids
+
+    @staticmethod
     def _parse_image_id(raw_id):
         if raw_id in (None, ""):
             return None
@@ -168,6 +190,44 @@ class CarService:
         raise PermissionDenied("You are not allowed to post cars.")
 
     @staticmethod
+    def delete_images(car, image_ids):
+        """
+        Delete images belonging to the car.
+        """
+        if not image_ids:
+            return
+
+        for raw_id in image_ids:
+            image_id = CarService._parse_image_id(raw_id)
+
+            image = CarService._get_car_image(
+                car,
+                image_id
+            )
+
+            # delete physical file
+            if image.image:
+                image.image.delete(save=False)
+
+            image.delete()
+
+        # ensure one featured image remains
+        if (
+            car.images.exists()
+            and not car.images.filter(
+            is_featured=True
+        ).exists()
+        ):
+            first_image = car.images.order_by(
+                "id"
+            ).first()
+
+            first_image.is_featured = True
+            first_image.save(
+                update_fields=["is_featured"]
+            )
+
+    @staticmethod
     @transaction.atomic
     def create_car_with_images(serializer, request):
 
@@ -181,19 +241,48 @@ class CarService:
     def update_car_with_images(serializer, request):
         old_price = serializer.instance.price
         car = serializer.save()
-        uploaded_images = CarService._collect_uploaded_images(request)
 
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.debug("uploaded_images parsed: %r", uploaded_images)
-        CarService._upsert_images_for_car(car, uploaded_images, require_at_least_one=False)
+        # delete requested images
+        delete_images = (
+            CarService._collect_delete_images(
+                request
+            )
+        )
+        CarService.delete_images(
+            car,
+            delete_images
+        )
 
-        images_payload = request.data.get("images")
+        # add/update uploaded images
+        uploaded_images = (
+            CarService._collect_uploaded_images(
+                request
+            )
+        )
+
+        CarService._upsert_images_for_car(
+            car,
+            uploaded_images,
+            require_at_least_one=False
+        )
+
+        images_payload = request.data.get(
+            "images"
+        )
+
         if images_payload is not None:
-            CarService.sync_images_json(car, images_payload)
+            CarService.sync_images_json(
+                car,
+                images_payload
+            )
 
+        # notify price drop
         if car.price < old_price:
-            CarService.notify_price_drop(car, old_price, car.price)
+            CarService.notify_price_drop(
+                car,
+                old_price,
+                car.price
+            )
 
         return car
 
