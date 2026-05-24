@@ -192,19 +192,6 @@ class LeadViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.Lis
     @action(detail=True, methods=["patch"], permission_classes=[IsAuthenticated])
     def update_status(self, request, pk=None):
         lead = self.get_object()
-        user = request.user
-
-        # Seller must belong to same dealer
-        staff = DealerStaff.objects.filter(
-            user=user,
-            role="seller"
-        ).select_related("dealer").first()
-
-        if staff and lead.car.dealer_id != staff.dealer_id:
-            return Response(
-                {"detail": "You cannot update this lead."},
-                status=status.HTTP_403_FORBIDDEN
-            )
 
         serializer = self.get_serializer(
             lead,
@@ -212,6 +199,7 @@ class LeadViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.Lis
             partial=True,
             context={"request": request},
         )
+
         serializer.is_valid(raise_exception=True)
         serializer.save()
 

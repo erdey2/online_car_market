@@ -47,32 +47,49 @@ class LeadService:
 
     @staticmethod
     def _filter_for_user(qs, user):
-        """
-        Shared role-based filtering.
-        """
-
         if user.is_superuser:
             return qs
 
-        if hasattr(user, "dealer"):
-            return qs.filter(car__dealer=user.dealer)
+        dealer_profile = getattr(
+            getattr(user, "profile", None),
+            "dealer_profile",
+            None
+        )
 
-        if hasattr(user, "broker"):
-            return qs.filter(car__broker=user.broker)
+        if dealer_profile:
+            return qs.filter(
+                car__dealer=dealer_profile
+            )
 
-        staff_assignment = (
+        broker_profile = getattr(
+            getattr(user, "profile", None),
+            "broker_profile",
+            None
+        )
+
+        if broker_profile:
+            return qs.filter(
+                car__broker=broker_profile
+            )
+
+        seller_assignment = (
             DealerStaff.objects
-            .filter(user=user)
+            .filter(
+                user=user,
+                role="seller"
+            )
             .select_related("dealer")
             .first()
         )
 
-        if staff_assignment:
+        if seller_assignment:
             return qs.filter(
-                car__dealer=staff_assignment.dealer
+                car__dealer=seller_assignment.dealer
             )
 
-        return qs.filter(buyer=user)
+        return qs.filter(
+            buyer=user
+        )
 
     @staticmethod
     def total_leads(user=None):

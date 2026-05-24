@@ -231,17 +231,38 @@ class LeadStatusUpdateSerializer(serializers.Serializer):
         request = self.context.get("request")
         user = request.user if request else None
 
+        dealer_profile = getattr(
+            getattr(user, "profile", None),
+            "dealer_profile",
+            None
+        )
+
+        broker_profile = getattr(
+            getattr(user, "profile", None),
+            "broker_profile",
+            None
+        )
+
+        seller_assignment = DealerStaff.objects.filter(
+            user=user,
+            role="seller"
+        ).exists()
+
         if value == Lead.LeadStatus.CLOSED:
             can_close = (
-                user and (
-                user.is_superuser
-                or hasattr(user, "dealer")
-                or hasattr(user, "broker")
-                or DealerStaff.objects.filter(user=user).exists()
+                user
+                and (
+                    user.is_superuser
+                    or dealer_profile
+                    or broker_profile
+                    or seller_assignment
+                )
             )
-            )
+
             if not can_close:
-                raise serializers.ValidationError("Only sellers or admin can close a lead.")
+                raise serializers.ValidationError(
+                    "Only sellers, dealers, brokers, or admins can close a lead."
+                )
 
         return value
 
