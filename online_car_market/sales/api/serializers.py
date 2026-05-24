@@ -148,9 +148,20 @@ class LeadSerializer(serializers.ModelSerializer):
         ]
 
     def get_buyer_name(self, obj):
-        if obj.buyer:
-            return obj.buyer.get_full_name()
-        return obj.name
+        if not obj.buyer:
+            return obj.name
+
+        profile = getattr(obj.buyer, "profile", None)
+
+        if profile:
+            first_name = getattr(profile, "first_name", "")
+            last_name = getattr(profile, "last_name", "")
+            full_name = f"{first_name} {last_name}".strip()
+
+            if full_name:
+                return full_name
+
+        return obj.buyer.email
 
     def get_car_info(self, obj):
         if obj.car:
