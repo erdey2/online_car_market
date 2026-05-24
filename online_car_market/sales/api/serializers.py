@@ -165,7 +165,6 @@ class LeadCreateSerializer(serializers.ModelSerializer):
     car_id = serializers.PrimaryKeyRelatedField(
         queryset=Car.objects.all(),
         source="car",
-        write_only=True
     )
 
     class Meta:
@@ -180,10 +179,7 @@ class LeadCreateSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        """
-        Ensure a lead with the same contact for this car does not exist.
-        """
-        car = attrs["car"]   # FIXED
+        car = attrs.get("car")
         contact = attrs["contact"]
 
         if Lead.objects.filter(
@@ -204,7 +200,7 @@ class LeadCreateSerializer(serializers.ModelSerializer):
             else None
         )
 
-        car = validated_data.pop("car")   # FIXED
+        car = validated_data.pop("car")
 
         return LeadService.create_lead(
             car=car,
