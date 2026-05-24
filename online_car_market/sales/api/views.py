@@ -155,21 +155,56 @@ class LeadViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.Lis
         if user.is_superuser:
             return self.queryset
 
-        if hasattr(user, "dealer"):
-            return self.queryset.filter(car__dealer=user.dealer)
+        dealer_profile = getattr(
+            getattr(user, "profile", None),
+            "dealer_profile",
+            None
+        )
+        if dealer_profile:
+            return self.queryset.filter(
+                car__dealer=dealer_profile
+            )
 
-        if hasattr(user, "broker"):
-            return self.queryset.filter(car__broker=user.broker)
+        broker_profile = getattr(
+            getattr(user, "profile", None),
+            "broker_profile",
+            None
+        )
+        if broker_profile:
+            return self.queryset.filter(
+                car__broker=broker_profile
+            )
 
-        staff_assignment = DealerStaff.objects.filter(user=user).select_related("dealer").first()
-        if staff_assignment:
-            return self.queryset.filter(car__dealer=staff_assignment.dealer)
+        seller_assignment = DealerStaff.objects.filter(
+            user=user,
+            role="seller"
+        ).select_related("dealer").first()
 
-        return self.queryset.filter(buyer=user)
+        if seller_assignment:
+            return self.queryset.filter(
+                car__dealer=seller_assignment.dealer
+            )
+
+        return self.queryset.filter(
+            buyer=user
+        )
 
     @action(detail=True, methods=["patch"], permission_classes=[IsAuthenticated])
     def update_status(self, request, pk=None):
         lead = self.get_object()
+        user = request.user
+
+        # Seller must belong to same dealer
+        staff = DealerStaff.objects.filter(
+            user=user,
+            role="seller"
+        ).select_related("dealer").first()
+
+        if staff and lead.car.dealer_id != staff.dealer_id:
+            return Response(
+                {"detail": "You cannot update this lead."},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         serializer = self.get_serializer(
             lead,
