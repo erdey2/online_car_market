@@ -8,6 +8,7 @@ from online_car_market.brokers.models import BrokerProfile
 from online_car_market.dealers.models import DealerProfile, DealerStaff
 from online_car_market.sales.service.lead_service import LeadService
 from django.contrib.auth import get_user_model
+from online_car_market.dealers.models import DealerStaff
 
 User = get_user_model()
 
@@ -230,10 +231,18 @@ class LeadStatusUpdateSerializer(serializers.Serializer):
         request = self.context.get("request")
         user = request.user if request else None
 
-        if value == Lead.LeadStatus.CLOSED and not (
-            user and (user.is_superuser or hasattr(user, "dealer") or hasattr(user, "broker"))
-        ):
-            raise serializers.ValidationError("Only sellers or admin can close a lead.")
+        if value == Lead.LeadStatus.CLOSED:
+            can_close = (
+                user and (
+                user.is_superuser
+                or hasattr(user, "dealer")
+                or hasattr(user, "broker")
+                or DealerStaff.objects.filter(user=user).exists()
+            )
+            )
+            if not can_close:
+                raise serializers.ValidationError("Only sellers or admin can close a lead.")
+
         return value
 
     def update(self, instance, validated_data):

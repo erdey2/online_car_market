@@ -7,6 +7,7 @@ from online_car_market.sales.models import Lead
 from .serializers import SaleSerializer, LeadSerializer, LeadCreateSerializer, LeadStatusUpdateSerializer, LeadAnalyticsSerializer
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, OpenApiExample
 from online_car_market.users.permissions.business_permissions import CanViewSalesData, CanManageSales
+from online_car_market.dealers.models import DealerStaff
 from ..service.lead_service import LeadService
 from ..service.sale_service import SaleService
 
@@ -159,6 +160,10 @@ class LeadViewSet(mixins.CreateModelMixin, mixins.RetrieveModelMixin, mixins.Lis
 
         if hasattr(user, "broker"):
             return self.queryset.filter(car__broker=user.broker)
+
+        staff_assignment = DealerStaff.objects.filter(user=user).select_related("dealer").first()
+        if staff_assignment:
+            return self.queryset.filter(car__dealer=staff_assignment.dealer)
 
         return self.queryset.filter(buyer=user)
 
