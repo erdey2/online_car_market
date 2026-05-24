@@ -162,35 +162,49 @@ class LeadSerializer(serializers.ModelSerializer):
         return None
 
 class LeadCreateSerializer(serializers.ModelSerializer):
+    car_id = serializers.PrimaryKeyRelatedField(
+        queryset=Car.objects.all(),
+        source="car",
+        write_only=True
+    )
+
     class Meta:
         model = Lead
-        fields = ["name", "contact"]
+        fields = ["car_id", "name", "contact"]
 
     def validate_contact(self, value):
         if not value.strip():
-            raise serializers.ValidationError("Contact cannot be empty.")
+            raise serializers.ValidationError(
+                "Contact cannot be empty."
+            )
         return value
 
     def validate(self, attrs):
         """
         Ensure a lead with the same contact for this car does not exist.
         """
-        car = self.context.get("car")
+        car = attrs["car"]   # FIXED
         contact = attrs["contact"]
 
-        if not car:
-            raise serializers.ValidationError("Car must be specified to create a lead.")
-
-        if Lead.objects.filter(contact__iexact=contact, car=car).exists():
+        if Lead.objects.filter(
+            contact__iexact=contact,
+            car=car
+        ).exists():
             raise serializers.ValidationError(
                 "A lead with this contact already exists for this car."
             )
+
         return attrs
 
     def create(self, validated_data):
         request = self.context.get("request")
-        car = self.context.get("car")
-        buyer = request.user if request and request.user.is_authenticated else None
+        buyer = (
+            request.user
+            if request and request.user.is_authenticated
+            else None
+        )
+
+        car = validated_data.pop("car")   # FIXED
 
         return LeadService.create_lead(
             car=car,
