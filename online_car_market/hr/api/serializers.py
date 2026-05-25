@@ -2,6 +2,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 from rolepermissions.checkers import has_role
@@ -16,7 +17,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(write_only=True, required=True)
     user_email_display = serializers.EmailField(source="user.email", read_only=True)
     full_name = serializers.SerializerMethodField(read_only=True)
-    salary = serializers.SerializerMethodField(read_only=True)
+    salary = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     components = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -88,8 +89,10 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
         return user
 
-    def create(self, validated_data: dict) -> Employee:
+    @transaction.atomic
+    def create(self, validated_data):
         user = validated_data.pop("user_email")
+        salary = validated_data.pop("salary", None)
 
         if "hire_date" not in validated_data:
             validated_data["hire_date"] = timezone.now().date()
@@ -99,16 +102,41 @@ class EmployeeSerializer(serializers.ModelSerializer):
         dealer = getattr(request_user.profile, "dealer_profile", None)
 
         if not dealer:
-            # staff case → must belong to dealer staff HR
-            staff = DealerStaff.objects.filter(user=request_user, role="hr").first()
+            staff = DealerStaff.objects.filter(
+                user=request_user,
+                role="hr"
+            ).first()
+
             if not staff:
                 raise serializers.ValidationError("Not allowed.")
 
-        return Employee.objects.create(
+        # Create employee
+        employee = Employee.objects.create(
             user=user,
             created_by=request_user,
+            salary=salary,  # save direct salary too
             **validated_data
         )
+
+        # Create salary component
+        if salary:
+            basic_salary_component, created = SalaryComponent.objects.get_or_create(
+                name="Basic Salary",
+                defaults={
+                    "component_type": SalaryComponent.EARNING,
+                    "is_taxable": True,
+                    "is_pensionable": True,
+                    "is_system": True,
+                }
+            )
+
+            EmployeeSalary.objects.create(
+                employee=employee,
+                component=basic_salary_component,
+                amount=salary
+            )
+
+        return employee
 
 class SignedUploadSerializer(serializers.Serializer):
     signed_document = serializers.FileField()
