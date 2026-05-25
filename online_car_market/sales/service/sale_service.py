@@ -5,6 +5,9 @@ from online_car_market.buyers.models import BuyerProfile
 from online_car_market.brokers.models import BrokerProfile
 from rolepermissions.checkers import has_role
 
+from users.permissions.business_permissions import is_staff
+
+
 class SaleService:
 
     @staticmethod
@@ -46,7 +49,7 @@ class SaleService:
             except DealerProfile.DoesNotExist:
                 return queryset.none()
 
-        if has_role(user, 'seller'):
+        if is_staff(user, ["seller"]):
             try:
                 dealer_staff = DealerStaff.objects.get(
                     user=user,

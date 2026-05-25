@@ -1,4 +1,3 @@
-from drf_spectacular.types import OpenApiTypes
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
@@ -8,7 +7,8 @@ from online_car_market.brokers.models import BrokerProfile
 from online_car_market.dealers.models import DealerProfile, DealerStaff
 from online_car_market.sales.service.lead_service import LeadService
 from django.contrib.auth import get_user_model
-from online_car_market.dealers.models import DealerStaff
+
+from users.permissions.business_permissions import is_staff
 
 User = get_user_model()
 
@@ -93,20 +93,27 @@ class SaleSerializer(serializers.ModelSerializer):
             except DealerProfile.DoesNotExist:
                 raise serializers.ValidationError("Dealer profile not found.")
 
-        elif has_role(user, 'seller'):
+        elif is_staff(user, ["seller"]):
             try:
-                staff = DealerStaff.objects.get(user=user, role='seller')
-                if car.dealer != staff.dealer:
-                    raise serializers.ValidationError("You can only sell cars belonging to your dealer.")
-                data['dealer'] = staff.dealer
-            except DealerStaff.DoesNotExist:
-                raise serializers.ValidationError("You are not assigned to any dealer as a seller.")
+                staff = DealerStaff.objects.get(
+                    user=user,
+                    role="seller"
+                )
 
-        elif has_role(user, ['super_admin', 'admin']):
-            # Admins can assign broker or dealer freely
+                if car.dealer != staff.dealer:
+                    raise serializers.ValidationError(
+                        "You can only sell cars belonging to your dealer."
+                    )
+
+                data["dealer"] = staff.dealer
+
+            except DealerStaff.DoesNotExist:
+                raise serializers.ValidationError(
+                    "You are not assigned to any dealer as a seller."
+                )
+
+        elif has_role(user, "super_admin") or has_role(user, "admin"):
             pass
-        else:
-            raise serializers.ValidationError("You don't have permission to create a sale.")
 
         # Validate car ownership consistency
         broker = data.get('broker')
