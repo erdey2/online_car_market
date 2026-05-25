@@ -165,7 +165,7 @@ class CanManageSales(BasePermission):
         return (
             has_role(request.user, "dealer")
             or has_role(request.user, "broker")
-            or has_role(request.user, "seller")   # ADD THIS
+            or is_staff(request.user, ["seller"])
             or has_role(request.user, "admin")
             or has_role(request.user, "super_admin")
         )
@@ -178,7 +178,7 @@ class CanViewSalesData(BasePermission):
             or has_role(user, "super_admin")
             or has_role(user, "dealer")
             or has_role(user, "broker")
-            or has_role(user, "seller")
+            or is_staff(user, ["seller"])
             or has_role(user, "buyer")
         )
 
