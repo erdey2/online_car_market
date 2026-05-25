@@ -48,8 +48,13 @@ class SaleService:
 
         if has_role(user, 'seller'):
             try:
-                dealer_staff = DealerStaff.objects.get(user=user)
-                return queryset.filter(car__dealer=dealer_staff.dealer)
+                dealer_staff = DealerStaff.objects.get(
+                    user=user,
+                    role="seller"
+                )
+                return queryset.filter(
+                    car__dealer=dealer_staff.dealer
+                )
             except DealerStaff.DoesNotExist:
                 return queryset.none()
 

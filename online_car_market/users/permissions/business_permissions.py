@@ -1,4 +1,6 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
+from rolepermissions.checkers import has_role
+
 from online_car_market.dealers.models import DealerStaff
 
 # HELPERS
@@ -113,14 +115,6 @@ class CanManageAccounting(BasePermission):
             is_staff(user, ["accountant", "finance"])
         )
 
-class CanManageSales(BasePermission):
-    def has_permission(self, request, view):
-        user = request.user
-        return (
-            user.is_authenticated and user.role in ["admin", "dealer", "broker"] or
-            is_staff(user, ["seller"])
-        )
-
 class CanViewPayroll(BasePermission):
     def has_permission(self, request, view):
         user = request.user
@@ -166,12 +160,26 @@ class CanPostPayroll(BasePermission):
             is_staff(user, ["finance"])
         )
 
+class CanManageSales(BasePermission):
+    def has_permission(self, request, view):
+        return (
+            has_role(request.user, "dealer")
+            or has_role(request.user, "broker")
+            or has_role(request.user, "seller")   # ADD THIS
+            or has_role(request.user, "admin")
+            or has_role(request.user, "super_admin")
+        )
+
 class CanViewSalesData(BasePermission):
     def has_permission(self, request, view):
         user = request.user
         return (
-            user.role == "admin" or
-            is_staff(user, ["accountant", "seller", "finance"])
+            has_role(user, "admin")
+            or has_role(user, "super_admin")
+            or has_role(user, "dealer")
+            or has_role(user, "broker")
+            or has_role(user, "seller")
+            or has_role(user, "buyer")
         )
 
 # GENERAL
