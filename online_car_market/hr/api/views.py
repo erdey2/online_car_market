@@ -16,7 +16,7 @@ from django.db.models import Q
 from online_car_market.users.permissions.drf_permissions import IsHR, IsDealerOrHR, IsFinance
 from online_car_market.users.permissions.business_permissions import IsHRorDealer
 from online_car_market.dealers.models import DealerStaff
-from drf_spectacular.utils import extend_schema_view, extend_schema, OpenApiResponse, OpenApiParameter
+from drf_spectacular.utils import extend_schema_view, extend_schema, OpenApiResponse, OpenApiParameter, OpenApiExample
 from ..services.contract_service import ContractService
 from ..services.leave_service import LeaveService
 from ..services.attendance_service import AttendanceService
@@ -516,46 +516,93 @@ class EmployeeSalaryViewSet(ModelViewSet):
         self._ensure_employee_access(serializer.validated_data.get("employee", serializer.instance.employee))
         serializer.save()
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Dealers - Human Resource Management"],
+        summary="List overtime entries",
+        description=(
+            "Retrieve overtime records accessible to the authenticated user.\n\n"
+            "- Dealers and HR staff can view overtime for employees under their dealer.\n"
+            "- Finance users can audit and approve overtime records."
+        ),
+    ),
+    retrieve=extend_schema(
+        tags=["Dealers - Human Resource Management"],
+        summary="Retrieve overtime entry",
+        description="Retrieve detailed information about a specific overtime entry.",
+    ),
+    create=extend_schema(
+        tags=["Dealers - Human Resource Management"],
+        summary="Create overtime entry",
+        description=(
+            "Create a new overtime record for an employee.\n\n"
+            "Overtime entries are later used during payroll calculations."
+        ),
+        request=OvertimeSerializer,
+        responses={201: OvertimeSerializer},
+        examples=[
+            OpenApiExample(
+                "Normal Overtime",
+                value={
+                    "employee": 5,
+                    "overtime_type": "1.5",
+                    "hours": "4.5",
+                    "approved": False,
+                    "date": "2026-05-28"
+                },
+                request_only=True,
+            )
+        ],
+    ),
+    update=extend_schema(
+        tags=["Dealers - Human Resource Management"],
+        summary="Update overtime entry",
+        description="Update an existing overtime record.",
+    ),
+    partial_update=extend_schema(
+        tags=["Dealers - Human Resource Management"],
+        summary="Partially update overtime entry",
+        description="Modify selected fields of an overtime record.",
+    ),
+    destroy=extend_schema(
+        tags=["Dealers - Human Resource Management"],
+        summary="Delete overtime entry",
+        description="Delete an overtime entry.",
+    ),
+)
 @extend_schema(
     tags=["Dealers - Human Resource Management"],
     summary="Employee Overtime Management",
     description=(
         "This endpoint manages employee overtime records used during payroll processing.\n\n"
 
-        "Overtime entries allow HR, Dealers, and Finance teams to track extra working hours "
-        "performed by employees beyond normal working schedules.\n\n"
-
-        "Each overtime entry contains:\n"
-        "- Employee\n"
-        "- Overtime type (multiplier rate)\n"
-        "- Number of overtime hours\n"
-        "- Overtime date\n"
-        "- Approval status\n\n"
+        "Overtime entries track extra working hours performed beyond normal schedules.\n\n"
 
         "Overtime Types:\n"
-        "- `1.5` → Normal Overtime (1.5x hourly rate)\n"
-        "- `1.75` → Weekend Overtime (1.75x hourly rate)\n"
-        "- `2.0` → Special Overtime (2.0x hourly rate)\n"
-        "- `2.5` → Holiday Overtime (2.5x hourly rate)\n\n"
+        "- `1.5` → Normal Overtime\n"
+        "- `1.75` → Weekend Overtime\n"
+        "- `2.0` → Special Overtime\n"
+        "- `2.5` → Holiday Overtime\n\n"
 
         "Permissions:\n"
-        "- Dealers and HR staff can create and manage overtime entries for employees.\n"
-        "- Finance users can review and approve overtime records.\n"
-        "- Approved overtime records are included in payroll calculations.\n\n"
+        "- Dealers and HR staff can create/manage overtime entries.\n"
+        "- Finance users can audit and approve overtime records.\n\n"
 
-        "Example Calculation:\n"
-        "If an employee earns 200 ETB/hour and works 5 hours of Holiday Overtime (2.5x), "
-        "the overtime payment will be:\n"
-        "`200 × 5 × 2.5 = 2500 ETB`\n\n"
-
-        "Important Notes:\n"
-        "- Overtime hours must be positive values.\n"
-        "- Payroll should only include approved overtime entries.\n"
-        "- Entries are ordered by overtime date (latest first)."
+        "Approved overtime records are included in payroll calculations."
     )
 )
 class OvertimeEmployeeViewSet(ModelViewSet):
-    permission_classes = [IsAuthenticated, IsDealerOrHR | IsFinance]
     serializer_class = OvertimeSerializer
-    queryset = OvertimeEntry.objects.all()
+    permission_classes = [ IsAuthenticated, IsDealerOrHR | IsFinance ]
+
+    queryset = (OvertimeEntry.objects.select_related(
+            "employee",
+            "employee__user",
+            "employee__user__profile",
+        )
+        .all()
+    )
+
+    def get_queryset(self):
+        return self.queryset.order_by("-date", "-created_at")
 

@@ -412,8 +412,67 @@ class EmployeeSalarySerializer(serializers.ModelSerializer):
         ]
 
 class OvertimeSerializer(serializers.ModelSerializer):
+    employee_name = serializers.SerializerMethodField(read_only=True)
+    overtime_type_display = serializers.CharField(
+        source="get_overtime_type_display",
+        read_only=True
+    )
+
     class Meta:
         model = OvertimeEntry
-        fields = "__all__"
-        read_only_fields = ['employee', 'created_at']
+        fields = [
+            "id",
+            "employee",
+            "employee_name",
+            "overtime_type",
+            "overtime_type_display",
+            "hours",
+            "approved",
+            "date",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "created_at",
+        ]
+
+    def get_employee_name(self, obj):
+        profile = getattr(obj.employee.user, "profile", None)
+
+        if not profile:
+            return obj.employee.user.email
+
+        return f"{profile.first_name} {profile.last_name}".strip()
+
+    def validate_hours(self, value):
+        if value <= 0:
+            raise serializers.ValidationError(
+                "Overtime hours must be greater than zero."
+            )
+
+        if value > Decimal("24"):
+            raise serializers.ValidationError(
+                "Overtime hours cannot exceed 24 hours."
+            )
+
+        return value
+
+    def validate_date(self, value):
+        if value and value > timezone.now().date():
+            raise serializers.ValidationError(
+                "Overtime date cannot be in the future."
+            )
+
+        return value
+
+    def validate(self, attrs):
+        employee = attrs.get("employee")
+
+        if not employee:
+            raise serializers.ValidationError(
+                {"employee": "Employee is required."}
+            )
+
+        return attrs
+
 
