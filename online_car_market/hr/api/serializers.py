@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
+from django.db.models import Sum
 from rest_framework import serializers
 from rolepermissions.checkers import has_role
 import bleach
@@ -19,6 +20,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField(read_only=True)
     salary = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     components = serializers.SerializerMethodField(read_only=True)
+    overtime_entries = serializers.SerializerMethodField(read_only=True)
+    total_overtime_hours = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Employee
@@ -30,62 +33,107 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "hire_date",
             "position",
             "salary",
+
             "components",
+            "overtime_entries",
+            "total_overtime_hours",
+
             "is_active",
             "created_by",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "user_email_display", "full_name", "salary", "components", "created_by", "created_at", "updated_at"]
+
+        read_only_fields = [
+            "id",
+            "user_email_display",
+            "full_name",
+            "salary",
+            "components",
+            "overtime_entries",
+            "total_overtime_hours",
+            "created_by",
+            "created_at",
+            "updated_at"
+        ]
 
     def get_full_name(self, obj):
         profile = getattr(obj.user, "profile", None)
+
         if not profile:
             return "Unknown"
 
         return f"{profile.first_name} {profile.last_name}".strip()
 
     def _employee_salaries(self, obj):
-        """Use prefetched salaries when available (see EmployeeViewSet.get_queryset)."""
         if (
             hasattr(obj, "_prefetched_objects_cache")
             and "employeesalary_set" in obj._prefetched_objects_cache
         ):
             return obj.employeesalary_set.all()
-        return EmployeeSalary.objects.select_related("component").filter(employee=obj)
+
+        return EmployeeSalary.objects.select_related(
+            "component"
+        ).filter(employee=obj)
 
     def get_salary(self, obj):
         for salary in self._employee_salaries(obj):
             if salary.component.name.lower() == "basic salary":
                 return salary.amount
+
         return None
 
     def get_components(self, obj):
-        """
-        Return nested salary components assigned to this employee.
-        Each row: {id, employee, employee_email, component, component_name, amount}
-        """
-        return SimpleEmployeeSerializer(self._employee_salaries(obj), many=True).data
+        return SimpleEmployeeSerializer(
+            self._employee_salaries(obj),
+            many=True
+        ).data
 
-    # Field-level validations
-    def validate_hire_date(self, value: date) -> date:
+    def get_overtime_entries(self, obj):
+        overtime_qs = obj.overtime_entries.all().order_by("-date")
+
+        return OvertimeSerializer(
+            overtime_qs,
+            many=True
+        ).data
+
+    def get_total_overtime_hours(self, obj):
+        total = obj.overtime_entries.aggregate(
+            total=Sum("hours")
+        )["total"]
+
+        return total or 0
+
+    def validate_hire_date(self, value):
         if value > date.today():
-            raise serializers.ValidationError("Hire date cannot be in the future.")
+            raise serializers.ValidationError(
+                "Hire date cannot be in the future."
+            )
+
         return value
 
-    def validate_user_email(self, email: str) -> User:
-        """Resolve email → User + prevent duplicate Employee."""
+    def validate_user_email(self, email):
         try:
             user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            raise serializers.ValidationError("No user with this email exists.")
 
-        if self.instance:  # update
-            if Employee.objects.filter(user=user).exclude(pk=self.instance.pk).exists():
-                raise serializers.ValidationError("This user is already an employee.")
-        else:  # create
+        except User.DoesNotExist:
+            raise serializers.ValidationError(
+                "No user with this email exists."
+            )
+
+        if self.instance:
+            if Employee.objects.filter(user=user).exclude(
+                pk=self.instance.pk
+            ).exists():
+                raise serializers.ValidationError(
+                    "This user is already an employee."
+                )
+
+        else:
             if hasattr(user, "employee_profile"):
-                raise serializers.ValidationError("This user is already an employee.")
+                raise serializers.ValidationError(
+                    "This user is already an employee."
+                )
 
         return user
 
@@ -99,7 +147,11 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
         request_user = self.context["request"].user
 
-        dealer = getattr(request_user.profile, "dealer_profile", None)
+        dealer = getattr(
+            request_user.profile,
+            "dealer_profile",
+            None
+        )
 
         if not dealer:
             staff = DealerStaff.objects.filter(
@@ -108,26 +160,28 @@ class EmployeeSerializer(serializers.ModelSerializer):
             ).first()
 
             if not staff:
-                raise serializers.ValidationError("Not allowed.")
+                raise serializers.ValidationError(
+                    "Not allowed."
+                )
 
-        # Create employee
         employee = Employee.objects.create(
             user=user,
             created_by=request_user,
-            salary=salary,  # save direct salary too
+            salary=salary,
             **validated_data
         )
 
-        # Create salary component
         if salary:
-            basic_salary_component, created = SalaryComponent.objects.get_or_create(
-                name="Basic Salary",
-                defaults={
-                    "component_type": SalaryComponent.EARNING,
-                    "is_taxable": True,
-                    "is_pensionable": True,
-                    "is_system": True,
-                }
+            basic_salary_component, created = (
+                SalaryComponent.objects.get_or_create(
+                    name="Basic Salary",
+                    defaults={
+                        "component_type": SalaryComponent.EARNING,
+                        "is_taxable": True,
+                        "is_pensionable": True,
+                        "is_system": True,
+                    }
+                )
             )
 
             EmployeeSalary.objects.create(
