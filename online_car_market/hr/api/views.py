@@ -518,11 +518,40 @@ class EmployeeSalaryViewSet(ModelViewSet):
 
 @extend_schema(
     tags=["Dealers - Human Resource Management"],
+    summary="Employee Overtime Management",
     description=(
-        "Manage overtime entries for employees. "
-        "Overtime records are used to calculate additional pay "
-        "during payroll processing. "
-        "Finance users may audit and approve overtime data."
+        "This endpoint manages employee overtime records used during payroll processing.\n\n"
+
+        "Overtime entries allow HR, Dealers, and Finance teams to track extra working hours "
+        "performed by employees beyond normal working schedules.\n\n"
+
+        "Each overtime entry contains:\n"
+        "- Employee\n"
+        "- Overtime type (multiplier rate)\n"
+        "- Number of overtime hours\n"
+        "- Overtime date\n"
+        "- Approval status\n\n"
+
+        "Overtime Types:\n"
+        "- `1.5` → Normal Overtime (1.5x hourly rate)\n"
+        "- `1.75` → Weekend Overtime (1.75x hourly rate)\n"
+        "- `2.0` → Special Overtime (2.0x hourly rate)\n"
+        "- `2.5` → Holiday Overtime (2.5x hourly rate)\n\n"
+
+        "Permissions:\n"
+        "- Dealers and HR staff can create and manage overtime entries for employees.\n"
+        "- Finance users can review and approve overtime records.\n"
+        "- Approved overtime records are included in payroll calculations.\n\n"
+
+        "Example Calculation:\n"
+        "If an employee earns 200 ETB/hour and works 5 hours of Holiday Overtime (2.5x), "
+        "the overtime payment will be:\n"
+        "`200 × 5 × 2.5 = 2500 ETB`\n\n"
+
+        "Important Notes:\n"
+        "- Overtime hours must be positive values.\n"
+        "- Payroll should only include approved overtime entries.\n"
+        "- Entries are ordered by overtime date (latest first)."
     )
 )
 class OvertimeEmployeeViewSet(ModelViewSet):
