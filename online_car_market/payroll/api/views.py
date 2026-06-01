@@ -1,7 +1,9 @@
 from django.db.models import Prefetch
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from online_car_market.payroll.models import PayrollItem, PayrollLine
-from online_car_market.payroll.api.serializers import PayslipSerializer, PayrollRunSerializer
+from online_car_market.payroll.api.serializers import (PayslipSerializer,
+                                                       PayrollRunSerializer,
+                                                       PayrollRunSuccessSerializer, PayrollRunErrorSerializer)
 from online_car_market.payroll.selectors.payroll_queries import get_latest_payslip
 from rest_framework.permissions import IsAuthenticated
 from online_car_market.users.permissions.business_permissions import (
@@ -81,33 +83,41 @@ class PayrollRunViewSet(viewsets.ModelViewSet):
             "Allowed roles: dealer and HR staff."
         ),
         responses={
-            200: PayrollActionResponse,
-            400: PayrollActionResponse,
+            200: PayrollRunSuccessSerializer,
+            400: PayrollRunErrorSerializer,
+            409: PayrollRunErrorSerializer,
         }
     )
-    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated, CanRunPayroll])
+    @action(
+        detail=True,
+        methods=["post"],
+        permission_classes=[IsAuthenticated, CanRunPayroll]
+    )
     def run(self, request, pk=None):
         payroll_run = self.get_object()
 
         try:
             result = run_payroll(payroll_run)
-        except ValidationError as e:
-            # Friendly API error if payroll is posted
+
             return Response(
-                {"detail": str(e)},
-                status=status.HTTP_400_BAD_REQUEST
+                {
+                    "detail": "Payroll processed successfully",
+                    "data": result
+                },
+                status=status.HTTP_200_OK
             )
-        except ValueError as e:
-            # Other business rule errors
+
+        except ValidationError as e:
             return Response(
                 {"detail": str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        return Response(
-            {"detail": "Payroll processed successfully", "data": result},
-            status=status.HTTP_200_OK
-        )
+        except ValueError as e:
+            return Response(
+                {"detail": str(e)},
+                status=status.HTTP_409_CONFLICT
+            )
 
     @extend_schema(
         tags=["Payroll – Payroll Runs"],

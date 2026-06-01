@@ -14,6 +14,13 @@ class PayrollLineSerializer(serializers.ModelSerializer):
         model = PayrollLine
         fields = ["name", "amount"]
 
+class PayrollRunSuccessSerializer(serializers.Serializer):
+    detail = serializers.CharField()
+    data = serializers.DictField()
+
+
+class PayrollRunErrorSerializer(serializers.Serializer):
+    detail = serializers.CharField()
 
 class PayslipSerializer(serializers.ModelSerializer):
     earnings = serializers.SerializerMethodField()
