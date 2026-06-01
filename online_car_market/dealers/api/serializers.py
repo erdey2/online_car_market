@@ -2,9 +2,8 @@ from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from rolepermissions.checkers import has_role
 from online_car_market.common.serializers import ProfileLiteSerializer
-from online_car_market.users.models import User, Profile
+from online_car_market.users.models import User
 from ..models import DealerProfile, DealerStaff, DealerRating
-from rolepermissions.roles import assign_role
 import bleach
 import logging
 
@@ -15,10 +14,17 @@ class DealerProfileSerializer(serializers.ModelSerializer):
     profile = ProfileLiteSerializer(read_only=True)
     is_verified = serializers.BooleanField(read_only=True)
     role = serializers.SerializerMethodField(read_only=True)
+    business_license = serializers.SerializerMethodField()
 
     @extend_schema_field(serializers.CharField())
     def get_role(self, obj):
         return obj.profile.user.role if obj.profile and obj.profile.user else None
+
+    @extend_schema_field(serializers.URLField())
+    def get_business_license(self, obj):
+        if obj.business_license:
+            return obj.business_license.url
+        return None
 
     class Meta:
         model = DealerProfile
@@ -36,34 +42,57 @@ class DealerProfileSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'profile', 'is_verified']
+
+        read_only_fields = [
+            'id',
+            'profile',
+            'is_verified'
+        ]
 
     def validate_company_name(self, value):
         cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+
         if len(cleaned) > 255:
-            raise serializers.ValidationError("Company name cannot exceed 255 characters.")
+            raise serializers.ValidationError(
+                "Company name cannot exceed 255 characters."
+            )
+
         return cleaned
 
     def validate_license_number(self, value):
         cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+
         if len(cleaned) > 50:
-            raise serializers.ValidationError("License number cannot exceed 50 characters.")
+            raise serializers.ValidationError(
+                "License number cannot exceed 50 characters."
+            )
+
         return cleaned
 
     def validate_tax_id(self, value):
         if value:
             cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+
             if len(cleaned) > 100:
-                raise serializers.ValidationError("Tax ID cannot exceed 100 characters.")
+                raise serializers.ValidationError(
+                    "Tax ID cannot exceed 100 characters."
+                )
+
             return cleaned
+
         return value
 
     def validate_telebirr_account(self, value):
         if value:
             cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+
             if len(cleaned) > 100:
-                raise serializers.ValidationError("Telebirr account cannot exceed 100 characters.")
+                raise serializers.ValidationError(
+                    "Telebirr account cannot exceed 100 characters."
+                )
+
             return cleaned
+
         return value
 
 class DealerStaffSerializer(serializers.ModelSerializer):
