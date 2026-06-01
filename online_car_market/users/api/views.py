@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet, ViewSet, ReadOnlyModelViewSet
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, inline_serializer
 from .serializers import (UserRoleSerializer, ProfileSerializer, UserSerializer,
                           ERPLoginSerializer, AdminLoginSerializer, BuyerRegisterSerializer,
@@ -94,6 +95,7 @@ class AuthViewSet(ViewSet):
                 "license_number": serializers.CharField(),
                 "tax_id": serializers.CharField(required=False),
                 "telebirr_account": serializers.CharField(required=False),
+                "business_license": serializers.FileField(),
             },
         ),
         responses={
@@ -101,7 +103,7 @@ class AuthViewSet(ViewSet):
             400: OpenApiResponse(description="Invalid input"),
         },
     )
-    @action(detail=False, methods=["post"])
+    @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser])
     def register_dealer(self, request):
         serializer = DealerRegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

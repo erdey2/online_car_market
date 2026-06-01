@@ -20,19 +20,6 @@ class DealerProfileSerializer(serializers.ModelSerializer):
     def get_role(self, obj):
         return obj.profile.user.role if obj.profile and obj.profile.user else None
 
-    ''' @extend_schema_field(serializers.CharField())
-    def get_role(self, obj) -> str:
-        roles = [r.get_name() for r in get_user_roles(obj.profile.user)]
-        if 'dealer' in roles:
-            return 'dealer'
-        elif 'seller' in roles:
-            return 'seller'
-        elif 'accountant' in roles:
-            return 'accountant'
-        elif 'buyer' in roles:
-            return 'buyer'
-        return None '''
-
     class Meta:
         model = DealerProfile
         fields = [
@@ -42,6 +29,7 @@ class DealerProfileSerializer(serializers.ModelSerializer):
             'license_number',
             'tax_id',
             'telebirr_account',
+            'business_license',
             'status',
             'is_verified',
             'role',

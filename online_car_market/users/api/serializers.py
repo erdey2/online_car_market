@@ -388,6 +388,7 @@ class DealerRegisterSerializer(serializers.ModelSerializer):
     license_number = serializers.CharField()
     tax_id = serializers.CharField(required=False)
     telebirr_account = serializers.CharField(required=False)
+    business_license = serializers.FileField(required=True)
 
     class Meta:
         model = User
@@ -398,6 +399,7 @@ class DealerRegisterSerializer(serializers.ModelSerializer):
             "license_number",
             "tax_id",
             "telebirr_account",
+            "business_license",
         ]
 
     def create(self, validated_data):
@@ -405,6 +407,7 @@ class DealerRegisterSerializer(serializers.ModelSerializer):
         license_number = validated_data.pop("license_number")
         tax_id = validated_data.pop("tax_id", None)
         telebirr = validated_data.pop("telebirr_account", None)
+        business_license = validated_data.pop("business_license", None)
 
         user = User.objects.create_user(
             role=User.Role.BUYER,
@@ -419,6 +422,7 @@ class DealerRegisterSerializer(serializers.ModelSerializer):
             license_number=license_number,
             tax_id=tax_id,
             telebirr_account=telebirr,
+            business_license=business_license,
             status=DealerProfile.Status.PENDING
         )
 

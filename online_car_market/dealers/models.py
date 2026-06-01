@@ -1,6 +1,6 @@
 from django.db import models
 from online_car_market.users.models import User, Profile
-
+from cloudinary.models import CloudinaryField
 
 class DealerProfile(models.Model):
     class Status(models.TextChoices):
@@ -15,6 +15,7 @@ class DealerProfile(models.Model):
     license_number = models.CharField(max_length=50)
     tax_id = models.CharField(max_length=100, null=True, blank=True)
     telebirr_account = models.CharField(max_length=100, null=True)
+    business_license = CloudinaryField('business_license', resource_type='auto', null=True, blank=True)
 
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     is_verified = models.BooleanField(default=False)
