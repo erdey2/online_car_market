@@ -2,6 +2,7 @@ from rest_framework.viewsets import ViewSet
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.parsers import MultiPartParser, FormParser
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from .serializers import UpgradeToDealerSerializer, UpgradeToBrokerSerializer
 import logging
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 class RoleUpgradeViewSet(ViewSet):
     permission_classes = [IsAuthenticated]
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def upgrade_to_dealer(self, request):
         serializer = UpgradeToDealerSerializer(
             data=request.data,

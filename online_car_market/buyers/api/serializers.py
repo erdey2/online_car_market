@@ -5,7 +5,7 @@ from online_car_market.buyers.models import BuyerProfile, LoyaltyProgram
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.users.models import Profile, User
-from online_car_market.users.models import Profile
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -25,15 +25,25 @@ class BuyerProfileSerializer(serializers.ModelSerializer):
         read_only_fields = ['loyalty_points', 'loyalty_programs']
 
 class UpgradeToDealerSerializer(serializers.ModelSerializer):
+    business_license = serializers.FileField(required=True)
+
     class Meta:
         model = DealerProfile
-        fields = ['company_name', 'license_number', 'tax_id', 'telebirr_account']
+        fields = [
+            'company_name',
+            'license_number',
+            'tax_id',
+            'telebirr_account',
+            'business_license',
+        ]
 
     def validate(self, attrs):
         user = self.context['request'].user
 
         if user.role == User.Role.DEALER:
-            raise serializers.ValidationError("User is already a dealer.")
+            raise serializers.ValidationError(
+                "User is already a dealer."
+            )
 
         return attrs
 
@@ -43,10 +53,13 @@ class UpgradeToDealerSerializer(serializers.ModelSerializer):
 
         profile, _ = Profile.objects.get_or_create(user=user)
 
-        existing = DealerProfile.objects.filter(profile=profile).first()
+        existing = DealerProfile.objects.filter(
+            profile=profile
+        ).first()
 
-        # CASE 1: existing application
+        # EXISTING APPLICATION
         if existing:
+
             if existing.status in [
                 DealerProfile.Status.PENDING,
                 DealerProfile.Status.APPROVED,
@@ -56,8 +69,9 @@ class UpgradeToDealerSerializer(serializers.ModelSerializer):
                     f"Application already exists with status '{existing.status}'"
                 )
 
-            # CASE 2: RE-APPLICATION
+            # RE-APPLICATION
             if existing.status == DealerProfile.Status.REJECTED:
+
                 existing.status = DealerProfile.Status.PENDING
                 existing.reviewed_by = None
                 existing.reviewed_at = None
@@ -70,7 +84,7 @@ class UpgradeToDealerSerializer(serializers.ModelSerializer):
 
                 return existing
 
-        # CASE 3: NEW APPLICATION
+        # NEW APPLICATION
         dealer = DealerProfile.objects.create(
             profile=profile,
             status=DealerProfile.Status.PENDING,
