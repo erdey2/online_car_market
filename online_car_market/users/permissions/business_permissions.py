@@ -10,7 +10,7 @@ def is_staff(user, roles=None):
 
     staff = (
         DealerStaff.objects
-        .select_related("dealer")  # helps later usage
+        .select_related("dealer")
         .filter(user=user)
         .first()
     )
@@ -110,8 +110,11 @@ class CanManageAccounting(BasePermission):
     def has_permission(self, request, view):
         user = request.user
 
+        if not user.is_authenticated:
+            return False
+
         return (
-            user.role in ["admin", "super_admin", "dealer"] or
+            user.role == "dealer" or
             is_staff(user, ["accountant", "finance"])
         )
 
