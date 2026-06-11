@@ -91,11 +91,19 @@ class CarExpenseSerializer(serializers.ModelSerializer):
         return data
 
 class RevenueSerializer(serializers.ModelSerializer):
+    source_type = serializers.ChoiceField(
+        choices=['sale', 'broker_payment'],
+        write_only=True
+    )
+    source_id = serializers.IntegerField(write_only=True)
+
     class Meta:
         model = Revenue
         fields = [
             'dealer',
             'source',
+            'source_type',
+            'source_id',
             'amount',
             'description',
             'currency',
@@ -105,69 +113,58 @@ class RevenueSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'id',
+            'source',
             'invoice_number',
             'converted_amount',
             'created_at'
         ]
 
     def validate_amount(self, value):
-        """Ensure the revenue amount is positive."""
         if value <= 0:
             raise serializers.ValidationError("Revenue amount must be greater than zero.")
         return value
 
-    def validate_source_type(self, value):
-        """Ensure source type is valid (e.g., 'sale' or 'broker_payment')."""
-        if value not in ['sale', 'broker_payment']:
-            raise serializers.ValidationError("Source type must be 'sale' or 'broker_payment'.")
-        return value
-
     def validate(self, data):
-        """Validate the source reference and convert currency if needed."""
         source_type = data.get('source_type')
         source_id = data.get('source_id')
         amount = data.get('amount')
         currency = data.get('currency')
 
+        # Validate source mapping
         if source_type == 'sale':
             sale = Sale.objects.filter(id=source_id, status='sold').first()
             if not sale:
                 raise serializers.ValidationError("Invalid or unsold sale reference.")
             data['source'] = sale
+
         elif source_type == 'broker_payment':
             payment = Payment.objects.filter(id=source_id, status='completed').first()
             if not payment:
                 raise serializers.ValidationError("Invalid or uncompleted payment reference.")
             data['source'] = payment
 
+        else:
+            raise serializers.ValidationError("Invalid source type.")
+
+        # Currency conversion
         if currency == 'USD':
-            latest_rate = ExchangeRate.objects.filter(
+            rate = ExchangeRate.objects.filter(
                 from_currency='USD',
                 to_currency='ETB'
             ).order_by('-date').first()
-            if not latest_rate:
+
+            if not rate:
                 raise serializers.ValidationError("No exchange rate available for USD to ETB.")
-            data['converted_amount'] = amount * latest_rate.rate
+
+            data['converted_amount'] = amount * rate.rate
+
         elif currency == 'ETB':
             data['converted_amount'] = amount
+
         else:
             raise serializers.ValidationError("Unsupported currency for conversion.")
 
         return data
-
-    def create(self, validated_data):
-        """Ensure only accountants or admins can create revenue entries."""
-        request = self.context.get('request')
-        if request and not has_role(request.user, ['accountant', 'admin', 'super_admin']):
-            raise serializers.ValidationError("Only accountants or admins can create revenue entries.")
-        return super().create(validated_data)
-
-    def update(self, instance, validated_data):
-        """Ensure only accountants or admins can update revenue entries."""
-        request = self.context.get('request')
-        if request and not has_role(request.user, ['accountant', 'admin', 'super_admin']):
-            raise serializers.ValidationError("Only accountants or admins can update revenue entries.")
-        return super().update(instance, validated_data)
 
 class ExpenseSerializer(serializers.ModelSerializer):
     company_name = serializers.CharField(source="company.company_name", read_only=True)
