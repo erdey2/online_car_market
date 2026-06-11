@@ -113,10 +113,13 @@ class CanManageAccounting(BasePermission):
         if not user.is_authenticated:
             return False
 
-        return (
-            user.role == "dealer" or
-            is_staff(user, ["accountant", "finance"])
-        )
+        if user.role == "dealer":
+            return True
+
+        return DealerStaff.objects.filter(
+            user=user,
+            role__in=["accountant", "finance"]
+        ).exists()
 
 class CanViewPayroll(BasePermission):
     def has_permission(self, request, view):

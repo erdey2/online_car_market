@@ -2,6 +2,7 @@ from rest_framework import serializers
 from rolepermissions.checkers import has_role
 from ..models import Expense, FinancialReport, CarExpense, Revenue, ExchangeRate
 from online_car_market.sales.models import Sale
+from online_car_market.dealers.models import DealerProfile
 import bleach
 
 class ExchangeRateSerializer(serializers.ModelSerializer):
@@ -263,7 +264,6 @@ class ExpenseSerializer(serializers.ModelSerializer):
         Handle exchange rate assignment.
         Works for both create and partial update.
         """
-
         currency = attrs.get(
             "currency",
             getattr(self.instance, "currency", None)
