@@ -7,38 +7,30 @@ import bleach
 class ExchangeRateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ExchangeRate
-        fields = '__all__'
+        fields = "__all__"
 
     def validate_rate(self, value):
-        """Ensure the exchange rate is positive and reasonable."""
         if value <= 0:
-            raise serializers.ValidationError("Exchange rate must be greater than zero.")
-        if value > 1000:  # Arbitrary upper limit to catch errors (e.g., 1 USD = 1000 ETB is plausible)
-            raise serializers.ValidationError("Exchange rate seems unreasonably high. Please verify.")
+            raise serializers.ValidationError(
+                "Exchange rate must be greater than zero."
+            )
+        if value > 1000:
+            raise serializers.ValidationError(
+                "Exchange rate seems unreasonably high."
+            )
         return value
 
     def validate(self, data):
-        """Check uniqueness of currency pair and date combination."""
-        date = data.get('date')
+        date = data.get("date")
+
         if ExchangeRate.objects.filter(date=date).exclude(
             pk=self.instance.pk if self.instance else None
         ).exists():
-            raise serializers.ValidationError("An exchange rate for this date already exists.")
+            raise serializers.ValidationError(
+                "An exchange rate for this date already exists."
+            )
+
         return data
-
-    def create(self, validated_data):
-        """Ensure only accountants or admins can create rates."""
-        request = self.context.get('request')
-        if request and not has_role(request.user, ['accountant', 'admin', 'super_admin']):
-            raise serializers.ValidationError("Only accountants or admins can set exchange rates.")
-        return super().create(validated_data)
-
-    def update(self, instance, validated_data):
-        """Ensure only accountants or admins can update rates."""
-        request = self.context.get('request')
-        if request and not has_role(request.user, ['accountant', 'admin', 'super_admin']):
-            raise serializers.ValidationError("Only accountants or admins can update exchange rates.")
-        return super().update(instance, validated_data)
 
 class CarExpenseSerializer(serializers.ModelSerializer):
     vin_code = serializers.CharField(source="car.vin", read_only=True)
