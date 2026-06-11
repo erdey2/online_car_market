@@ -39,7 +39,6 @@ class CarExpenseSerializer(serializers.ModelSerializer):
     class Meta:
         model = CarExpense
         fields = '__all__'
-        extra_fields = ['vin_code', 'origin']
         read_only_fields=[
             'id',
             'converted_amount',
@@ -90,20 +89,6 @@ class CarExpenseSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Unsupported currency.")
 
         return data
-
-    def create(self, validated_data):
-        """Ensure only accountants or dealers can create expenses."""
-        request = self.context.get('request')
-        if request and not has_role(request.user, ['accountant', 'dealer', 'admin', 'super_admin']):
-            raise serializers.ValidationError("Only accountants or dealers can create expenses.")
-        return super().create(validated_data)
-
-    def update(self, instance, validated_data):
-        """Ensure only accountants or dealers can update expenses."""
-        request = self.context.get('request')
-        if request and not has_role(request.user, ['accountant', 'dealer', 'admin', 'super_admin']):
-            raise serializers.ValidationError("Only accountants or dealers can update expenses.")
-        return super().update(instance, validated_data)
 
 class RevenueSerializer(serializers.ModelSerializer):
     class Meta:

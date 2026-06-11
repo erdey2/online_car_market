@@ -113,7 +113,10 @@ class CarExpenseViewSet(ModelViewSet):
     def expenses_per_dealer_car(self, request):
         """Aggregate total expenses per car per dealer."""
         # Get distinct dealers that have expenses
-        dealers = list(CarExpense.objects.values("dealer_id", "dealer__company_name").distinct())
+        dealers = CarExpense.objects.values(
+            "dealer_id",
+            "dealer__company_name"
+        ).distinct()
 
         if not dealers:
             return Response([])
