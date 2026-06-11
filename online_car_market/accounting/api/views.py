@@ -1,6 +1,8 @@
 import django_filters
 from django.db.models import Sum
 from django_filters.rest_framework.backends import DjangoFilterBackend
+from django.contrib.auth import get_user_model
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
 
 from rest_framework.viewsets import ModelViewSet, GenericViewSet
@@ -17,6 +19,7 @@ from online_car_market.accounting.utils import generate_financial_report
 from online_car_market.dealers.models import DealerStaff
 from online_car_market.users.permissions.business_permissions import CanManageAccounting, is_staff
 
+User = get_user_model()
 
 # Exchange rate
 @extend_schema_view(
@@ -216,14 +219,33 @@ class RevenueViewSet(ModelViewSet):
     permission_classes = [IsAuthenticated, CanManageAccounting]
 
 class ExpenseFilter(django_filters.FilterSet):
-    start_date = django_filters.DateFilter(field_name="date", lookup_expr="gte")
-    end_date = django_filters.DateFilter(field_name="date", lookup_expr="lte")
-    dealer = django_filters.NumberFilter(field_name="dealer__id")
-    currency = django_filters.CharFilter(field_name="currency")
+    start_date = django_filters.DateFilter(
+        field_name="created_at",
+        lookup_expr="date__gte"
+    )
+
+    end_date = django_filters.DateFilter(
+        field_name="created_at",
+        lookup_expr="date__lte"
+    )
+
+    company = django_filters.NumberFilter(
+        field_name="company__id"
+    )
+
+    currency = django_filters.CharFilter(
+        field_name="currency",
+        lookup_expr="iexact"
+    )
 
     class Meta:
         model = Expense
-        fields = ['dealer', 'currency', 'start_date', 'end_date']
+        fields = [
+            "company",
+            "currency",
+            "start_date",
+            "end_date",
+        ]
 
 # Expense ViewSet
 @extend_schema_view(
@@ -278,40 +300,86 @@ class ExpenseViewSet(ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        base_qs = Expense.objects.select_related("company", "company__profile__user")
 
-        # Dealer → own data
-        if user.role == "dealer":
-            dealer_profile = DealerProfile.objects.filter(profile__user=user).first()
-            return base_qs.filter(company=dealer_profile) if dealer_profile else base_qs.none()
+        queryset = Expense.objects.select_related(
+            "company",
+            "company__profile",
+            "company__profile__user",
+        )
 
-        # Accountant / Finance staff → dealer data
-        staff = DealerStaff.objects.filter(user=user).first()
+        # Dealer
+        if user.role == User.Role.DEALER:
+            dealer_profile = DealerProfile.objects.filter(
+                profile__user=user
+            ).first()
+
+            return (
+                queryset.filter(company=dealer_profile)
+                if dealer_profile
+                else queryset.none()
+            )
+
+        # Dealer Staff
+        staff = DealerStaff.objects.select_related(
+            "dealer"
+        ).filter(user=user).first()
+
         if staff and staff.role in ["accountant", "finance"]:
-            return base_qs.filter(company=staff.dealer)
+            return queryset.filter(company=staff.dealer)
 
-        # Admin → all
-        if user.role in ["admin", "super_admin"]:
-            return base_qs
+        # System Admin
+        if user.role in [
+            User.Role.ADMIN,
+            User.Role.SUPER_ADMIN
+        ]:
+            return queryset
 
-        return base_qs.none()
+        return queryset.none()
 
     def perform_create(self, serializer):
         user = self.request.user
 
-        if user.role == "dealer":
-            dealer_profile = DealerProfile.objects.filter(profile__user=user).first()
+        # Dealer
+        if user.role == User.Role.DEALER:
+            dealer_profile = DealerProfile.objects.filter(
+                profile__user=user
+            ).first()
+
+            if not dealer_profile:
+                raise ValidationError(
+                    "Dealer profile not found."
+                )
+
             serializer.save(company=dealer_profile)
             return
 
-        # Staff (accountant/finance)
-        staff = DealerStaff.objects.filter(user=user).first()
+        # Dealer Staff
+        staff = DealerStaff.objects.select_related(
+            "dealer"
+        ).filter(user=user).first()
+
         if staff and staff.role in ["accountant", "finance"]:
             serializer.save(company=staff.dealer)
             return
 
         # Admin
-        serializer.save()
+        if user.role in [
+            User.Role.ADMIN,
+            User.Role.SUPER_ADMIN
+        ]:
+            company = serializer.validated_data.get("company")
+
+            if not company:
+                raise ValidationError(
+                    "Company is required when creating expenses as an admin."
+                )
+
+            serializer.save()
+            return
+
+        raise PermissionDenied(
+            "You do not have permission to create expenses."
+        )
 
 # FinancialReport ViewSet
 @extend_schema_view(

@@ -167,68 +167,125 @@ class RevenueSerializer(serializers.ModelSerializer):
         return data
 
 class ExpenseSerializer(serializers.ModelSerializer):
-    company_name = serializers.CharField(source="company.company_name", read_only=True)
-    # company = serializers.PrimaryKeyRelatedField(queryset=DealerProfile.objects.all(), required=False)
+    company_name = serializers.CharField(
+        source="company.company_name",
+        read_only=True
+    )
+
+    company = serializers.PrimaryKeyRelatedField(
+        queryset=DealerProfile.objects.all(),
+        required=False
+    )
+
     class Meta:
         model = Expense
         fields = [
-            'id',
-            'company_name',
-            'type',
-            'amount',
-            'description',
-            'currency',
-            'exchange_rate',
-            'invoice_number',
-            'created_at',
+            "id",
+            "company",
+            "company_name",
+            "type",
+            "amount",
+            "description",
+            "currency",
+            "exchange_rate",
+            "invoice_number",
+            "created_at",
         ]
+
         read_only_fields = [
-            'id',
-            'invoice_number',
-            'exchange_rate',
-            'created_at',
+            "id",
+            "invoice_number",
+            "exchange_rate",
+            "created_at",
         ]
 
     def validate_type(self, value):
-        """Sanitize type field."""
-        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
-        if len(cleaned_value) == 0:
-            raise serializers.ValidationError("Type cannot be empty.")
+        cleaned_value = bleach.clean(
+            value.strip(),
+            tags=[],
+            strip=True
+        )
+
+        if not cleaned_value:
+            raise serializers.ValidationError(
+                "Type cannot be empty."
+            )
+
         if len(cleaned_value) > 100:
-            raise serializers.ValidationError("Type cannot exceed 100 characters.")
+            raise serializers.ValidationError(
+                "Type cannot exceed 100 characters."
+            )
+
         return cleaned_value
 
     def validate_amount(self, value):
-        """Ensure amount is non-negative and reasonable."""
-        if value < 0:
-            raise serializers.ValidationError("Amount cannot be negative.")
+        if value <= 0:
+            raise serializers.ValidationError(
+                "Amount must be greater than zero."
+            )
+
         if value > 100000000:
-            raise serializers.ValidationError("Amount cannot exceed 100,000,000.")
+            raise serializers.ValidationError(
+                "Amount cannot exceed 100,000,000."
+            )
+
         return value
 
     def validate_description(self, value):
-        """Sanitize and validate description."""
         if value:
-            cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
-            if len(cleaned_value) > 1000:
-                raise serializers.ValidationError("Description cannot exceed 1000 characters.")
-            return cleaned_value
-        return value
-
-    def validate_exchange_rate(self, value):
-        """Ensure exchange rate is valid."""
-        if value < 0:
-            raise serializers.ValidationError("Exchange rate cannot be negative.")
-        return value
-
-    def validate(self, data):
-        """Ensure correct permissions."""
-        user = self.context['request'].user
-        if not has_role(user, ['super_admin', 'admin', 'dealer', 'accountant']):
-            raise serializers.ValidationError(
-                "Only accountant, dealer, admins, or super admins can manage expenses."
+            cleaned_value = bleach.clean(
+                value.strip(),
+                tags=[],
+                strip=True
             )
-        return data
+
+            if len(cleaned_value) > 1000:
+                raise serializers.ValidationError(
+                    "Description cannot exceed 1000 characters."
+                )
+
+            return cleaned_value
+
+        return value
+
+    def validate_currency(self, value):
+        valid_currencies = ["ETB", "USD"]
+
+        if value not in valid_currencies:
+            raise serializers.ValidationError(
+                "Currency must be ETB or USD."
+            )
+
+        return value
+
+    def validate(self, attrs):
+        """
+        Handle exchange rate assignment.
+        Works for both create and partial update.
+        """
+
+        currency = attrs.get(
+            "currency",
+            getattr(self.instance, "currency", None)
+        )
+
+        if currency == "USD":
+            rate = ExchangeRate.objects.filter(
+                from_currency="USD",
+                to_currency="ETB"
+            ).order_by("-date").first()
+
+            if not rate:
+                raise serializers.ValidationError(
+                    "No USD to ETB exchange rate available."
+                )
+
+            attrs["exchange_rate"] = rate.rate
+
+        elif currency == "ETB":
+            attrs["exchange_rate"] = 1
+
+        return attrs
 
 class FinancialReportSerializer(serializers.ModelSerializer):
     # Explicitly define `type` field so schema shows enum
