@@ -5,10 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
 
-from rolepermissions.checkers import has_role
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter
-from online_car_market.dealers.models import DealerProfile
-from online_car_market.brokers.models import BrokerProfile
 from online_car_market.users.permissions.drf_permissions import (IsSuperAdminOrAdminOrDealer, IsSuperAdminOrAdminOrBroker,
                                                                  IsSuperAdminOrAdmin, IsDealer, IsBuyer)
 from ..utils import get_top_sellers, get_high_sales_rate_cars, parse_month_year
