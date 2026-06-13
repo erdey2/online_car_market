@@ -96,6 +96,7 @@ class RevenueSerializer(serializers.ModelSerializer):
     class Meta:
         model = Revenue
         fields = [
+            'id',
             'dealer',
             'source',
             'amount',
@@ -103,62 +104,41 @@ class RevenueSerializer(serializers.ModelSerializer):
             'currency',
             'converted_amount',
             'invoice_number',
-            'created_at'
+            'created_at',
         ]
+
         read_only_fields = [
             'id',
-            'source',
             'invoice_number',
             'converted_amount',
-            'created_at'
+            'created_at',
         ]
 
     def validate_amount(self, value):
         if value <= 0:
-            raise serializers.ValidationError("Revenue amount must be greater than zero.")
+            raise serializers.ValidationError(
+                "Revenue amount must be greater than zero."
+            )
         return value
 
-    def validate(self, data):
-        source_type = data.get('source_type')
-        source_id = data.get('source_id')
-        amount = data.get('amount')
-        currency = data.get('currency')
+    def validate(self, attrs):
+        amount = attrs.get("amount")
+        currency = attrs.get("currency")
 
-        # Validate source mapping
-        if source_type == 'sale':
-            sale = Sale.objects.filter(id=source_id, status='sold').first()
-            if not sale:
-                raise serializers.ValidationError("Invalid or unsold sale reference.")
-            data['source'] = sale
-
-        elif source_type == 'broker_payment':
-            payment = Payment.objects.filter(id=source_id, status='completed').first()
-            if not payment:
-                raise serializers.ValidationError("Invalid or uncompleted payment reference.")
-            data['source'] = payment
-
-        else:
-            raise serializers.ValidationError("Invalid source type.")
-
-        # Currency conversion
-        if currency == 'USD':
-            rate = ExchangeRate.objects.filter(
-                from_currency='USD',
-                to_currency='ETB'
-            ).order_by('-date').first()
+        if currency == "USD":
+            rate = ExchangeRate.objects.order_by("-date").first()
 
             if not rate:
-                raise serializers.ValidationError("No exchange rate available for USD to ETB.")
+                raise serializers.ValidationError(
+                    "No exchange rate available."
+                )
 
-            data['converted_amount'] = amount * rate.rate
+            attrs["converted_amount"] = amount * rate.rate
 
-        elif currency == 'ETB':
-            data['converted_amount'] = amount
+        elif currency == "ETB":
+            attrs["converted_amount"] = amount
 
-        else:
-            raise serializers.ValidationError("Unsupported currency for conversion.")
-
-        return data
+        return attrs
 
 class ExpenseSerializer(serializers.ModelSerializer):
     company_name = serializers.CharField(
