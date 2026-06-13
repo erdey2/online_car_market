@@ -92,19 +92,12 @@ class CarExpenseSerializer(serializers.ModelSerializer):
         return data
 
 class RevenueSerializer(serializers.ModelSerializer):
-    source_type = serializers.ChoiceField(
-        choices=['sale', 'broker_payment'],
-        write_only=True
-    )
-    source_id = serializers.IntegerField(write_only=True)
 
     class Meta:
         model = Revenue
         fields = [
             'dealer',
             'source',
-            'source_type',
-            'source_id',
             'amount',
             'description',
             'currency',
