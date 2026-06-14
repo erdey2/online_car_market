@@ -1,13 +1,13 @@
+from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
-from .serializers import InspectionSerializer, InspectorSerializer, CreateInspectorSerializer
+from .serializers import InspectionSerializer, InspectorSerializer, CreateInspectorSerializer, InspectionVerificationSerializer
 from ..models import Inspection, Inspector
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse, OpenApiExample
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.response import Response
 from rest_framework import permissions
 from rest_framework.decorators import action
-from online_car_market.users.permissions.business_permissions import IsAdminOrReadOnly
 from online_car_market.users.permissions.drf_permissions import IsInspector, IsSuperAdminOrAdmin
 from ..services.inspection_service import InspectionService, InspectorService
 
@@ -15,190 +15,180 @@ from ..services.inspection_service import InspectionService, InspectorService
 @extend_schema_view(
     list=extend_schema(
         tags=["Car Inspections"],
-        summary="List all inspections",
-        description="Retrieve a list of all inspections. Admins see all, while brokers/sellers see their own.",
+        summary="List inspections",
+        description="""
+        Retrieve inspections based on the authenticated user's role.
+
+        Permissions:
+        - Super Admin/Admin → all inspections
+        - Inspector → inspections assigned to them
+        - Dealer/Broker → inspections related to their cars
+        - Buyers/Public → verified inspections only
+        """,
         responses={200: InspectionSerializer(many=True)},
     ),
+
     retrieve=extend_schema(
         tags=["Car Inspections"],
-        summary="Retrieve a specific inspection",
-        description="Get detailed information about a specific inspection record.",
+        summary="Retrieve inspection details",
+        description="Retrieve a specific inspection record.",
         responses={200: InspectionSerializer},
     ),
+
     create=extend_schema(
         tags=["Car Inspections"],
-        summary="Create a new inspection",
-        description="Allows a broker or seller to create a new inspection for a car.",
+        summary="Create inspection",
+        description="""
+        Create a new inspection.
+
+        Only inspectors can create inspections.
+        """,
         request=InspectionSerializer,
         examples=[
             OpenApiExample(
-                "Example Request",
+                "Inspection Creation",
                 value={
                     "car_id": 12,
                     "inspector_id": 3,
-                    "inspected_by": "Top Garage Motors",
-                    "inspection_date": "2025-11-10",
-                    "remarks": "Engine and brakes are in excellent condition.",
-                    "condition_status": "excellent"
+                    "inspection_date": "2026-06-14",
+                    "remarks": "Vehicle passed inspection.",
+                    "condition_status": "good"
                 },
-            ),
+            )
         ],
         responses={
-            201: OpenApiResponse(response=InspectionSerializer, description="Inspection created successfully"),
-            403: OpenApiResponse(description="Permission denied"),
+            201: InspectionSerializer,
+            400: OpenApiResponse(description="Validation error."),
+            403: OpenApiResponse(description="Only inspectors can create inspections."),
         },
     ),
+
     update=extend_schema(
         tags=["Car Inspections"],
-        summary="Update an inspection",
-        description="Allows brokers or sellers to update an existing inspection they created.",
+        summary="Update inspection",
+        description="""
+        Update an existing inspection.
+
+        Only the assigned inspector may update a pending inspection.
+        """,
         responses={
             200: InspectionSerializer,
-            403: OpenApiResponse(description="Permission denied"),
+            403: OpenApiResponse(description="Permission denied."),
         },
     ),
+
     partial_update=extend_schema(
         tags=["Car Inspections"],
-        summary="Partially update an inspection",
-        description="Allows brokers or sellers to partially update fields of an existing inspection.",
+        summary="Partially update inspection",
+        description="""
+        Partially update a pending inspection.
+
+        Only the assigned inspector may perform this action.
+        """,
     ),
+
     destroy=extend_schema(
         tags=["Car Inspections"],
-        summary="Delete an inspection",
-        description="Allows only admins to delete an inspection.",
-        responses={204: OpenApiResponse(description="Deleted successfully")},
+        summary="Delete inspection",
+        description="Delete an inspection. Admin and Super Admin only.",
+        responses={
+            204: OpenApiResponse(
+                description="Inspection deleted successfully."
+            )
+        },
     ),
 )
 class InspectionViewSet(ModelViewSet):
+
     queryset = Inspection.objects.select_related(
         "car",
         "inspector",
         "uploaded_by",
-        "verified_by"
+        "verified_by",
     )
+
     serializer_class = InspectionSerializer
 
     def get_permissions(self):
+
         if self.action == "verify":
             return [IsSuperAdminOrAdmin()]
 
-        if self.action in ["create", "update", "partial_update"]:
+        if self.action in [
+            "create",
+            "update",
+            "partial_update"
+        ]:
             return [IsInspector()]
 
-        elif self.action == "destroy":
-            return [permissions.IsAdminUser()]
+        if self.action == "destroy":
+            return [IsSuperAdminOrAdmin()]
 
-        return [IsAdminOrReadOnly()]
+        return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
-
-        user = self.request.user
-
-        if user.role in [
-            "admin",
-            "super_admin"
-        ]:
-            return Inspection.objects.all()
-
-        if hasattr(user, "inspector_profile"):
-            return Inspection.objects.filter(
-                inspector=user.inspector_profile
-            )
-
-        return Inspection.objects.filter(
-            status="verified"
+        return InspectionService.get_user_inspections(
+            self.request.user
         )
 
     @extend_schema(
-        description="Verify or reject an inspection."
-                    "This endpoint allows an **admin or superadmin** to update the inspection status "
-                    "to either `'verified'` or `'rejected'`. Optionally, an admin can include remarks.",
-        parameters=[
-            OpenApiParameter(
-                name="status",
-                type=str,
-                required=True,
-                description="The new status. Must be either 'verified' or 'rejected'."
-            ),
-            OpenApiParameter(
-                name="admin_remarks",
-                type=str,
-                required=False,
-                description="Optional remarks from the admin."
-            ),
-        ],
-        responses={
-            200: OpenApiResponse(description="Inspection verified or rejected successfully."),
-            400: OpenApiResponse(description="Invalid status or bad request."),
-            403: OpenApiResponse(description="Forbidden – user not authorized."),
-            404: OpenApiResponse(description="Inspection not found."),
-        },
-    )
-    @extend_schema(
         tags=["Car Inspections"],
-        summary="Verify or reject an inspection.",
-        description=(
-            "Verify or reject a car inspection.\n\n"
-            "**Admin-only action** that updates the inspection status and records "
-            "who verified it and when."
-        ),
-        request=InspectionSerializer,
+        summary="Verify or reject inspection",
+        description="""
+        Verify or reject an inspection.
+
+        Only Admins and Super Admins can perform this action.
+
+        Effects:
+        - Sets inspection status
+        - Records verifier
+        - Records verification timestamp
+        - Stores admin remarks
+        """,
+        request=InspectionVerificationSerializer,
         responses={
             200: OpenApiResponse(
-                description="Inspection verified or rejected successfully.",
-                examples=[
-                    OpenApiExample(
-                        "Verified",
-                        value={"detail": "Inspection verified successfully."}
-                    ),
-                    OpenApiExample(
-                        "Rejected",
-                        value={"detail": "Inspection rejected successfully."}
-                    ),
-                ],
+                description="Inspection status updated successfully."
             ),
             400: OpenApiResponse(
-                description="Invalid status value.",
-                examples=[
-                    OpenApiExample(
-                        "Invalid Status",
-                        value={"error": "Invalid status. Must be 'verified' or 'rejected'."}
-                    )
-                ],
+                description="Invalid status value."
             ),
             403: OpenApiResponse(
-                description="User does not have permission to verify inspections.",
-                examples=[
-                    OpenApiExample(
-                        "Forbidden",
-                        value={"detail": "You do not have permission to perform this action."}
-                    )
-                ],
+                description="Only admins can verify inspections."
             ),
             404: OpenApiResponse(
                 description="Inspection not found."
             ),
         },
     )
-    @action(detail=True, methods=["patch"], permission_classes=[IsSuperAdminOrAdmin])
+    @action(
+        detail=True,
+        methods=["patch"],
+        permission_classes=[IsSuperAdminOrAdmin]
+    )
     def verify(self, request, pk=None):
 
         inspection = self.get_object()
 
         if inspection.status == "verified":
             return Response(
-                {"detail": "Inspection already verified."},
-                status=400
+                {"detail": "Inspection is already verified."},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         InspectionService.verify_inspection(
             inspection=inspection,
             user=request.user,
             status_value=request.data.get("status"),
-            admin_remarks=request.data.get("admin_remarks", "")
+            admin_remarks=request.data.get(
+                "admin_remarks",
+                ""
+            )
         )
 
-        return Response({"detail": "Inspection updated successfully."})
+        return Response(
+            {"detail": "Inspection updated successfully."}
+        )
 
 
 @extend_schema_view(

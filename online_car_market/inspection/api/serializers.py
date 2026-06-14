@@ -140,3 +140,13 @@ class CreateInspectorSerializer(serializers.Serializer):
     license_number = serializers.CharField(required=False)
 
     password = serializers.CharField(write_only=True)
+
+class InspectionVerificationSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(
+        choices=["verified", "rejected"]
+    )
+
+    admin_remarks = serializers.CharField(
+        required=False,
+        allow_blank=True
+    )
