@@ -1,10 +1,13 @@
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
-from ..models import Inspection
+from ..models import Inspection, Inspector
 from online_car_market.inventory.models import Car
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
+from django.contrib.auth import get_user_model
+from rolepermissions.roles import assign_role
 
+User = get_user_model()
 
 class InspectionService:
 
@@ -136,3 +139,27 @@ class InspectionService:
         instance.save()
 
         return instance
+
+
+class InspectorService:
+
+    @staticmethod
+    def create_inspector(admin_user, validated_data):
+
+        user = User.objects.create_user(
+            email=validated_data["email"],
+            password=validated_data["password"],
+            first_name=validated_data["first_name"],
+            last_name=validated_data["last_name"],
+        )
+
+        assign_role(user, "inspector")
+
+        inspector = Inspector.objects.create(
+            user=user,
+            company_name=validated_data["company_name"],
+            license_number=validated_data.get("license_number"),
+            created_by=admin_user,
+        )
+
+        return inspector

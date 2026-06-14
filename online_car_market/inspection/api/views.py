@@ -1,5 +1,7 @@
-from .serializers import InspectionSerializer
-from ..models import Inspection
+from rest_framework.permissions import IsAuthenticated
+
+from .serializers import InspectionSerializer, InspectorSerializer, CreateInspectorSerializer
+from ..models import Inspection, Inspector
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse, OpenApiExample
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.response import Response
@@ -7,7 +9,7 @@ from rest_framework import permissions
 from rest_framework.decorators import action
 from online_car_market.users.permissions.business_permissions import IsAdminOrReadOnly
 from online_car_market.users.permissions.drf_permissions import IsInspector, IsSuperAdminOrAdmin
-from ..services.inspection_service import InspectionService
+from ..services.inspection_service import InspectionService, InspectorService
 
 
 @extend_schema_view(
@@ -197,5 +199,113 @@ class InspectionViewSet(ModelViewSet):
         )
 
         return Response({"detail": "Inspection updated successfully."})
+
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Inspectors"],
+        summary="List inspectors",
+        description=(
+            "Retrieve all registered inspectors. "
+            "Only administrators and super administrators can access this endpoint."
+        ),
+        responses={200: InspectorSerializer(many=True)},
+    ),
+    retrieve=extend_schema(
+        tags=["Inspectors"],
+        summary="Retrieve inspector details",
+        description="Retrieve detailed information about a specific inspector.",
+        responses={200: InspectorSerializer},
+    ),
+    create=extend_schema(
+        tags=["Inspectors"],
+        summary="Register a new inspector",
+        description=(
+            "Create a new inspector account and assign the inspector role. "
+            "Only administrators and super administrators can perform this action."
+        ),
+        request=CreateInspectorSerializer,
+        examples=[
+            OpenApiExample(
+                "Create Inspector",
+                value={
+                    "email": "inspector@example.com",
+                    "first_name": "Abebe",
+                    "last_name": "Kebede",
+                    "company_name": "AA Vehicle Inspection Center",
+                    "license_number": "LIC-12345",
+                    "password": "StrongPassword123"
+                },
+            )
+        ],
+        responses={
+            201: OpenApiResponse(
+                response=InspectorSerializer,
+                description="Inspector created successfully."
+            ),
+            400: OpenApiResponse(
+                description="Validation error."
+            ),
+            403: OpenApiResponse(
+                description="Permission denied."
+            ),
+        },
+    ),
+    update=extend_schema(
+        tags=["Inspectors"],
+        summary="Update inspector",
+        description="Update an inspector profile.",
+        responses={
+            200: InspectorSerializer,
+            403: OpenApiResponse(description="Permission denied."),
+        },
+    ),
+    partial_update=extend_schema(
+        tags=["Inspectors"],
+        summary="Partially update inspector",
+        description="Partially update inspector information.",
+        responses={
+            200: InspectorSerializer,
+            403: OpenApiResponse(description="Permission denied."),
+        },
+    ),
+    destroy=extend_schema(
+        tags=["Inspectors"],
+        summary="Delete inspector",
+        description=(
+            "Delete an inspector account. "
+            "Use with caution because inspection history may depend on this record."
+        ),
+        responses={
+            204: OpenApiResponse(
+                description="Inspector deleted successfully."
+            ),
+            403: OpenApiResponse(
+                description="Permission denied."
+            ),
+        },
+    ),
+)
+class InspectorViewSet(ModelViewSet):
+
+    queryset = Inspector.objects.select_related(
+        "user",
+        "created_by"
+    )
+
+    permission_classes = [IsAuthenticated, IsSuperAdminOrAdmin]
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return CreateInspectorSerializer
+
+        return InspectorSerializer
+
+    def perform_create(self, serializer):
+
+        InspectorService.create_inspector(
+            admin_user=self.request.user,
+            validated_data=serializer.validated_data
+        )
 
 

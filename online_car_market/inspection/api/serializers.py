@@ -108,3 +108,35 @@ class InspectionSerializer(serializers.ModelSerializer):
             user=self.context["request"].user,
             validated_data=validated_data
         )
+
+class InspectorSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(source="user.email")
+    first_name = serializers.CharField(source="user.first_name")
+    last_name = serializers.CharField(source="user.last_name")
+
+    class Meta:
+        model = Inspector
+        fields = [
+            "id",
+            "email",
+            "first_name",
+            "last_name",
+            "company_name",
+            "license_number",
+            "is_active",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "created_at",
+        ]
+
+class CreateInspectorSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+
+    company_name = serializers.CharField()
+    license_number = serializers.CharField(required=False)
+
+    password = serializers.CharField(write_only=True)
