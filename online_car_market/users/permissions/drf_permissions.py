@@ -26,6 +26,13 @@ class IsBuyer(BasePermission):
     def has_permission(self, request, view):
         return has_any_role(request.user, ["buyer"])
 
+class IsInspector(BasePermission):
+    def has_permission(self, request, view):
+        return hasattr(
+            request.user,
+            "inspector_profile"
+        )
+
 # STAFF ROLES
 class IsHR(BasePermission):
     def has_permission(self, request, view):

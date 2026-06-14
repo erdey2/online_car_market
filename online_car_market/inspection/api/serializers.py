@@ -1,51 +1,99 @@
 from rest_framework import serializers
-from ..models import Inspection
+from ..models import Inspection, Inspector
 from online_car_market.inventory.models import Car
 from online_car_market.inventory.api.serializers import CarMiniSerializer
 from ..services.inspection_service import InspectionService
 
 
 class InspectionSerializer(serializers.ModelSerializer):
+
     car = CarMiniSerializer(read_only=True)
-    car_id = serializers.IntegerField(write_only=True, required=True)
-    car_display = serializers.CharField(source='car.title', read_only=True)
-    report_url = serializers.SerializerMethodField(read_only=True)
-    verified_by_email = serializers.EmailField(source="verified_by.email", read_only=True)
+    car_id = serializers.IntegerField(write_only=True)
+
+    inspector_id = serializers.IntegerField(write_only=True)
+    inspector = serializers.StringRelatedField(read_only=True)
+
+    car_display = serializers.SerializerMethodField()
+    report_url = serializers.SerializerMethodField()
+
+    verified_by_email = serializers.EmailField(
+        source="verified_by.email",
+        read_only=True
+    )
+
+    uploaded_by_email = serializers.EmailField(
+        source="uploaded_by.email",
+        read_only=True
+    )
 
     class Meta:
         model = Inspection
         fields = [
             "id",
+
             "car",
             "car_id",
             "car_display",
-            "inspected_by",
+
+            "inspector",
+            "inspector_id",
+
             "inspection_date",
             "remarks",
             "condition_status",
-            "report_document", "report_url",
+
+            "signed_report",
+            "report_url",
+
             "status",
-            "verified_by_email", "verified_at", "admin_remarks",
-            "uploaded_by", "uploaded_at",
-            "created_at", "updated_at"
+
+            "verified_by_email",
+            "verified_at",
+            "admin_remarks",
+
+            "uploaded_by_email",
+
+            "created_at",
+            "updated_at",
         ]
+
         read_only_fields = [
-            "id", "car", "car_display", "report_url",
-            "uploaded_by", "uploaded_at",
-            "verified_by_email", "verified_at",
-            "created_at", "updated_at"
+            "id",
+            "car",
+            "car_display",
+            "report_url",
+            "inspector",
+            "verified_by_email",
+            "verified_at",
+            "uploaded_by_email",
+            "created_at",
+            "updated_at",
         ]
+
+    def get_car_display(self, obj):
+        return str(obj.car)
 
     def get_report_url(self, obj):
-        return obj.report_document.build_url() if obj.report_document else None
+        if obj.signed_report:
+            return obj.signed_report.build_url()
+        return None
 
     def validate_car_id(self, value):
-        try:
-            car = Car.objects.get(id=value)
-        except Car.DoesNotExist:
-            raise serializers.ValidationError("Car with this ID does not exist.")
-        if hasattr(car, "inspection"):
-            raise serializers.ValidationError("This car already has an inspection record.")
+        if not Car.objects.filter(id=value).exists():
+            raise serializers.ValidationError(
+                "Car with this ID does not exist."
+            )
+        return value
+
+    def validate_inspector_id(self, value):
+        if not Inspector.objects.filter(
+            id=value,
+            is_active=True
+        ).exists():
+            raise serializers.ValidationError(
+                "Inspector not found or inactive."
+            )
+
         return value
 
     def create(self, validated_data):

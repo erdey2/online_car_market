@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework import permissions
 from rest_framework.decorators import action
 from online_car_market.users.permissions.business_permissions import IsAdminOrReadOnly
-from online_car_market.users.permissions.drf_permissions import IsDealerBrokerOrSeller, IsSuperAdminOrAdmin
+from online_car_market.users.permissions.drf_permissions import IsInspector, IsSuperAdminOrAdmin
 from ..services.inspection_service import InspectionService
 
 
@@ -33,6 +33,7 @@ from ..services.inspection_service import InspectionService
                 "Example Request",
                 value={
                     "car_id": 12,
+                    "inspector_id": 3,
                     "inspected_by": "Top Garage Motors",
                     "inspection_date": "2025-11-10",
                     "remarks": "Engine and brakes are in excellent condition.",
@@ -67,7 +68,12 @@ from ..services.inspection_service import InspectionService
     ),
 )
 class InspectionViewSet(ModelViewSet):
-    queryset = Inspection.objects.select_related("car", "uploaded_by", "verified_by")
+    queryset = Inspection.objects.select_related(
+        "car",
+        "inspector",
+        "uploaded_by",
+        "verified_by"
+    )
     serializer_class = InspectionSerializer
 
     def get_permissions(self):
@@ -75,7 +81,7 @@ class InspectionViewSet(ModelViewSet):
             return [IsSuperAdminOrAdmin()]
 
         if self.action in ["create", "update", "partial_update"]:
-            return [IsDealerBrokerOrSeller()]
+            return [IsInspector()]
 
         elif self.action == "destroy":
             return [permissions.IsAdminUser()]
@@ -83,7 +89,23 @@ class InspectionViewSet(ModelViewSet):
         return [IsAdminOrReadOnly()]
 
     def get_queryset(self):
-        return InspectionService.get_user_inspections(self.request.user)
+
+        user = self.request.user
+
+        if user.role in [
+            "admin",
+            "super_admin"
+        ]:
+            return Inspection.objects.all()
+
+        if hasattr(user, "inspector_profile"):
+            return Inspection.objects.filter(
+                inspector=user.inspector_profile
+            )
+
+        return Inspection.objects.filter(
+            status="verified"
+        )
 
     @extend_schema(
         description="Verify or reject an inspection."
@@ -158,7 +180,14 @@ class InspectionViewSet(ModelViewSet):
     )
     @action(detail=True, methods=["patch"], permission_classes=[IsSuperAdminOrAdmin])
     def verify(self, request, pk=None):
+
         inspection = self.get_object()
+
+        if inspection.status == "verified":
+            return Response(
+                {"detail": "Inspection already verified."},
+                status=400
+            )
 
         InspectionService.verify_inspection(
             inspection=inspection,

@@ -36,6 +36,7 @@ class DealerProfileSerializer(serializers.ModelSerializer):
             'tax_id',
             'telebirr_account',
             'business_license',
+            'expiration_date',
             'status',
             'is_verified',
             'role',

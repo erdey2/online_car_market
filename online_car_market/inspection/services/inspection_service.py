@@ -1,75 +1,138 @@
-from rest_framework.exceptions import ValidationError
 from django.utils import timezone
-from rolepermissions.checkers import has_role
+from rest_framework.exceptions import ValidationError
 from ..models import Inspection
 from online_car_market.inventory.models import Car
+from online_car_market.dealers.models import DealerProfile
+from online_car_market.brokers.models import BrokerProfile
+
 
 class InspectionService:
 
     @staticmethod
     def get_user_inspections(user):
 
-        # Admins see everything
-        if has_role(user, ["admin", "superadmin"]):
-            return Inspection.objects.all()
+        # Super Admin / Admin
+        if getattr(user, "role", None) in [
+            "admin",
+            "super_admin"
+        ]:
+            return Inspection.objects.select_related(
+                "car",
+                "inspector",
+                "verified_by"
+            )
 
-        # Sellers / Dealers see inspections for THEIR cars
-        if has_role(user, ["dealer", "seller"]):
-            return Inspection.objects.filter(car__owner=user)
+        # Inspector
+        if hasattr(user, "inspector_profile"):
+            return Inspection.objects.filter(
+                inspector=user.inspector_profile
+            )
 
-        # Brokers see inspections THEY uploaded
-        if has_role(user, ["broker"]):
-            return Inspection.objects.filter(uploaded_by=user)
+        # Dealer
+        dealer = DealerProfile.objects.filter(
+            profile__user=user
+        ).first()
 
-        # Buyers (public marketplace users)
-        # Only verified inspections should be visible
-        return Inspection.objects.filter(status="verified")
+        if dealer:
+            return Inspection.objects.filter(
+                car__dealer=dealer
+            )
+
+        # Broker
+        broker = BrokerProfile.objects.filter(
+            profile__user=user
+        ).first()
+
+        if broker:
+            return Inspection.objects.filter(
+                car__broker=broker
+            )
+
+        # Buyers/Public
+        return Inspection.objects.filter(
+            status="verified"
+        )
 
     @staticmethod
-    def verify_inspection(inspection, user, status_value, admin_remarks):
-        if status_value not in ["verified", "rejected"]:
-            raise ValidationError("Invalid status. Must be 'verified' or 'rejected'.")
+    def verify_inspection(
+        inspection,
+        user,
+        status_value,
+        admin_remarks=""
+    ):
+
+        if status_value not in [
+            "verified",
+            "rejected"
+        ]:
+            raise ValidationError(
+                "Invalid status. Must be 'verified' or 'rejected'."
+            )
 
         inspection.status = status_value
         inspection.verified_by = user
         inspection.verified_at = timezone.now()
         inspection.admin_remarks = admin_remarks
+
         inspection.save()
 
         return inspection
 
     @staticmethod
-    def create_inspection(user, validated_data):
-        car = Car.objects.get(id=validated_data.pop("car_id"))
+    def create_inspection(
+        user,
+        validated_data
+    ):
+
+        if not hasattr(user, "inspector_profile"):
+            raise ValidationError(
+                "Only inspectors can create inspections."
+            )
+
+        car_id = validated_data.pop("car_id")
+
+        try:
+            car = Car.objects.get(id=car_id)
+        except Car.DoesNotExist:
+            raise ValidationError(
+                "Car not found."
+            )
 
         return Inspection.objects.create(
             car=car,
-            uploaded_by=user,
-            uploaded_at=timezone.now(),
+            inspector=user.inspector_profile,
             status="pending",
             **validated_data
         )
 
     @staticmethod
-    def update_inspection(instance, user, validated_data):
-        if "status" in validated_data and validated_data["status"] in ["verified", "rejected"]:
-            if not (user.is_staff or user.role in ["admin", "superadmin"]):
-                raise ValidationError("Only admin or superadmin can verify inspections.")
+    def update_inspection(
+        instance,
+        user,
+        validated_data
+    ):
 
-            instance.status = validated_data["status"]
-            instance.verified_by = user
-            instance.verified_at = timezone.now()
-            instance.admin_remarks = validated_data.get("admin_remarks", instance.admin_remarks)
+        # Admin verification handled separately
+        validated_data.pop("status", None)
 
-        else:
-            if instance.status != "pending":
-                raise ValidationError("Only pending inspections can be modified.")
+        if instance.status != "pending":
+            raise ValidationError(
+                "Only pending inspections can be modified."
+            )
 
-            if instance.uploaded_by != user:
-                raise ValidationError("You can only modify your own inspection.")
+        if not hasattr(user, "inspector_profile"):
+            raise ValidationError(
+                "Only inspectors can modify inspections."
+            )
 
-            for attr, value in validated_data.items():
-                setattr(instance, attr, value)
+        if instance.inspector != user.inspector_profile:
+            raise ValidationError(
+                "You can only modify your own inspections."
+            )
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
 
         instance.save()
+
         return instance
