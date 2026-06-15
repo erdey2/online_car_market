@@ -48,13 +48,13 @@ Only users with the Inspector role can perform this action.
                 "Inspection Creation Example",
                 value={
                     "car_id": 12,
-                    "inspection_date": "2026-06-14",
                     "inspection_score": 92,
                     "odometer_verified": True,
                     "accident_history": False,
+                    "inspection_date": "2026-06-15",
+                    "remarks": "Vehicle passed inspection. Engine, suspension and brakes are in good condition.",
                     "condition_status": "good",
-                    "remarks": "Vehicle passed inspection.",
-                    "signed_report": "<uploaded_file>"
+                    "signed_report": "<file>"
                 },
             )
         ],

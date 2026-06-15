@@ -10,7 +10,10 @@ class InspectionSerializer(serializers.ModelSerializer):
     car = CarMiniSerializer(read_only=True)
     car_id = serializers.IntegerField(write_only=True)
 
-    inspector = serializers.StringRelatedField(read_only=True)
+    inspector = serializers.StringRelatedField(
+        read_only=True
+    )
+
     car_display = serializers.SerializerMethodField()
     report_url = serializers.SerializerMethodField()
 
@@ -34,6 +37,11 @@ class InspectionSerializer(serializers.ModelSerializer):
             "car_display",
 
             "inspector",
+
+            "inspection_score",
+            "odometer_verified",
+            "accident_history",
+
             "inspection_date",
             "remarks",
             "condition_status",
@@ -57,10 +65,12 @@ class InspectionSerializer(serializers.ModelSerializer):
             "id",
             "car",
             "car_display",
-            "report_url",
             "inspector",
+            "report_url",
+            "status",
             "verified_by_email",
             "verified_at",
+            "admin_remarks",
             "uploaded_by_email",
             "created_at",
             "updated_at",
@@ -79,17 +89,6 @@ class InspectionSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Car with this ID does not exist."
             )
-        return value
-
-    def validate_inspector_id(self, value):
-        if not Inspector.objects.filter(
-            id=value,
-            is_active=True
-        ).exists():
-            raise serializers.ValidationError(
-                "Inspector not found or inactive."
-            )
-
         return value
 
     def create(self, validated_data):

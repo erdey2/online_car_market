@@ -86,7 +86,6 @@ class InspectionService:
             )
 
         car_id = validated_data.pop("car_id")
-        inspector_id = validated_data.pop("inspector_id")
 
         try:
             car = Car.objects.get(id=car_id)
@@ -95,19 +94,9 @@ class InspectionService:
                 {"car_id": "Car not found."}
             )
 
-        try:
-            inspector = Inspector.objects.get(
-                id=inspector_id,
-                is_active=True
-            )
-        except Inspector.DoesNotExist:
-            raise ValidationError(
-                {"inspector_id": "Inspector not found."}
-            )
-
         return Inspection.objects.create(
             car=car,
-            inspector=inspector,
+            inspector=user.inspector_profile,
             uploaded_by=user,
             status="pending",
             **validated_data
@@ -121,7 +110,6 @@ class InspectionService:
     ):
 
         validated_data.pop("status", None)
-        validated_data.pop("inspector_id", None)
         validated_data.pop("car_id", None)
 
         if instance.status != "pending":
