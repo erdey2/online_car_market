@@ -17,21 +17,20 @@ from ..services.inspection_service import InspectionService, InspectorService
         tags=["Car Inspections"],
         summary="List inspections",
         description="""
-        Retrieve inspections based on the authenticated user's role.
+Retrieve inspections based on the authenticated user's role:
 
-        Permissions:
-        - Super Admin/Admin → all inspections
-        - Inspector → inspections assigned to them
-        - Dealer/Broker → inspections related to their cars
-        - Buyers/Public → verified inspections only
-        """,
+- Admin / Super Admin → all inspections
+- Inspector → their assigned inspections
+- Dealer / Broker → inspections related to their cars
+- Public users → verified inspections only
+""",
         responses={200: InspectionSerializer(many=True)},
     ),
 
     retrieve=extend_schema(
         tags=["Car Inspections"],
         summary="Retrieve inspection details",
-        description="Retrieve a specific inspection record.",
+        description="Retrieve a single inspection record by ID.",
         responses={200: InspectionSerializer},
     ),
 
@@ -39,16 +38,17 @@ from ..services.inspection_service import InspectionService, InspectorService
         tags=["Car Inspections"],
         summary="Create inspection",
         description="""
-        Create a new inspection.
+Create a new inspection record.
 
-        Only inspectors can create inspections.
-        """,
+Only users with the Inspector role can perform this action.
+""",
         request=InspectionSerializer,
         examples=[
             OpenApiExample(
-                "Inspection Creation",
+                "Inspection Creation Example",
                 value={
                     "car_id": 12,
+                    "inspector_id": 3,
                     "inspection_date": "2026-06-14",
                     "remarks": "Vehicle passed inspection.",
                     "condition_status": "good"
@@ -66,10 +66,12 @@ from ..services.inspection_service import InspectionService, InspectorService
         tags=["Car Inspections"],
         summary="Update inspection",
         description="""
-        Update an existing inspection.
+Update an existing inspection.
 
-        Only the assigned inspector may update a pending inspection.
-        """,
+Rules:
+- Only the assigned inspector can update
+- Only pending inspections can be modified
+""",
         responses={
             200: InspectionSerializer,
             403: OpenApiResponse(description="Permission denied."),
@@ -80,20 +82,27 @@ from ..services.inspection_service import InspectionService, InspectorService
         tags=["Car Inspections"],
         summary="Partially update inspection",
         description="""
-        Partially update a pending inspection.
+Partially update a pending inspection.
 
-        Only the assigned inspector may perform this action.
-        """,
+Only the assigned inspector can perform this action.
+""",
+        responses={
+            200: InspectionSerializer,
+            403: OpenApiResponse(description="Permission denied."),
+        },
     ),
 
     destroy=extend_schema(
         tags=["Car Inspections"],
         summary="Delete inspection",
-        description="Delete an inspection. Admin and Super Admin only.",
+        description="""
+Delete an inspection record.
+
+Only Admin and Super Admin can delete inspections.
+""",
         responses={
-            204: OpenApiResponse(
-                description="Inspection deleted successfully."
-            )
+            204: OpenApiResponse(description="Inspection deleted successfully."),
+            403: OpenApiResponse(description="Permission denied."),
         },
     ),
 )
@@ -106,11 +115,10 @@ class InspectionViewSet(ModelViewSet):
         if self.action == "verify":
             return [IsSuperAdminOrAdmin()]
 
-        if self.action in [
-            "create",
-            "update",
-            "partial_update"
-        ]:
+        if self.action in ["create"]:
+            return [IsInspector()]
+
+        if self.action in ["update", "partial_update"]:
             return [IsInspector()]
 
         if self.action == "destroy":
@@ -127,30 +135,23 @@ class InspectionViewSet(ModelViewSet):
         tags=["Car Inspections"],
         summary="Verify or reject inspection",
         description="""
-        Verify or reject an inspection.
+Admin-only endpoint to verify or reject an inspection.
 
-        Only Admins and Super Admins can perform this action.
+Allowed status values:
+- verified
+- rejected
 
-        Effects:
-        - Sets inspection status
-        - Records verifier
-        - Records verification timestamp
-        - Stores admin remarks
-        """,
+This action also records:
+- verifier
+- verification timestamp
+- admin remarks
+""",
         request=InspectionVerificationSerializer,
         responses={
-            200: OpenApiResponse(
-                description="Inspection status updated successfully."
-            ),
-            400: OpenApiResponse(
-                description="Invalid status value."
-            ),
-            403: OpenApiResponse(
-                description="Only admins can verify inspections."
-            ),
-            404: OpenApiResponse(
-                description="Inspection not found."
-            ),
+            200: OpenApiResponse(description="Inspection updated successfully."),
+            400: OpenApiResponse(description="Invalid status value."),
+            403: OpenApiResponse(description="Only admins can verify inspections."),
+            404: OpenApiResponse(description="Inspection not found."),
         },
     )
     @action(
@@ -172,16 +173,13 @@ class InspectionViewSet(ModelViewSet):
             inspection=inspection,
             user=request.user,
             status_value=request.data.get("status"),
-            admin_remarks=request.data.get(
-                "admin_remarks",
-                ""
-            )
+            admin_remarks=request.data.get("admin_remarks", "")
         )
 
         return Response(
-            {"detail": "Inspection updated successfully."}
+            {"detail": "Inspection updated successfully."},
+            status=status.HTTP_200_OK
         )
-
 
 @extend_schema_view(
     list=extend_schema(
