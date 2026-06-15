@@ -10,9 +10,7 @@ class InspectionSerializer(serializers.ModelSerializer):
     car = CarMiniSerializer(read_only=True)
     car_id = serializers.IntegerField(write_only=True)
 
-    inspector_id = serializers.IntegerField(write_only=True)
     inspector = serializers.StringRelatedField(read_only=True)
-
     car_display = serializers.SerializerMethodField()
     report_url = serializers.SerializerMethodField()
 
@@ -36,8 +34,6 @@ class InspectionSerializer(serializers.ModelSerializer):
             "car_display",
 
             "inspector",
-            "inspector_id",
-
             "inspection_date",
             "remarks",
             "condition_status",
@@ -110,9 +106,14 @@ class InspectionSerializer(serializers.ModelSerializer):
         )
 
 class InspectorSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(source="user.email")
-    first_name = serializers.CharField(source="user.first_name")
-    last_name = serializers.CharField(source="user.last_name")
+
+    email = serializers.EmailField(
+        source="user.email",
+        read_only=True
+    )
+
+    first_name = serializers.SerializerMethodField()
+    last_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Inspector
@@ -128,8 +129,18 @@ class InspectorSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             "id",
-            "created_at",
+            "email",
         ]
+
+    def get_first_name(self, obj):
+        if hasattr(obj.user, "profile"):
+            return obj.user.profile.first_name
+        return ""
+
+    def get_last_name(self, obj):
+        if hasattr(obj.user, "profile"):
+            return obj.user.profile.last_name
+        return ""
 
 class CreateInspectorSerializer(serializers.Serializer):
     email = serializers.EmailField()

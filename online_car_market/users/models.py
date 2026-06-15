@@ -32,6 +32,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         DEALER = "dealer", "Dealer"
         ADMIN = "admin", "Admin"
         SUPER_ADMIN = "super_admin", "Super Admin"
+        INSPECTOR = "inspector", "Inspector"
 
     email = models.EmailField(_('Email address'), unique=True)
     description = models.TextField(max_length=500, blank=True, null=True)

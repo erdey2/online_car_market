@@ -1,5 +1,7 @@
 from rest_framework.permissions import BasePermission
 from online_car_market.users.permissions.business_permissions import is_staff
+from online_car_market.users.models import User
+from online_car_market.inspection.models import Inspector
 
 # GLOBAL ROLE CHECK
 def has_any_role(user, roles):
@@ -28,9 +30,14 @@ class IsBuyer(BasePermission):
 
 class IsInspector(BasePermission):
     def has_permission(self, request, view):
-        return hasattr(
-            request.user,
-            "inspector_profile"
+
+        return (
+            request.user.is_authenticated
+            and request.user.role == User.Role.INSPECTOR
+            and Inspector.objects.filter(
+                user=request.user,
+                is_active=True
+            ).exists()
         )
 
 # STAFF ROLES

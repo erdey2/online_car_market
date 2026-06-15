@@ -1,11 +1,12 @@
 from django.utils import timezone
+from django.db import transaction
 from rest_framework.exceptions import ValidationError
 from ..models import Inspection, Inspector
 from online_car_market.inventory.models import Car
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
+from online_car_market.users.models import Profile
 from django.contrib.auth import get_user_model
-from rolepermissions.roles import assign_role
 
 User = get_user_model()
 
@@ -14,24 +15,22 @@ class InspectionService:
     @staticmethod
     def get_user_inspections(user):
 
-        # Super Admin / Admin
         if getattr(user, "role", None) in [
-            "admin",
-            "super_admin"
+            User.Role.ADMIN,
+            User.Role.SUPER_ADMIN,
         ]:
             return Inspection.objects.select_related(
                 "car",
                 "inspector",
-                "verified_by"
+                "verified_by",
+                "uploaded_by",
             )
 
-        # Inspector
         if hasattr(user, "inspector_profile"):
             return Inspection.objects.filter(
                 inspector=user.inspector_profile
             )
 
-        # Dealer
         dealer = DealerProfile.objects.filter(
             profile__user=user
         ).first()
@@ -41,7 +40,6 @@ class InspectionService:
                 car__dealer=dealer
             )
 
-        # Broker
         broker = BrokerProfile.objects.filter(
             profile__user=user
         ).first()
@@ -51,7 +49,6 @@ class InspectionService:
                 car__broker=broker
             )
 
-        # Buyers/Public
         return Inspection.objects.filter(
             status="verified"
         )
@@ -63,7 +60,6 @@ class InspectionService:
         status_value,
         admin_remarks=""
     ):
-
         if status_value not in [
             "verified",
             "rejected"
@@ -82,10 +78,7 @@ class InspectionService:
         return inspection
 
     @staticmethod
-    def create_inspection(
-        user,
-        validated_data
-    ):
+    def create_inspection(user, validated_data):
 
         if not hasattr(user, "inspector_profile"):
             raise ValidationError(
@@ -93,17 +86,29 @@ class InspectionService:
             )
 
         car_id = validated_data.pop("car_id")
+        inspector_id = validated_data.pop("inspector_id")
 
         try:
             car = Car.objects.get(id=car_id)
         except Car.DoesNotExist:
             raise ValidationError(
-                "Car not found."
+                {"car_id": "Car not found."}
+            )
+
+        try:
+            inspector = Inspector.objects.get(
+                id=inspector_id,
+                is_active=True
+            )
+        except Inspector.DoesNotExist:
+            raise ValidationError(
+                {"inspector_id": "Inspector not found."}
             )
 
         return Inspection.objects.create(
             car=car,
-            inspector=user.inspector_profile,
+            inspector=inspector,
+            uploaded_by=user,
             status="pending",
             **validated_data
         )
@@ -115,8 +120,9 @@ class InspectionService:
         validated_data
     ):
 
-        # Admin verification handled separately
         validated_data.pop("status", None)
+        validated_data.pop("inspector_id", None)
+        validated_data.pop("car_id", None)
 
         if instance.status != "pending":
             raise ValidationError(
@@ -144,22 +150,51 @@ class InspectionService:
 class InspectorService:
 
     @staticmethod
-    def create_inspector(admin_user, validated_data):
+    @transaction.atomic
+    def create_inspector(
+        admin_user,
+        validated_data
+    ):
 
-        user = User.objects.create_user(
-            email=validated_data["email"],
-            password=validated_data["password"],
-            first_name=validated_data["first_name"],
-            last_name=validated_data["last_name"],
+        email = validated_data.pop("email")
+        password = validated_data.pop("password")
+
+        first_name = validated_data.pop("first_name")
+        last_name = validated_data.pop("last_name")
+
+        company_name = validated_data.pop("company_name")
+        license_number = validated_data.pop(
+            "license_number",
+            ""
         )
 
-        assign_role(user, "inspector")
+        if User.objects.filter(
+            email=email
+        ).exists():
+            raise ValidationError(
+                {
+                    "email":
+                    "User with this email already exists."
+                }
+            )
+
+        user = User.objects.create_user(
+            email=email,
+            password=password,
+            role=User.Role.INSPECTOR
+        )
+
+        Profile.objects.create(
+            user=user,
+            first_name=first_name,
+            last_name=last_name
+        )
 
         inspector = Inspector.objects.create(
             user=user,
-            company_name=validated_data["company_name"],
-            license_number=validated_data.get("license_number"),
-            created_by=admin_user,
+            company_name=company_name,
+            license_number=license_number,
+            created_by=admin_user
         )
 
         return inspector

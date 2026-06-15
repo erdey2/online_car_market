@@ -49,7 +49,6 @@ from ..services.inspection_service import InspectionService, InspectorService
                 "Inspection Creation",
                 value={
                     "car_id": 12,
-                    "inspector_id": 3,
                     "inspection_date": "2026-06-14",
                     "remarks": "Vehicle passed inspection.",
                     "condition_status": "good"
@@ -99,13 +98,6 @@ from ..services.inspection_service import InspectionService, InspectorService
     ),
 )
 class InspectionViewSet(ModelViewSet):
-
-    queryset = Inspection.objects.select_related(
-        "car",
-        "inspector",
-        "uploaded_by",
-        "verified_by",
-    )
 
     serializer_class = InspectionSerializer
 
@@ -277,9 +269,9 @@ class InspectionViewSet(ModelViewSet):
     ),
 )
 class InspectorViewSet(ModelViewSet):
-
     queryset = Inspector.objects.select_related(
         "user",
+        "user__profile",
         "created_by"
     )
 
@@ -291,11 +283,23 @@ class InspectorViewSet(ModelViewSet):
 
         return InspectorSerializer
 
-    def perform_create(self, serializer):
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(
+            data=request.data
+        )
 
-        InspectorService.create_inspector(
-            admin_user=self.request.user,
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        inspector = InspectorService.create_inspector(
+            admin_user=request.user,
             validated_data=serializer.validated_data
+        )
+
+        return Response(
+            InspectorSerializer(inspector).data,
+            status=status.HTTP_201_CREATED
         )
 
 
