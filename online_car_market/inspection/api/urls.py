@@ -3,10 +3,10 @@ from rest_framework.routers import DefaultRouter
 from .views import InspectionViewSet, InspectorViewSet
 
 router = DefaultRouter()
-router.register(r'', InspectionViewSet, basename='inspection')
-router.register(r"inspectors", InspectorViewSet, basename="inspectors")
 
+router.register(r'inspectors', InspectorViewSet, basename='inspector')
 
+router.register(r'inspections', InspectionViewSet, basename='inspection')
 
 urlpatterns = [
     path('', include(router.urls)),
