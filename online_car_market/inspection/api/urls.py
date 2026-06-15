@@ -6,7 +6,7 @@ router = DefaultRouter()
 
 router.register(r'inspectors', InspectorViewSet, basename='inspector')
 
-router.register(r'inspections', InspectionViewSet, basename='inspection')
+router.register(r'', InspectionViewSet, basename='inspection')
 
 urlpatterns = [
     path('', include(router.urls)),
