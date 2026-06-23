@@ -2,8 +2,8 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
 from .serializers import InspectionSerializer, InspectorSerializer, CreateInspectorSerializer, InspectionVerificationSerializer
-from ..models import Inspection, Inspector
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiResponse, OpenApiExample
+from ..models import Inspector
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiResponse, OpenApiExample
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.response import Response
 from rest_framework import permissions

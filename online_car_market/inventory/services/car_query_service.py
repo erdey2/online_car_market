@@ -41,14 +41,22 @@ class CarQueryService:
 
     @staticmethod
     def for_detail():
-        """Detail view: prefetch all images, top 10 bids, and verified inspection."""
 
-        all_images_qs = CarImage.objects.only("id", "image", "is_featured")
+        all_images_qs = CarImage.objects.only(
+            "id",
+            "image",
+            "is_featured"
+        )
 
         top_bids_qs = (
             Bid.objects
             .select_related("user")
-            .only("id", "amount", "user_id", "created_at")
+            .only(
+                "id",
+                "amount",
+                "user_id",
+                "created_at"
+            )
             .order_by("-amount")[:10]
         )
 
@@ -56,34 +64,46 @@ class CarQueryService:
             Inspection.objects
             .filter(status="verified")
             .select_related("verified_by")
-            .only(
-                "id",
-                "car_id",
-                "inspection_date",
-                "condition_status",
-                "remarks",
-                "verified_at",
-                "status",
-                "verified_by__email",
-            )
             .order_by("-verified_at")
         )
 
         return (
             Car.objects
             .select_related(
-                "dealer", "dealer__profile", "dealer__profile__user",
-                "broker", "broker__profile", "broker__profile__user",
-                "posted_by", "inspection", "make_ref", "model_ref",
-                "inspection__verified_by",
+                "dealer",
+                "dealer__profile",
+                "dealer__profile__user",
+                "broker",
+                "broker__profile",
+                "broker__profile__user",
+                "posted_by",
+                "make_ref",
+                "model_ref",
             )
             .prefetch_related(
-                Prefetch("images", queryset=all_images_qs),
-                Prefetch("bids", queryset=top_bids_qs, to_attr="top_bids"),
+                Prefetch(
+                    "images",
+                    queryset=all_images_qs
+                ),
+                Prefetch(
+                    "bids",
+                    queryset=top_bids_qs,
+                    to_attr="top_bids"
+                ),
+                Prefetch(
+                    "inspections",
+                    queryset=verified_inspections_qs,
+                    to_attr="verified_inspections"
+                ),
             )
             .annotate(
-                bid_count=Count("bids", distinct=True),
-                highest_bid=Max("bids__amount"),
+                bid_count=Count(
+                    "bids",
+                    distinct=True
+                ),
+                highest_bid=Max(
+                    "bids__amount"
+                ),
                 dealer_avg=Coalesce(
                     Avg("dealer__ratings__rating"),
                     0.0,
