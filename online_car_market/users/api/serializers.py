@@ -23,13 +23,14 @@ User = get_user_model()
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
     confirm_password = serializers.CharField(write_only=True)
-    description = serializers.CharField(max_length=500, required=False, allow_blank=True)
     first_name = serializers.CharField(max_length=50, required=False, allow_blank=True)
     last_name = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    contact = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    description = serializers.CharField(max_length=500, required=False, allow_blank=True)
 
     class Meta:
         model = User
-        fields = ['email', 'password', 'confirm_password', 'first_name', 'last_name', 'description']
+        fields = ['email', 'password', 'confirm_password', 'first_name', 'last_name', 'contact','description']
         extra_kwargs = {
             'email': {'required': True},
         }
@@ -47,6 +48,21 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         if not any(char.isdigit() for char in cleaned):
             raise serializers.ValidationError("Password must contain at least one digit.")
         return cleaned
+
+    def validate_contact(self, value):
+        if value:
+            value = bleach.clean(
+                value.strip(),
+                tags=[],
+                strip=True
+            )
+
+            if len(value) > 15:
+                raise serializers.ValidationError(
+                    "Contact cannot exceed 15 characters."
+                )
+
+        return value
 
     def validate_description(self, value):
         if value:

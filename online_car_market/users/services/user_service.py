@@ -25,20 +25,24 @@ class UserService:
     def register_user(validated_data):
         first_name = validated_data.pop('first_name', '')
         last_name = validated_data.pop('last_name', '')
-        validated_data.pop('confirm_password')
+        contact = validated_data.pop("contact", "")
 
-        user = User.objects.create_user(**validated_data)
+        validated_data.pop("confirm_password")
 
-        profile, _ = Profile.objects.get_or_create(user=user)
-        profile.first_name = first_name
-        profile.last_name = last_name
-        profile.save()
+        password = validated_data.pop("password")
 
-        try:
-            assign_role(user, 'buyer')
-            BuyerProfile.objects.get_or_create(profile=profile)
-        except RoleDoesNotExist:
-            raise serializers.ValidationError("Role buyer does not exist.")
+        user = User.objects.create_user(
+            password=password,
+            role=User.Role.BUYER,
+            **validated_data
+        )
+
+        Profile.objects.create(
+            user=user,
+            first_name=first_name,
+            last_name=last_name,
+            contact=contact,
+        )
 
         return user
 
