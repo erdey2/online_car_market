@@ -25,17 +25,27 @@ class AuthViewSet(ViewSet):
     @extend_schema(
         tags=["Authentication"],
         summary="Register as Buyer",
-        description="Create a new buyer account. This creates a User and Profile.",
-        request=inline_serializer(
-            name="BuyerRegisterRequest",
-            fields={
-                "email": serializers.EmailField(),
-                "password": serializers.CharField(),
-            },
-        ),
+        description="""
+        Create a new buyer account.
+
+        Creates:
+        - User
+        - Profile
+
+        Optional fields:
+        - first_name
+        - last_name
+        - contact
+        - description
+        """,
+        request=BuyerRegisterSerializer,
         responses={
-            201: OpenApiResponse(description="Buyer registered successfully"),
-            400: OpenApiResponse(description="Invalid input"),
+            201: OpenApiResponse(
+                description="Buyer registered successfully"
+            ),
+            400: OpenApiResponse(
+                description="Validation error"
+            ),
         },
     )
     @action(detail=False, methods=["post"])
@@ -43,7 +53,8 @@ class AuthViewSet(ViewSet):
         serializer = BuyerRegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response({"detail": "Buyer registered successfully"}, status=201)
+
+        return Response({"detail": "Buyer registered successfully"}, status=201 )
 
     @extend_schema(
         tags=["Authentication"],
