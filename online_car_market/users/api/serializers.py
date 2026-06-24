@@ -127,9 +127,10 @@ class CustomLoginSerializer(LoginSerializer):
 
 class CustomRegisterSerializer(RegisterSerializer):
     username = None
-    description = serializers.CharField(max_length=500, required=False, allow_blank=True)
     first_name = serializers.CharField(max_length=50, required=False, allow_blank=True)
     last_name = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    contact = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    description = serializers.CharField(max_length=500, required=False, allow_blank=True)
 
     @property
     def _has_phone_field(self):
@@ -169,6 +170,7 @@ class CustomRegisterSerializer(RegisterSerializer):
         # Save names and description
         profile.first_name = self.validated_data.get('first_name', '')
         profile.last_name = self.validated_data.get('last_name', '')
+        profile.contact = self.validated_data.get("contact", "")
         profile.save()
 
         # Assign default buyer role
