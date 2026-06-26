@@ -4,7 +4,7 @@ from drf_spectacular.utils import extend_schema_field
 from dj_rest_auth.registration.serializers import RegisterSerializer
 from dj_rest_auth.serializers import LoginSerializer
 from rolepermissions.checkers import has_role
-from rolepermissions.roles import get_user_roles, assign_role
+from rolepermissions.roles import assign_role
 from rolepermissions.exceptions import RoleDoesNotExist
 from django.contrib.auth import get_user_model
 from online_car_market.users.models import Profile
@@ -16,6 +16,8 @@ from ..services.user_service import UserService
 from ..services.profile_service import ProfileService
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.dealers.models import DealerProfile
+from online_car_market.inspection.models import Inspector
+from online_car_market.users.permissions.business_permissions import is_staff
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -325,34 +327,55 @@ class ERPLoginSerializer(LoginSerializer):
         data = super().validate(attrs)
         user = data.get("user")
 
-        roles = get_user_roles(user)
-        logger.info(f"User roles: {roles}")
-
         if not user:
-            raise serializers.ValidationError("Authentication failed.")
-
-        # Allow only ERP roles
-        allowed_roles = ["dealer", "hr", "seller", "accountant", "finance"]
-
-        if not any(has_role(user, role) for role in allowed_roles):
             raise serializers.ValidationError(
-                "You are not allowed to access the ERP system."
+                "Authentication failed."
             )
 
-        return data
+        # Dealer
+        if user.role == User.Role.DEALER:
+            return data
+
+        # ERP Staff
+        if is_staff(
+            user,
+            ["hr", "seller", "accountant", "finance"]
+        ):
+            return data
+
+        raise serializers.ValidationError(
+            "You are not allowed to access the ERP system."
+        )
 
 class AdminLoginSerializer(LoginSerializer):
+
     def validate(self, attrs):
         data = super().validate(attrs)
         user = data.get("user")
 
-        # Allow admin OR superadmin
-        if not has_role(user, ["admin", "super_admin"]):
+        if not user:
             raise serializers.ValidationError(
-                "You are not allowed to access the Admin system."
+                "Authentication failed."
             )
 
-        return data
+        # Super Admin and Admin
+        if user.role in [
+            User.Role.SUPER_ADMIN,
+            User.Role.ADMIN,
+        ]:
+            return data
+
+        # Inspector
+        if user.role == User.Role.INSPECTOR:
+            if Inspector.objects.filter(
+                user=user,
+                is_active=True
+            ).exists():
+                return data
+
+        raise serializers.ValidationError(
+            "You are not allowed to access the Admin system."
+        )
 
 class BuyerRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
