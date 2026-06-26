@@ -35,6 +35,16 @@ class Admin(AbstractUserRole):
         "view_inventory": True
     }
 
+class Inspector(AbstractUserRole):
+    available_permissions = {
+        "view_admin_dashboard": True,
+        "view_cars_for_inspection": True,
+        "view_inventory": True,
+        "create_inspection": True,
+        "update_own_inspection": True,
+        "view_own_inspections": True,
+    }
+
 class Dealer(AbstractUserRole):
     available_permissions = {
         'view_dealer_dashboard': True,

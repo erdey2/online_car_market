@@ -1,7 +1,7 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
-from rolepermissions.checkers import has_role
-
 from online_car_market.dealers.models import DealerStaff
+from online_car_market.users.models import User
+from online_car_market.inspection.models import Inspector
 
 # HELPERS
 def is_staff(user, roles=None):
@@ -168,24 +168,37 @@ class CanPostPayroll(BasePermission):
 
 class CanManageSales(BasePermission):
     def has_permission(self, request, view):
+        user = request.user
+
+        if not user.is_authenticated:
+            return False
+
         return (
-            has_role(request.user, "dealer")
-            or has_role(request.user, "broker")
-            or is_staff(request.user, ["seller"])
-            or has_role(request.user, "admin")
-            or has_role(request.user, "super_admin")
+            user.role in [
+                User.Role.DEALER,
+                User.Role.BROKER,
+                User.Role.ADMIN,
+                User.Role.SUPER_ADMIN,
+            ]
+            or is_staff(user, ["seller"])
         )
 
 class CanViewSalesData(BasePermission):
     def has_permission(self, request, view):
         user = request.user
+
+        if not user.is_authenticated:
+            return False
+
         return (
-            has_role(user, "admin")
-            or has_role(user, "super_admin")
-            or has_role(user, "dealer")
-            or has_role(user, "broker")
+            user.role in [
+                User.Role.SUPER_ADMIN,
+                User.Role.ADMIN,
+                User.Role.DEALER,
+                User.Role.BROKER,
+                User.Role.BUYER,
+            ]
             or is_staff(user, ["seller"])
-            or has_role(user, "buyer")
         )
 
 # GENERAL
@@ -245,3 +258,26 @@ class CanViewInventory(BasePermission):
             user.role in ["admin", "dealer", "broker"] or
             is_staff(user, ["seller"])
         )
+
+
+class CanAccessAdminPortal(BasePermission):
+
+    def has_permission(self, request, view):
+        user = request.user
+
+        if not user.is_authenticated:
+            return False
+
+        if user.role in [
+            User.Role.SUPER_ADMIN,
+            User.Role.ADMIN,
+        ]:
+            return True
+
+        if user.role == User.Role.INSPECTOR:
+            return Inspector.objects.filter(
+                user=user,
+                is_active=True
+            ).exists()
+
+        return False
