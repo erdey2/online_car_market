@@ -10,13 +10,11 @@ from rolepermissions.checkers import has_role
 import bleach
 from ..models import Employee, Contract, Attendance, Leave, SalaryComponent, EmployeeSalary, OvertimeEntry
 from online_car_market.hr.utils.pdf import generate_and_upload_pdf
-from online_car_market.dealers.models import DealerStaff
 
 User = get_user_model()
 
 class EmployeeSerializer(serializers.ModelSerializer):
-    user_email = serializers.EmailField(write_only=True, required=True)
-    user_email_display = serializers.EmailField(source="user.email", read_only=True)
+    login_email = serializers.EmailField(source="user.email", read_only=True)
     full_name = serializers.SerializerMethodField(read_only=True)
     salary = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     components = serializers.SerializerMethodField(read_only=True)
@@ -27,8 +25,11 @@ class EmployeeSerializer(serializers.ModelSerializer):
         model = Employee
         fields = [
             "id",
-            "user_email",
-            "user_email_display",
+            "first_name",
+            "last_name",
+            "contact",
+            "email",
+            "login_email",
             "full_name",
             "hire_date",
             "position",
@@ -139,55 +140,31 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def create(self, validated_data):
-        user = validated_data.pop("user_email")
         salary = validated_data.pop("salary", None)
-
-        if "hire_date" not in validated_data:
-            validated_data["hire_date"] = timezone.now().date()
 
         request_user = self.context["request"].user
 
-        dealer = getattr(
-            request_user.profile,
-            "dealer_profile",
-            None
-        )
-
-        if not dealer:
-            staff = DealerStaff.objects.filter(
-                user=request_user,
-                role="hr"
-            ).first()
-
-            if not staff:
-                raise serializers.ValidationError(
-                    "Not allowed."
-                )
-
         employee = Employee.objects.create(
-            user=user,
             created_by=request_user,
             salary=salary,
             **validated_data
         )
 
         if salary:
-            basic_salary_component, created = (
-                SalaryComponent.objects.get_or_create(
-                    name="Basic Salary",
-                    defaults={
-                        "component_type": SalaryComponent.EARNING,
-                        "is_taxable": True,
-                        "is_pensionable": True,
-                        "is_system": True,
-                    }
-                )
+            basic_salary_component, _ = SalaryComponent.objects.get_or_create(
+                name="Basic Salary",
+                defaults={
+                    "component_type": SalaryComponent.EARNING,
+                    "is_taxable": True,
+                    "is_pensionable": True,
+                    "is_system": True,
+                },
             )
 
             EmployeeSalary.objects.create(
                 employee=employee,
                 component=basic_salary_component,
-                amount=salary
+                amount=salary,
             )
 
         return employee

@@ -5,7 +5,11 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 class Employee(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='employee_profile')
+    user = models.OneToOneField(User, on_delete=models.SET_NULL, related_name='employee_profile', null=True, blank=True)
+    first_name = models.CharField(max_length=50, blank=True)
+    last_name = models.CharField(max_length=50, blank=True)
+    contact = models.CharField(max_length=20, blank=True) # e.g., phone number
+    email = models.EmailField(blank=True, null=True, unique=True) 
     hire_date = models.DateField(default=timezone.now)
     position = models.CharField(max_length=100, blank=True, null=True)
     salary = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -15,7 +19,11 @@ class Employee(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.user.email} - {self.position or 'Employee'}"
+        return (
+            f"{self.first_name} {self.last_name}".strip()
+            or self.email
+            or (self.user.email if self.user else "Unnamed Employee")
+        )
 
     class Meta:
         verbose_name = 'Employee'
