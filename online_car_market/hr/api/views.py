@@ -33,31 +33,43 @@ def _scope_employees_to_dealer(base_qs, dealer):
 @extend_schema_view(
     list=extend_schema(
         tags=["Dealers - Human Resource Management"],
-        summary="List all employees",
-        description="Retrieve all registered employees, including position, department, and hiring date.",
+        summary="List employees",
+        description=(
+            "Retrieve all employees belonging to the authenticated dealer or HR. "
+            "The response includes employee information, payroll components, overtime "
+            "records, and whether the employee has a linked login account."
+        ),
     ),
     retrieve=extend_schema(
         tags=["Dealers - Human Resource Management"],
-        summary="Retrieve employee details",
-        description="Fetch detailed information about a specific employee by ID.",
+        summary="Retrieve employee",
+        description=(
+            "Retrieve detailed information about a specific employee."
+        ),
     ),
     create=extend_schema(
         tags=["Dealers - Human Resource Management"],
-        summary="Add a new employee",
-        description="Dealers or HR can create new employees. `created_by` is automatically tracked.",
+        summary="Create employee",
+        description=(
+            "Create a new employee record. "
+            "Creating an employee does NOT create a login account. "
+            "A login account can later be created using the "
+            "`POST /employees/{id}/create-account/` endpoint."
+        ),
     ),
     update=extend_schema(
         tags=["Dealers - Human Resource Management"],
-        summary="Update employee information",
-        description="Modify existing employee details.",
+        summary="Update employee",
+        description="Update an employee's information.",
     ),
     partial_update=extend_schema(
         tags=["Dealers - Human Resource Management"],
-        summary="Partially update employee information",
+        summary="Partially update employee",
     ),
     destroy=extend_schema(
         tags=["Dealers - Human Resource Management"],
-        summary="Delete employee record",
+        summary="Delete employee",
+        description="Delete an employee record.",
     ),
 )
 class EmployeeViewSet(viewsets.ModelViewSet):
@@ -68,23 +80,27 @@ class EmployeeViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
-        base_qs = Employee.objects.select_related(
-            "user",
-            "user__profile",
-            "created_by",
-            "created_by__profile",
-            "created_by__profile__dealer_profile"
-        ).prefetch_related("employeesalary_set__component","overtime_entries"
-)
+        base_qs = (
+            Employee.objects
+            .select_related(
+                "user",
+                "user__profile",
+                "created_by",
+                "created_by__profile",
+                "created_by__profile__dealer_profile",
+            )
+            .prefetch_related(
+                "employeesalary_set__component",
+                "overtime_entries",
+            )
+        )
 
         profile = getattr(user, "profile", None)
         dealer = getattr(profile, "dealer_profile", None)
 
-        # Dealer → only their employees
         if dealer:
             return _scope_employees_to_dealer(base_qs, dealer)
 
-        # HR staff → employees of their dealer
         staff = (
             DealerStaff.objects
             .select_related("dealer")
@@ -95,7 +111,7 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         if staff:
             return _scope_employees_to_dealer(base_qs, staff.dealer)
 
-        return base_qs.none()
+        return Employee.objects.none()
 
 @extend_schema_view(
     list=extend_schema(

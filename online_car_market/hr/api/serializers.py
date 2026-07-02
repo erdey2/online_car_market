@@ -20,6 +20,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
     components = serializers.SerializerMethodField(read_only=True)
     overtime_entries = serializers.SerializerMethodField(read_only=True)
     total_overtime_hours = serializers.SerializerMethodField(read_only=True)
+    has_account = serializers.SerializerMethodField()
 
     class Meta:
         model = Employee
@@ -30,6 +31,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "contact",
             "email",
             "login_email",
+            "has_account",
             "full_name",
             "hire_date",
             "position",
@@ -47,7 +49,7 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
         read_only_fields = [
             "id",
-            "user_email_display",
+            "login_email",
             "full_name",
             "salary",
             "components",
@@ -55,16 +57,14 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "total_overtime_hours",
             "created_by",
             "created_at",
-            "updated_at"
+            "updated_at",
         ]
 
     def get_full_name(self, obj):
-        profile = getattr(obj.user, "profile", None)
+        return obj.first_name + " " + obj.last_name
 
-        if not profile:
-            return "Unknown"
-
-        return f"{profile.first_name} {profile.last_name}".strip()
+    def get_has_account(self, obj):
+        return obj.user is not None
 
     def _employee_salaries(self, obj):
         if (
@@ -113,41 +113,33 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
         return value
 
-    def validate_user_email(self, email):
-        try:
-            user = User.objects.get(email=email)
-
-        except User.DoesNotExist:
-            raise serializers.ValidationError(
-                "No user with this email exists."
-            )
-
-        if self.instance:
-            if Employee.objects.filter(user=user).exclude(
-                pk=self.instance.pk
-            ).exists():
-                raise serializers.ValidationError(
-                    "This user is already an employee."
-                )
-
-        else:
-            if hasattr(user, "employee_profile"):
-                raise serializers.ValidationError(
-                    "This user is already an employee."
-                )
-
-        return user
-
     @transaction.atomic
     def create(self, validated_data):
         salary = validated_data.pop("salary", None)
 
         request_user = self.context["request"].user
 
+        dealer = getattr(
+            request_user.profile,
+            "dealer_profile",
+            None,
+        )
+
+        if not dealer:
+            staff = DealerStaff.objects.filter(
+                user=request_user,
+                role="hr",
+            ).first()
+
+            if not staff:
+                raise serializers.ValidationError(
+                    "You are not allowed to create employees."
+                )
+
         employee = Employee.objects.create(
             created_by=request_user,
             salary=salary,
-            **validated_data
+            **validated_data,
         )
 
         if salary:
