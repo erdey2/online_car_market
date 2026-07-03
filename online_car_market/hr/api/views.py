@@ -52,9 +52,6 @@ def _scope_employees_to_dealer(base_qs, dealer):
         summary="Create employee",
         description=(
             "Create a new employee record. "
-            "Creating an employee does NOT create a login account. "
-            "A login account can later be created using the "
-            "`POST /employees/{id}/create-account/` endpoint."
         ),
     ),
     update=extend_schema(

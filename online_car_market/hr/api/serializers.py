@@ -10,6 +10,7 @@ from rolepermissions.checkers import has_role
 import bleach
 from ..models import Employee, Contract, Attendance, Leave, SalaryComponent, EmployeeSalary, OvertimeEntry
 from online_car_market.hr.utils.pdf import generate_and_upload_pdf
+from online_car_market.dealers.models import DealerStaff
 
 User = get_user_model()
 
