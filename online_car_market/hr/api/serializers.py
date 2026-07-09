@@ -461,12 +461,19 @@ class OvertimeSerializer(serializers.ModelSerializer):
         ]
 
     def get_employee_name(self, obj):
-        profile = getattr(obj.employee.user, "profile", None)
+        employee = obj.employee
 
-        if not profile:
-            return obj.employee.user.email
+        if not employee:
+            return None
 
-        return f"{profile.first_name} {profile.last_name}".strip()
+        name = f"{employee.first_name} {employee.last_name}".strip()
+
+        if name:
+            return name
+
+        return employee.email or (
+            employee.user.email if employee.user else None
+        )
 
     def validate_hours(self, value):
         if value <= 0:
