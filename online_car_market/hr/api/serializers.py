@@ -15,13 +15,19 @@ from online_car_market.dealers.models import DealerStaff
 User = get_user_model()
 
 class EmployeeSerializer(serializers.ModelSerializer):
-    login_email = serializers.EmailField(source="user.email", read_only=True)
+    login_email = serializers.SerializerMethodField(read_only=True)
     full_name = serializers.SerializerMethodField(read_only=True)
-    salary = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
+    salary = serializers.SerializerMethodField(read_only=True)
     components = serializers.SerializerMethodField(read_only=True)
     overtime_entries = serializers.SerializerMethodField(read_only=True)
     total_overtime_hours = serializers.SerializerMethodField(read_only=True)
     has_account = serializers.SerializerMethodField()
+
+    # Return profile values if account exists
+    first_name = serializers.SerializerMethodField()
+    last_name = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+    contact = serializers.SerializerMethodField()
 
     class Meta:
         model = Employee
@@ -61,12 +67,60 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    # Helpers
+
+    def _profile(self, obj):
+        if obj.user:
+            return getattr(obj.user, "profile", None)
+        return None
+
+    # Employee information
+
+    def get_first_name(self, obj):
+        profile = self._profile(obj)
+        if profile and profile.first_name:
+            return profile.first_name
+        return obj.first_name
+
+    def get_last_name(self, obj):
+        profile = self._profile(obj)
+        if profile and profile.last_name:
+            return profile.last_name
+        return obj.last_name
+
+    def get_email(self, obj):
+        if obj.user:
+            return obj.user.email
+        return obj.email
+
+    def get_contact(self, obj):
+        profile = self._profile(obj)
+        if profile and profile.contact:
+            return profile.contact
+        return obj.contact
+
+    def get_login_email(self, obj):
+        return obj.user.email if obj.user else None
+
     def get_full_name(self, obj):
-        return obj.first_name + " " + obj.last_name
+        profile = self._profile(obj)
+
+        if profile:
+            name = f"{profile.first_name or ''} {profile.last_name or ''}".strip()
+            if name:
+                return name
+            return obj.user.email
+
+        name = f"{obj.first_name or ''} {obj.last_name or ''}".strip()
+        if name:
+            return name
+
+        return obj.email
 
     def get_has_account(self, obj):
         return obj.user is not None
 
+    # Salary
     def _employee_salaries(self, obj):
         if (
             hasattr(obj, "_prefetched_objects_cache")
@@ -82,7 +136,6 @@ class EmployeeSerializer(serializers.ModelSerializer):
         for salary in self._employee_salaries(obj):
             if salary.component.name.lower() == "basic salary":
                 return salary.amount
-
         return None
 
     def get_components(self, obj):
@@ -92,10 +145,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
         ).data
 
     def get_overtime_entries(self, obj):
-        overtime_qs = obj.overtime_entries.all().order_by("-date")
-
         return OvertimeSerializer(
-            overtime_qs,
+            obj.overtime_entries.all().order_by("-date"),
             many=True
         ).data
 
@@ -111,7 +162,6 @@ class EmployeeSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Hire date cannot be in the future."
             )
-
         return value
 
     @transaction.atomic
