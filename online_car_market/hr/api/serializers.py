@@ -280,16 +280,20 @@ class ContractSerializer(serializers.ModelSerializer):
         return contract
 
 class AttendanceSerializer(serializers.ModelSerializer):
-    employee_email = serializers.EmailField(write_only=True, required=True)
-    employee_email_display = serializers.EmailField(source="employee.user.email", read_only=True)
+    employee = serializers.PrimaryKeyRelatedField(
+        queryset=Employee.objects.all(),
+        write_only=True
+    )
+
+    employee_email = serializers.SerializerMethodField(read_only=True)
     employee_full_name = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Attendance
         fields = [
             "id",
-            "employee_email",          # input only
-            "employee_email_display",  # output only
+            "employee",
+            "employee_email",
             "employee_full_name",
             "entry_time",
             "exit_time",
@@ -299,65 +303,98 @@ class AttendanceSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
         read_only_fields = [
             "id",
-            "employee_email_display",
+            "employee_email",
             "employee_full_name",
             "created_at",
             "updated_at",
         ]
 
-    def get_employee_full_name(self, obj: Attendance) -> str:
-        profile = obj.employee.user.profile
-        full = f"{profile.first_name} {profile.last_name}".strip()
-        return full or "Unknown"
+    def get_employee_email(self, obj):
+        employee = obj.employee
 
-    def validate_employee_email(self, email: str) -> Employee:
-        try:
-            return Employee.objects.get(user__email=email)
-        except Employee.DoesNotExist:
-            raise serializers.ValidationError("No employee with this email exists.")
+        if employee.user:
+            return employee.user.email
 
-    def validate(self, data: dict) -> dict:
-        entry = data.get("entry_time")
-        exit_ = data.get("exit_time")
+        return employee.email
 
-        # Ensure entry is before exit
+    def get_employee_full_name(self, obj):
+        employee = obj.employee
+
+        if employee.user:
+            profile = getattr(employee.user, "profile", None)
+
+            if profile:
+                full = f"{profile.first_name or ''} {profile.last_name or ''}".strip()
+                if full:
+                    return full
+
+            return employee.user.email
+
+        full = f"{employee.first_name or ''} {employee.last_name or ''}".strip()
+
+        return full or employee.email or "Unknown"
+
+    def validate(self, attrs):
+        entry = attrs.get("entry_time")
+        exit_ = attrs.get("exit_time")
+
         if entry and exit_ and entry > exit_:
-            raise serializers.ValidationError("Entry time must be before or equal to exit time.")
+            raise serializers.ValidationError(
+                "Entry time must be before or equal to exit time."
+            )
 
-        # Check duplicate attendance for the same employee/day
-        employee = data.get("employee") or (self.instance.employee if self.instance else None)
-        att_date = data.get("date") or (self.instance.date if self.instance else None)
+        employee = attrs.get(
+            "employee",
+            getattr(self.instance, "employee", None)
+        )
 
-        if employee and att_date:
-            qs = Attendance.objects.filter(employee=employee, date=att_date)
+        att_date = attrs.get(
+            "date",
+            getattr(self.instance, "date", timezone.now().date())
+        )
+
+        if employee:
+            qs = Attendance.objects.filter(
+                employee=employee,
+                date=att_date
+            )
+
             if self.instance:
                 qs = qs.exclude(pk=self.instance.pk)
+
             if qs.exists():
-                raise serializers.ValidationError(
-                    f"Attendance for {employee.user.email} on {att_date} already exists."
+                identifier = (
+                    employee.user.email
+                    if employee.user
+                    else employee.email
+                    or employee.first_name
+                    or f"Employee #{employee.pk}"
                 )
 
-        # Sanitize notes input
-        if "notes" in data:
-            data["notes"] = bleach.clean(data["notes"], tags=[], attributes={})
+                raise serializers.ValidationError({
+                    "date": f"Attendance for {identifier} on {att_date} already exists."
+                })
 
-        return data
+        if "notes" in attrs:
+            attrs["notes"] = bleach.clean(
+                attrs["notes"],
+                tags=[],
+                attributes={}
+            )
 
-    def create(self, validated_data: dict) -> Attendance:
-        # Resolve employee object
-        employee = validated_data.pop("employee_email")
+        return attrs
 
-        # If date not provided → use today's date
+    def create(self, validated_data):
         if "date" not in validated_data:
             validated_data["date"] = timezone.now().date()
 
-        return Attendance.objects.create(employee=employee, **validated_data)
+        return Attendance.objects.create(**validated_data)
 
-    def update(self, instance: Attendance, validated_data: dict) -> Attendance:
-        # Employee cannot be changed
-        validated_data.pop("employee_email", None)
+    def update(self, instance, validated_data):
+        validated_data.pop("employee", None)
         return super().update(instance, validated_data)
 
 class LeaveSerializer(serializers.ModelSerializer):

@@ -9,7 +9,7 @@ class Employee(models.Model):
     first_name = models.CharField(max_length=50, blank=True)
     last_name = models.CharField(max_length=50, blank=True)
     contact = models.CharField(max_length=20, blank=True) # e.g., phone number
-    email = models.EmailField(blank=True, null=True, unique=True) 
+    email = models.EmailField(blank=True, null=True, unique=True)
     hire_date = models.DateField(default=timezone.now)
     position = models.CharField(max_length=100, blank=True, null=True)
     salary = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
@@ -89,16 +89,29 @@ class Contract(models.Model):
 
 class Attendance(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='attendances')
+
     entry_time = models.DateTimeField(null=True, blank=True)
     exit_time = models.DateTimeField(null=True, blank=True)
     date = models.DateField(default=timezone.now)
+
     status = models.CharField(max_length=20, choices=[('present', 'Present'), ('absent', 'Absent'), ('leave', 'Leave')], default='present')
+
     notes = models.TextField(blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"Attendance for {self.employee.user.email} on {self.date}"
+        if self.employee.user:
+            name = self.employee.user.email
+        else:
+            name = (
+                self.employee.email
+                or f"{self.employee.first_name} {self.employee.last_name}".strip()
+                or "Unknown Employee"
+            )
+
+        return f"Attendance for {name} on {self.date}"
 
     class Meta:
         unique_together = ('employee', 'date')

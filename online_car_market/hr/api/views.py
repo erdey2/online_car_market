@@ -247,11 +247,16 @@ class ContractViewSet(viewsets.ModelViewSet):
     ),
 )
 class AttendanceViewSet(viewsets.ModelViewSet):
-    queryset = Attendance.objects.select_related(
-        "employee",
-        "employee__user",
-        "employee__user__profile",
+    queryset = (
+        Attendance.objects
+        .select_related(
+            "employee",
+            "employee__user",
+            "employee__user__profile",
+        )
+        .order_by("-date", "-created_at")
     )
+
     serializer_class = AttendanceSerializer
     permission_classes = [IsHR]
 
