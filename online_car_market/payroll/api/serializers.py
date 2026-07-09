@@ -17,7 +17,11 @@ class PayrollRunErrorSerializer(serializers.Serializer):
     detail = serializers.CharField()
 
 class PayslipEmployeeSerializer(serializers.ModelSerializer):
+    first_name = serializers.SerializerMethodField()
+    last_name = serializers.SerializerMethodField()
     full_name = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+    contact = serializers.SerializerMethodField()
 
     class Meta:
         model = Employee
@@ -32,17 +36,54 @@ class PayslipEmployeeSerializer(serializers.ModelSerializer):
             "hire_date",
         ]
 
+    def _profile(self, obj):
+        if obj.user:
+            return getattr(obj.user, "profile", None)
+        return None
+
+    def get_first_name(self, obj):
+        profile = self._profile(obj)
+
+        if profile and profile.first_name:
+            return profile.first_name
+
+        return obj.first_name
+
+    def get_last_name(self, obj):
+        profile = self._profile(obj)
+
+        if profile and profile.last_name:
+            return profile.last_name
+
+        return obj.last_name
+
+    def get_contact(self, obj):
+        profile = self._profile(obj)
+
+        if profile and profile.contact:
+            return profile.contact
+
+        return obj.contact
+
+    def get_email(self, obj):
+        if obj.user:
+            return obj.user.email
+
+        return obj.email
+
     def get_full_name(self, obj):
-        name = f"{obj.first_name} {obj.last_name}".strip()
+        first = self.get_first_name(obj)
+        last = self.get_last_name(obj)
+
+        name = f"{first or ''} {last or ''}".strip()
 
         if name:
             return name
 
-        if obj.email:
-            return obj.email
+        email = self.get_email(obj)
 
-        if obj.user:
-            return obj.user.email
+        if email:
+            return email
 
         return "Unknown Employee"
 
