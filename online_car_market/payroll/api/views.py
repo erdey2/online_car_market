@@ -1,4 +1,5 @@
 from django.db.models import Prefetch
+from django.http import Http404
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from online_car_market.payroll.models import PayrollItem, PayrollLine
 from online_car_market.payroll.api.serializers import (PayslipSerializer,
@@ -27,7 +28,6 @@ def payslip_queryset():
             queryset=PayrollLine.objects.select_related("component"),
         )
     )
-
 
 PayrollActionResponse = inline_serializer(
     name="PayrollActionResponse",
@@ -198,23 +198,25 @@ class PayslipAPIView(ListAPIView):
     def get_queryset(self):
         user = self.request.user
 
-        # Payroll staff can view all payslips
         if user.role == "dealer" or is_staff(
             user,
             ["hr", "accountant", "finance"]
         ):
-            return payslip_queryset().order_by("-payroll_run__created_at")
+            return payslip_queryset().order_by(
+                "-payroll_run__created_at"
+            )
 
-        # Employee can only see own latest payslip
-        if not hasattr(user, "employee_profile"):
+        employee = getattr(user, "employee_profile", None)
+
+        if employee is None:
             return PayrollItem.objects.none()
 
-        payslip = get_latest_payslip(user.employee_profile)
+        payslip = get_latest_payslip(employee)
 
-        if not payslip:
+        if payslip is None:
             return PayrollItem.objects.none()
 
-        return payslip_queryset().filter(id=payslip.id)
+        return payslip_queryset().filter(pk=payslip.pk)
 
 @extend_schema(
     tags=["Payroll – Payslips"],
@@ -254,19 +256,17 @@ class PayslipMeAPIView(RetrieveAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_object(self):
-        user = self.request.user
+        employee = getattr(self.request.user, "employee_profile", None)
 
-        if not hasattr(user, "employee_profile"):
-            from django.http import Http404
+        if employee is None:
             raise Http404("User is not an employee.")
 
-        payslip = get_latest_payslip(user.employee_profile)
+        payslip = get_latest_payslip(employee)
 
-        if not payslip:
-            from django.http import Http404
+        if payslip is None:
             raise Http404("No payslip found.")
 
-        return payslip_queryset().get(id=payslip.id)
+        return payslip_queryset().get(pk=payslip.pk)
 
 
 
