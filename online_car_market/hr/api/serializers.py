@@ -364,6 +364,26 @@ class EmployeeSerializer(serializers.ModelSerializer):
 
         return value
 
+    def validate_email(self, value):
+        """
+        Ensure employee email is unique (case-insensitive).
+        Email is optional.
+        """
+        if not value:
+            return value
+
+        queryset = Employee.objects.filter(email__iexact=value)
+
+        # Exclude current employee during update
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+
+        if queryset.exists():
+            raise serializers.ValidationError(
+                "An employee with this email already exists."
+            )
+        return value
+
     # Create
 
     @transaction.atomic
