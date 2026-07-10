@@ -14,7 +14,7 @@ from online_car_market.dealers.models import DealerStaff
 
 User = get_user_model()
 
-class EmployeeSerializer(serializers.ModelSerializer):
+''' class EmployeeSerializer(serializers.ModelSerializer):
     login_email = serializers.SerializerMethodField(read_only=True)
     full_name = serializers.SerializerMethodField(read_only=True)
     salary = serializers.SerializerMethodField(read_only=True)
@@ -210,7 +210,225 @@ class EmployeeSerializer(serializers.ModelSerializer):
                 amount=salary,
             )
 
+        return employee '''
+
+class EmployeeSerializer(serializers.ModelSerializer):
+    # Writable fields
+    first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True)
+    contact = serializers.CharField(required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_null=True)
+    salary = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+    )
+
+    # Read-only fields
+    login_email = serializers.SerializerMethodField(read_only=True)
+    full_name = serializers.SerializerMethodField(read_only=True)
+    components = serializers.SerializerMethodField(read_only=True)
+    overtime_entries = serializers.SerializerMethodField(read_only=True)
+    total_overtime_hours = serializers.SerializerMethodField(read_only=True)
+    has_account = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = Employee
+        fields = [
+            "id",
+            "first_name",
+            "last_name",
+            "contact",
+            "email",
+            "login_email",
+            "has_account",
+            "full_name",
+            "hire_date",
+            "position",
+            "salary",
+            "components",
+            "overtime_entries",
+            "total_overtime_hours",
+            "is_active",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "login_email",
+            "has_account",
+            "full_name",
+            "components",
+            "overtime_entries",
+            "total_overtime_hours",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
+
+    # Helpers
+
+    def _profile(self, obj):
+        if obj.user:
+            return getattr(obj.user, "profile", None)
+        return None
+
+    def _employee_salaries(self, obj):
+        if (
+            hasattr(obj, "_prefetched_objects_cache")
+            and "employeesalary_set" in obj._prefetched_objects_cache
+        ):
+            return obj.employeesalary_set.all()
+
+        return EmployeeSalary.objects.select_related(
+            "component"
+        ).filter(employee=obj)
+
+    # Representation
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        profile = self._profile(instance)
+
+        if profile:
+            data["first_name"] = profile.first_name or instance.first_name
+            data["last_name"] = profile.last_name or instance.last_name
+            data["contact"] = profile.contact or instance.contact
+            data["email"] = instance.user.email
+
+        data["salary"] = self.get_salary(instance)
+
+        return data
+
+    # Computed fields
+
+    def get_login_email(self, obj):
+        return obj.user.email if obj.user else None
+
+    def get_has_account(self, obj):
+        return obj.user is not None
+
+    def get_full_name(self, obj):
+        profile = self._profile(obj)
+
+        if profile:
+            name = f"{profile.first_name or ''} {profile.last_name or ''}".strip()
+
+            if name:
+                return name
+
+            return obj.user.email
+
+        return (
+            f"{obj.first_name or ''} {obj.last_name or ''}".strip()
+            or obj.email
+        )
+
+    def get_salary(self, obj):
+        for employee_salary in self._employee_salaries(obj):
+            if employee_salary.component.name.lower() == "basic salary":
+                return employee_salary.amount
+
+        return obj.salary
+
+    def get_components(self, obj):
+        return SimpleEmployeeSerializer(
+            self._employee_salaries(obj),
+            many=True
+        ).data
+
+    def get_overtime_entries(self, obj):
+        return OvertimeSerializer(
+            obj.overtime_entries.all().order_by("-date"),
+            many=True
+        ).data
+
+    def get_total_overtime_hours(self, obj):
+        total = obj.overtime_entries.aggregate(
+            total=Sum("hours")
+        )["total"]
+
+        return total or 0
+
+    # Validation
+
+    def validate_hire_date(self, value):
+        if value > date.today():
+            raise serializers.ValidationError(
+                "Hire date cannot be in the future."
+            )
+
+        return value
+
+    # Create
+
+    @transaction.atomic
+    def create(self, validated_data):
+        salary = validated_data.pop("salary", None)
+
+        employee = Employee.objects.create(
+            created_by=self.context["request"].user,
+            salary=salary,
+            **validated_data,
+        )
+
+        if salary is not None:
+            basic_salary_component, _ = SalaryComponent.objects.get_or_create(
+                name="Basic Salary",
+                defaults={
+                    "component_type": SalaryComponent.EARNING,
+                    "is_taxable": True,
+                    "is_pensionable": True,
+                    "is_system": True,
+                },
+            )
+
+            EmployeeSalary.objects.create(
+                employee=employee,
+                component=basic_salary_component,
+                amount=salary,
+            )
+
         return employee
+
+    # Update
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        salary = validated_data.pop("salary", None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.save()
+
+        if salary is not None:
+            basic_salary_component, _ = SalaryComponent.objects.get_or_create(
+                name="Basic Salary",
+                defaults={
+                    "component_type": SalaryComponent.EARNING,
+                    "is_taxable": True,
+                    "is_pensionable": True,
+                    "is_system": True,
+                },
+            )
+
+            EmployeeSalary.objects.update_or_create(
+                employee=instance,
+                component=basic_salary_component,
+                defaults={
+                    "amount": salary,
+                },
+            )
+
+            instance.salary = salary
+            instance.save(update_fields=["salary"])
+
+        return instance
 
 class SignedUploadSerializer(serializers.Serializer):
     signed_document = serializers.FileField()
