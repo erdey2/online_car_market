@@ -6,11 +6,18 @@ class LeaveService:
 
     @staticmethod
     def approve_leave(leave, approved_by):
+        print("Before:", leave.status)
+
         if leave.status != Leave.Status.PENDING:
             raise ValueError("Only pending leaves can be approved")
+
         leave.status = Leave.Status.APPROVED
         leave.approved_by = approved_by
         leave.save()
+
+        leave.refresh_from_db()
+
+        print("After:", leave.status)
 
     @staticmethod
     def reject_leave(leave, rejected_by):
