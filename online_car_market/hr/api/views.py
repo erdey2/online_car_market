@@ -351,23 +351,54 @@ class LeaveViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        qs = Leave.objects.select_related(
-            "employee",
-            "employee__user",
-            "employee__user__profile",
-            "approved_by",
+
+        qs = (
+            Leave.objects
+            .select_related(
+                "employee",
+                "employee__user",
+                "employee__user__profile",
+                "approved_by",
+            )
         )
 
-        # HR → all
-        if user.role == "hr":
-            return qs
+        profile = getattr(user, "profile", None)
+        dealer = getattr(profile, "dealer_profile", None)
 
-        # Others → only own
+        if dealer:
+            employees = _scope_employees_to_dealer(
+                Employee.objects.all(),
+                dealer,
+            )
+            return qs.filter(employee__in=employees)
+
+        staff = (
+            DealerStaff.objects
+            .select_related("dealer")
+            .filter(user=user, role="hr")
+            .first()
+        )
+
+        if staff:
+            employees = _scope_employees_to_dealer(
+                Employee.objects.all(),
+                staff.dealer,
+            )
+            return qs.filter(employee__in=employees)
+
+        # Regular employee
         return qs.filter(employee__user=user)
 
     def get_permissions(self):
-        if self.action in ['approve', 'reject', 'destroy']:
+        if self.action in [
+            "approve",
+            "reject",
+            "destroy",
+            "update",
+            "partial_update",
+        ]:
             return [IsHR()]
+
         return [IsAuthenticated()]
 
     # Employee: my leaves
