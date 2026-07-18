@@ -3,6 +3,16 @@ from online_car_market.users.permissions.business_permissions import is_staff
 from online_car_market.users.models import User
 from online_car_market.inspection.models import Inspector
 
+# helpers
+def is_admin_user(user):
+    return (
+        user.is_authenticated
+        and user.role in [
+            User.Role.SUPER_ADMIN,
+            User.Role.ADMIN,
+        ]
+    )
+
 # GLOBAL ROLE CHECK
 def has_any_role(user, roles):
     return user.is_authenticated and user.role in roles

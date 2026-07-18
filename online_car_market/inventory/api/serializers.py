@@ -1,7 +1,7 @@
 from django.utils import timezone
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
-from ..models import Car, CarImage, CarMake, CarModel, FavoriteCar, CarView
+from ..models import Car, CarImage, CarMake, CarModel, FavoriteCar, CarView, CarMakeRequest, CarModelRequest
 from online_car_market.inventory.models import Contact
 from online_car_market.bids.models import Bid
 from django.contrib.auth import get_user_model
@@ -84,6 +84,123 @@ class CarModelSerializer(serializers.ModelSerializer):
                     "Only admins or super admins can create or update models."
                 )
         return data
+
+class CarMakeRequestSerializer(serializers.ModelSerializer):
+    requested_by_email = serializers.EmailField(source="requested_by.email", read_only=True)
+    reviewed_by_email = serializers.EmailField(source="reviewed_by.email", read_only=True)
+
+    class Meta:
+        model = CarMakeRequest
+        fields = [
+            "id",
+            "requested_name",
+            "status",
+            "requested_by_email",
+            "reviewed_by_email",
+            "reviewed_at",
+            "rejection_reason",
+            "created_at",
+        ]
+
+        read_only_fields = (
+            "status",
+            "requested_by_email",
+            "reviewed_by_email",
+            "reviewed_at",
+            "created_at",
+        )
+
+    def validate_requested_name(self, value):
+        value = bleach.clean(value.strip(), tags=[], strip=True)
+
+        if not value:
+            raise serializers.ValidationError(
+                "Make name cannot be empty."
+            )
+
+        if CarMake.objects.filter(name__iexact=value).exists():
+            raise serializers.ValidationError(
+                "This make already exists."
+            )
+
+        if CarMakeRequest.objects.filter(
+            requested_name__iexact=value,
+            status=CarMakeRequest.Status.PENDING,
+        ).exists():
+            raise serializers.ValidationError(
+                "A request for this make already exists."
+            )
+
+        return value
+
+    def create(self, validated_data):
+        return CarMakeRequest.objects.create(
+            requested_by=self.context["request"].user,
+            **validated_data,
+        )
+
+class CarModelRequestSerializer(serializers.ModelSerializer):
+    make_name = serializers.CharField(source="make.name", read_only=True)
+    requested_by_email = serializers.EmailField(source="requested_by.email", read_only=True)
+    reviewed_by_email = serializers.EmailField(source="reviewed_by.email", read_only=True)
+
+    class Meta:
+        model = CarModelRequest
+        fields = [
+            "id",
+            "make",
+            "make_name",
+            "requested_name",
+            "status",
+            "requested_by_email",
+            "reviewed_by_email",
+            "reviewed_at",
+            "rejection_reason",
+            "created_at",
+        ]
+
+        read_only_fields = (
+            "status",
+            "requested_by_email",
+            "reviewed_by_email",
+            "reviewed_at",
+            "created_at",
+        )
+
+    def validate(self, attrs):
+        make = attrs["make"]
+        name = bleach.clean(
+            attrs["requested_name"].strip(),
+            tags=[],
+            strip=True,
+        )
+
+        if CarModel.objects.filter(
+            make=make,
+            name__iexact=name,
+        ).exists():
+            raise serializers.ValidationError(
+                "This model already exists."
+            )
+
+        if CarModelRequest.objects.filter(
+            make=make,
+            requested_name__iexact=name,
+            status=CarModelRequest.Status.PENDING,
+        ).exists():
+            raise serializers.ValidationError(
+                "A request already exists."
+            )
+
+        attrs["requested_name"] = name
+
+        return attrs
+
+    def create(self, validated_data):
+        return CarModelRequest.objects.create(
+            requested_by=self.context["request"].user,
+            **validated_data,
+        )
 
 class CarImageSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField(read_only=True)

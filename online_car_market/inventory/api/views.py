@@ -4,6 +4,7 @@ from django.core.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.cache import cache
 from django.conf import settings
+from django.utils import timezone
 
 from rest_framework import status, mixins, serializers
 from rest_framework.exceptions import NotFound
@@ -19,14 +20,15 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 
 from drf_spectacular.utils import (extend_schema, extend_schema_view, OpenApiParameter,
                                    OpenApiTypes, OpenApiExample, OpenApiResponse, inline_serializer)
-from ..models import Car, CarMake, CarModel, FavoriteCar, CarView, Contact, CarImage
+from ..models import Car, CarMake, CarModel, FavoriteCar, CarView, Contact, CarImage, CarMakeRequest, CarModelRequest
 from .serializers import (
                           VerifyCarSerializer, CarMakeSerializer, ContactSerializer,
                           CarModelSerializer, FavoriteCarSerializer, CarViewSerializer,
                           CarWriteSerializer, CarListSerializer, CarDetailSerializer,
-                          CarVerificationListSerializer, CarVerificationAnalyticsSerializer, CarImageSerializer
+                          CarVerificationListSerializer, CarVerificationAnalyticsSerializer, CarImageSerializer,
+                          CarMakeRequestSerializer, CarModelRequestSerializer
                           )
-from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, IsSuperAdminOrAdminOrBuyer
+from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, is_admin_user, IsSuperAdminOrAdminOrBuyer
 from online_car_market.users.permissions.business_permissions import CanPostCar, CanViewInventory
 from online_car_market.bids.api.serializers import BidSerializer
 
@@ -52,117 +54,112 @@ class PopularCarsPagination(PageNumberPagination):
 @extend_schema_view(
     list=extend_schema(
         tags=["Cars - Makes"],
-        description="List all car makes."
+        summary="List car makes",
+        description="Retrieve all approved car makes.",
     ),
     retrieve=extend_schema(
         tags=["Cars - Makes"],
-        description="Retrieve details of a specific car make."
+        summary="Retrieve car make",
     ),
     create=extend_schema(
         tags=["Cars - Makes"],
-        description="Create a new car make (admin only)."
+        summary="Create car make",
+        description="Create a new car make. Admin only.",
     ),
     update=extend_schema(
         tags=["Cars - Makes"],
-        description="Update an existing car make (admin only)."
+        summary="Update car make",
     ),
     partial_update=extend_schema(
         tags=["Cars - Makes"],
-        description="Partially update a car make (admin only)."
+        summary="Partially update car make",
     ),
     destroy=extend_schema(
         tags=["Cars - Makes"],
-        description="Delete a car make (admin only)."
+        summary="Delete car make",
     ),
 )
 class CarMakeViewSet(ModelViewSet):
-    queryset = CarMake.objects.all()
+    queryset = CarMake.objects.order_by("name")
     serializer_class = CarMakeSerializer
+
     CACHE_KEY = "car_makes_list"
 
     def list(self, request, *args, **kwargs):
-        # Try to get from cache
         cached = cache.get(self.CACHE_KEY)
+
         if cached is not None:
-            logger.debug(f"Serving car makes from cache")
             return Response(cached)
 
-        # Fetch fresh data
-        logger.debug(f"Cache miss for car makes; fetching from DB")
-        resp = super().list(request, *args, **kwargs)
+        response = super().list(request, *args, **kwargs)
 
-        # Cache for configurable duration (default: 1 minute for freshness)
-        timeout = getattr(settings, "CAR_MAKES_CACHE_TIMEOUT", 60)
-        cache.set(self.CACHE_KEY, resp.data, timeout=timeout)
-        logger.debug(f"Cached car makes list for {timeout}s")
+        timeout = getattr(
+            settings,
+            "CAR_MAKES_CACHE_TIMEOUT",
+            60,
+        )
 
-        # Add cache headers to client to prevent browser-level caching
-        resp['Cache-Control'] = 'public, max-age=60'
-        resp['Vary'] = 'Accept'
+        cache.set(
+            self.CACHE_KEY,
+            response.data,
+            timeout,
+        )
 
-        return resp
+        response["Cache-Control"] = f"public, max-age={timeout}"
+        response["Vary"] = "Accept"
+
+        return response
 
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
-            return [AllowAny()]   # No authentication required
-        return [IsSuperAdminOrAdmin()]   # Only admins for create/update/delete
+            return [AllowAny()]
 
-    def create(self, request, *args, **kwargs):
-        """Override create to ensure cache invalidation fires."""
-        response = super().create(request, *args, **kwargs)
-        self._invalidate_makes_cache()
-        return response
+        return [IsSuperAdminOrAdmin()]
 
     def perform_create(self, serializer):
-        instance = serializer.save()
-        self._invalidate_makes_cache()
-        return instance
+        serializer.save()
+        self._invalidate_cache()
 
     def perform_update(self, serializer):
-        instance = serializer.save()
-        self._invalidate_makes_cache()
-        return instance
+        serializer.save()
+        self._invalidate_cache()
 
     def perform_destroy(self, instance):
-        pk = instance.pk
         instance.delete()
-        self._invalidate_makes_cache()
+        self._invalidate_cache()
 
-    def _invalidate_makes_cache(self):
-        """Centralized cache invalidation to ensure it always fires."""
-        try:
-            cache.delete(self.CACHE_KEY)
-            logger.info(f"Invalidated car makes cache")
-        except Exception as e:
-            logger.error(f"Failed to invalidate car makes cache: {e}")
+    def _invalidate_cache(self):
+        cache.delete(self.CACHE_KEY)
 
 @extend_schema_view(
     list=extend_schema(
         tags=["Cars - Models"],
-        description="List all car models."
+        summary="List car models",
     ),
     retrieve=extend_schema(
         tags=["Cars - Models"],
-        description="Retrieve details of a specific car model."
+        summary="Retrieve car model",
     ),
     create=extend_schema(
         tags=["Cars - Models"],
-        description="Create a new car model (admin only)."
+        summary="Create car model",
+        description="Admin only.",
     ),
     update=extend_schema(
         tags=["Cars - Models"],
-        description="Update an existing car model (admin only)."
+        summary="Update car model",
     ),
     partial_update=extend_schema(
         tags=["Cars - Models"],
-        description="Partially update a car model (admin only)."
+        summary="Partially update car model",
     ),
     destroy=extend_schema(
         tags=["Cars - Models"],
-        description="Delete a car model (admin only)."
+        summary="Delete car model",
     ),
 )
 class CarModelViewSet(ModelViewSet):
+
     serializer_class = CarModelSerializer
 
     def get_queryset(self):
@@ -175,7 +172,314 @@ class CarModelViewSet(ModelViewSet):
     def get_permissions(self):
         if self.action in ["list", "retrieve"]:
             return [AllowAny()]
+
         return [IsSuperAdminOrAdmin()]
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Cars - Make Requests"],
+        summary="List make requests",
+        description="Admins see all requests. Sellers/Brokers see only their own.",
+    ),
+    retrieve=extend_schema(
+        tags=["Cars - Make Requests"],
+        summary="Retrieve make request",
+    ),
+    create=extend_schema(
+        tags=["Cars - Make Requests"],
+        summary="Request new make",
+    ),
+)
+class CarMakeRequestViewSet(ModelViewSet):
+
+    serializer_class = CarMakeRequestSerializer
+
+    def get_queryset(self):
+
+        queryset = (
+            CarMakeRequest.objects
+            .select_related(
+                "requested_by",
+                "reviewed_by",
+            )
+            .order_by("-created_at")
+        )
+
+        user = self.request.user
+
+        # Admin and super admin see all requests
+        if is_admin_user(user):
+            return queryset
+
+        # Dealer staff, sellers, brokers see only their requests
+        return queryset.filter(
+            requested_by=user
+        )
+
+
+    def get_permissions(self):
+
+        if self.action in [
+            "approve",
+            "reject",
+        ]:
+            return [
+                IsSuperAdminOrAdmin()
+            ]
+
+        return [
+            IsAuthenticated()
+        ]
+
+
+    @extend_schema(
+        tags=["Cars - Make Requests"],
+        summary="Approve make request",
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+    )
+    def approve(self, request, pk=None):
+
+        req = self.get_object()
+
+        if req.status != CarMakeRequest.Status.PENDING:
+            return Response(
+                {
+                    "detail": "Request already processed."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+        make, created = CarMake.objects.get_or_create(
+            name=req.requested_name.strip()
+        )
+
+
+        req.status = CarMakeRequest.Status.APPROVED
+        req.reviewed_by = request.user
+        req.reviewed_at = timezone.now()
+
+        req.save(
+            update_fields=[
+                "status",
+                "reviewed_by",
+                "reviewed_at",
+            ]
+        )
+
+
+        cache.delete("car_makes_list")
+
+
+        return Response(
+            CarMakeSerializer(make).data
+        )
+
+
+    @extend_schema(
+        tags=["Cars - Make Requests"],
+        summary="Reject make request",
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+    )
+    def reject(self, request, pk=None):
+
+        req = self.get_object()
+
+        if req.status != CarMakeRequest.Status.PENDING:
+            return Response(
+                {
+                    "detail": "Request already processed."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+        req.status = CarMakeRequest.Status.REJECTED
+        req.reviewed_by = request.user
+        req.reviewed_at = timezone.now()
+        req.rejection_reason = request.data.get(
+            "reason",
+            ""
+        )
+
+        req.save(
+            update_fields=[
+                "status",
+                "reviewed_by",
+                "reviewed_at",
+                "rejection_reason",
+            ]
+        )
+
+
+        return Response(
+            {
+                "status": "rejected"
+            }
+        )
+
+@extend_schema_view(
+    list=extend_schema(
+        tags=["Cars - Model Requests"],
+        summary="List model requests",
+        description="Admins see all requests. Sellers/Brokers see only their own.",
+    ),
+    retrieve=extend_schema(
+        tags=["Cars - Model Requests"],
+        summary="Retrieve model request",
+    ),
+    create=extend_schema(
+        tags=["Cars - Model Requests"],
+        summary="Request new model",
+    ),
+)
+class CarModelRequestViewSet(ModelViewSet):
+
+    serializer_class = CarModelRequestSerializer
+
+
+    def get_queryset(self):
+
+        queryset = (
+            CarModelRequest.objects
+            .select_related(
+                "make",
+                "requested_by",
+                "reviewed_by",
+            )
+            .order_by("-created_at")
+        )
+
+
+        user = self.request.user
+
+
+        if is_admin_user(user):
+            return queryset
+
+
+        return queryset.filter(
+            requested_by=user
+        )
+
+
+
+    def get_permissions(self):
+
+        if self.action in [
+            "approve",
+            "reject",
+        ]:
+            return [
+                IsSuperAdminOrAdmin()
+            ]
+
+        return [
+            IsAuthenticated()
+        ]
+
+
+
+    @extend_schema(
+        tags=["Cars - Model Requests"],
+        summary="Approve model request",
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+    )
+    def approve(self, request, pk=None):
+
+        req = self.get_object()
+
+
+        if req.status != CarModelRequest.Status.PENDING:
+            return Response(
+                {
+                    "detail": "Request already processed."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+        model, created = CarModel.objects.get_or_create(
+            make=req.make,
+            name=req.requested_name.strip(),
+        )
+
+
+        req.status = CarModelRequest.Status.APPROVED
+        req.reviewed_by = request.user
+        req.reviewed_at = timezone.now()
+
+
+        req.save(
+            update_fields=[
+                "status",
+                "reviewed_by",
+                "reviewed_at",
+            ]
+        )
+
+
+        return Response(
+            CarModelSerializer(model).data
+        )
+
+
+
+    @extend_schema(
+        tags=["Cars - Model Requests"],
+        summary="Reject model request",
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+    )
+    def reject(self, request, pk=None):
+
+        req = self.get_object()
+
+
+        if req.status != CarModelRequest.Status.PENDING:
+            return Response(
+                {
+                    "detail": "Request already processed."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
+        req.status = CarModelRequest.Status.REJECTED
+        req.reviewed_by = request.user
+        req.reviewed_at = timezone.now()
+        req.rejection_reason = request.data.get(
+            "reason",
+            ""
+        )
+
+
+        req.save(
+            update_fields=[
+                "status",
+                "reviewed_by",
+                "reviewed_at",
+                "rejection_reason",
+            ]
+        )
+
+
+        return Response(
+            {
+                "status": "rejected"
+            }
+        )
 
 @extend_schema_view(
     list=extend_schema(

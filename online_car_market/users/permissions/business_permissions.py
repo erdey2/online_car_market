@@ -259,7 +259,6 @@ class CanViewInventory(BasePermission):
             is_staff(user, ["seller"])
         )
 
-
 class CanAccessAdminPortal(BasePermission):
 
     def has_permission(self, request, view):

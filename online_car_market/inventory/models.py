@@ -1,5 +1,6 @@
 from django.db import models
 from django.db.models import Q
+from django.db.models.functions import Lower
 from django.utils import timezone
 from cloudinary.models import CloudinaryField
 from django.contrib.auth import get_user_model
@@ -33,6 +34,63 @@ class CarModel(models.Model):
 
     def __str__(self):
         return f"{self.name}"
+
+
+class CarMakeRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    requested_name = models.CharField(max_length=100, db_index=True)
+    requested_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="car_make_requests")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+
+    reviewed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="reviewed_make_requests")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                Lower("requested_name"),
+                "status",
+                condition=models.Q(status="pending"),
+                name="unique_pending_make_request",
+            )
+        ]
+
+
+class CarModelRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    make = models.ForeignKey(CarMake, on_delete=models.CASCADE)
+    requested_name = models.CharField(max_length=100)
+    requested_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+
+    reviewed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="reviewed_model_requests")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+        constraints = [
+            models.UniqueConstraint(
+                Lower("requested_name"),
+                "make",
+                "status",
+                condition=models.Q(status="pending"),
+                name="unique_pending_model_request",
+            )
+        ]
 
 class Car(models.Model):
     VERIFICATION_STATUSES = [
