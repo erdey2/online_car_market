@@ -112,6 +112,7 @@ class CarMakeRequestSerializer(serializers.ModelSerializer):
             "reviewed_by",
             "reviewed_by_email",
             "reviewed_at",
+            "rejection_reason",
             "created_at",
         )
 
@@ -171,6 +172,7 @@ class CarModelRequestSerializer(serializers.ModelSerializer):
             "requested_by_email",
             "reviewed_by_email",
             "reviewed_at",
+            "rejection_reason",
             "created_at",
         )
 
@@ -212,6 +214,13 @@ class CarModelRequestSerializer(serializers.ModelSerializer):
         CarRequestNotificationService.notify_admins_new_model_request(instance)
 
         return instance
+
+class RejectRequestSerializer(serializers.Serializer):
+    reason = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=500,
+    )
 
 class CarImageSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField(read_only=True)

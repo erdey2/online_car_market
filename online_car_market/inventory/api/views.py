@@ -26,7 +26,7 @@ from .serializers import (
                           CarModelSerializer, FavoriteCarSerializer, CarViewSerializer,
                           CarWriteSerializer, CarListSerializer, CarDetailSerializer,
                           CarVerificationListSerializer, CarVerificationAnalyticsSerializer, CarImageSerializer,
-                          CarMakeRequestSerializer, CarModelRequestSerializer
+                          CarMakeRequestSerializer, CarModelRequestSerializer, RejectRequestSerializer
                           )
 from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, is_admin_user, IsSuperAdminOrAdminOrBuyer, IsDealerBrokerOrSeller
 from online_car_market.users.permissions.business_permissions import CanPostCar, CanViewInventory
@@ -231,11 +231,13 @@ class CarMakeRequestViewSet(ModelViewSet):
     @extend_schema(
         tags=["Cars - Make Requests"],
         summary="Approve make request",
+        request=None,
+        responses={
+            200: CarMakeSerializer,
+            400: OpenApiResponse(description="Request already processed."),
+        },
     )
-    @action(
-        detail=True,
-        methods=["post"],
-    )
+    @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
 
         req = self.get_object()
@@ -277,12 +279,12 @@ class CarMakeRequestViewSet(ModelViewSet):
     @extend_schema(
         tags=["Cars - Make Requests"],
         summary="Reject make request",
+        request=RejectRequestSerializer,
     )
-    @action(
-        detail=True,
-        methods=["post"],
-    )
+    @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
+        serializer = RejectRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
         req = self.get_object()
 
@@ -349,13 +351,10 @@ class CarModelRequestViewSet(ModelViewSet):
             .order_by("-created_at")
         )
 
-
         user = self.request.user
-
 
         if is_admin_user(user):
             return queryset
-
 
         return queryset.filter(
             requested_by=user
@@ -378,15 +377,16 @@ class CarModelRequestViewSet(ModelViewSet):
     @extend_schema(
         tags=["Cars - Model Requests"],
         summary="Approve model request",
+        request=None,
+        responses={
+            200: CarModelSerializer,
+            400: OpenApiResponse(description="Request already processed."),
+        },
     )
-    @action(
-        detail=True,
-        methods=["post"],
-    )
+    @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
 
         req = self.get_object()
-
 
         if req.status != CarModelRequest.Status.PENDING:
             return Response(
@@ -396,17 +396,14 @@ class CarModelRequestViewSet(ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-
         model, created = CarModel.objects.get_or_create(
             make=req.make,
             name=req.requested_name.strip(),
         )
 
-
         req.status = CarModelRequest.Status.APPROVED
         req.reviewed_by = request.user
         req.reviewed_at = timezone.now()
-
 
         req.save(
             update_fields=[
@@ -415,23 +412,20 @@ class CarModelRequestViewSet(ModelViewSet):
                 "reviewed_at",
             ]
         )
-
-
         return Response(
             CarModelSerializer(model).data
         )
 
-
-
     @extend_schema(
         tags=["Cars - Model Requests"],
         summary="Reject model request",
+        request=RejectRequestSerializer,
     )
-    @action(
-        detail=True,
-        methods=["post"],
-    )
+    @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
+
+        serializer = RejectRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
         req = self.get_object()
 
@@ -443,7 +437,6 @@ class CarModelRequestViewSet(ModelViewSet):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
 
         req.status = CarModelRequest.Status.REJECTED
         req.reviewed_by = request.user
@@ -452,8 +445,6 @@ class CarModelRequestViewSet(ModelViewSet):
             "reason",
             ""
         )
-
-
         req.save(
             update_fields=[
                 "status",
@@ -462,8 +453,6 @@ class CarModelRequestViewSet(ModelViewSet):
                 "rejection_reason",
             ]
         )
-
-
         return Response(
             {
                 "status": "rejected"
