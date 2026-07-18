@@ -28,10 +28,10 @@ from .serializers import (
                           CarVerificationListSerializer, CarVerificationAnalyticsSerializer, CarImageSerializer,
                           CarMakeRequestSerializer, CarModelRequestSerializer
                           )
-from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, is_admin_user, IsSuperAdminOrAdminOrBuyer
+from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, is_admin_user, IsSuperAdminOrAdminOrBuyer, IsDealerBrokerOrSeller
 from online_car_market.users.permissions.business_permissions import CanPostCar, CanViewInventory
 from online_car_market.bids.api.serializers import BidSerializer
-
+from ..services.car_request_notification_service import CarRequestNotificationService
 from ..services.car_service import CarService
 from ..services.car_filter_service import CarFilterService
 from ..services.car_query_service import CarQueryService
@@ -191,7 +191,6 @@ class CarModelViewSet(ModelViewSet):
     ),
 )
 class CarMakeRequestViewSet(ModelViewSet):
-
     serializer_class = CarMakeRequestSerializer
 
     def get_queryset(self):
@@ -215,8 +214,6 @@ class CarMakeRequestViewSet(ModelViewSet):
         return queryset.filter(
             requested_by=user
         )
-
-
     def get_permissions(self):
 
         if self.action in [
@@ -228,9 +225,8 @@ class CarMakeRequestViewSet(ModelViewSet):
             ]
 
         return [
-            IsAuthenticated()
+            IsDealerBrokerOrSeller()
         ]
-
 
     @extend_schema(
         tags=["Cars - Make Requests"],
@@ -257,7 +253,6 @@ class CarMakeRequestViewSet(ModelViewSet):
             name=req.requested_name.strip()
         )
 
-
         req.status = CarMakeRequest.Status.APPROVED
         req.reviewed_by = request.user
         req.reviewed_at = timezone.now()
@@ -269,15 +264,15 @@ class CarMakeRequestViewSet(ModelViewSet):
                 "reviewed_at",
             ]
         )
-
-
+        CarRequestNotificationService.notify_request_approved(
+            req,
+            "make"
+        )
         cache.delete("car_makes_list")
-
 
         return Response(
             CarMakeSerializer(make).data
         )
-
 
     @extend_schema(
         tags=["Cars - Make Requests"],
@@ -298,8 +293,6 @@ class CarMakeRequestViewSet(ModelViewSet):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-
         req.status = CarMakeRequest.Status.REJECTED
         req.reviewed_by = request.user
         req.reviewed_at = timezone.now()
@@ -316,8 +309,10 @@ class CarMakeRequestViewSet(ModelViewSet):
                 "rejection_reason",
             ]
         )
-
-
+        CarRequestNotificationService.notify_request_rejected(
+            req,
+            "make"
+        )
         return Response(
             {
                 "status": "rejected"
@@ -340,9 +335,7 @@ class CarMakeRequestViewSet(ModelViewSet):
     ),
 )
 class CarModelRequestViewSet(ModelViewSet):
-
     serializer_class = CarModelRequestSerializer
-
 
     def get_queryset(self):
 
@@ -368,8 +361,6 @@ class CarModelRequestViewSet(ModelViewSet):
             requested_by=user
         )
 
-
-
     def get_permissions(self):
 
         if self.action in [
@@ -381,10 +372,8 @@ class CarModelRequestViewSet(ModelViewSet):
             ]
 
         return [
-            IsAuthenticated()
+            IsDealerBrokerOrSeller()
         ]
-
-
 
     @extend_schema(
         tags=["Cars - Model Requests"],

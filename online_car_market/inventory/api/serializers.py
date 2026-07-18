@@ -8,6 +8,7 @@ from django.contrib.auth import get_user_model
 import re, bleach, logging
 from datetime import datetime
 from decimal import Decimal
+from online_car_market.inventory.services.car_request_notification_service import CarRequestNotificationService
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -95,7 +96,9 @@ class CarMakeRequestSerializer(serializers.ModelSerializer):
             "id",
             "requested_name",
             "status",
+            "requested_by",
             "requested_by_email",
+            "reviewed_by",
             "reviewed_by_email",
             "reviewed_at",
             "rejection_reason",
@@ -104,7 +107,9 @@ class CarMakeRequestSerializer(serializers.ModelSerializer):
 
         read_only_fields = (
             "status",
+            "requested_by",
             "requested_by_email",
+            "reviewed_by",
             "reviewed_by_email",
             "reviewed_at",
             "created_at",
@@ -134,10 +139,12 @@ class CarMakeRequestSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        return CarMakeRequest.objects.create(
+        instance = CarMakeRequest.objects.create(
             requested_by=self.context["request"].user,
             **validated_data,
         )
+        CarRequestNotificationService.notify_admins_new_make_request(instance)
+        return instance
 
 class CarModelRequestSerializer(serializers.ModelSerializer):
     make_name = serializers.CharField(source="make.name", read_only=True)
@@ -197,10 +204,14 @@ class CarModelRequestSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        return CarModelRequest.objects.create(
+
+        instance = CarModelRequest.objects.create(
             requested_by=self.context["request"].user,
             **validated_data,
         )
+        CarRequestNotificationService.notify_admins_new_model_request(instance)
+
+        return instance
 
 class CarImageSerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField(read_only=True)

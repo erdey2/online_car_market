@@ -206,11 +206,6 @@ class CarService:
                 image_id
             )
 
-            # delete physical file
-            ''' if image.image:
-                image.image.delete(save=False)
-            image.delete() '''
-
             # delete from Cloudinary
             if image.image:
                 try:
