@@ -505,17 +505,19 @@ class CarWriteSerializer(serializers.ModelSerializer):
 
     make_ref = serializers.PrimaryKeyRelatedField(
         queryset=CarMake.objects.all(),
-        required=True,
+        required=False,
     )
 
     model_ref = serializers.PrimaryKeyRelatedField(
         queryset=CarModel.objects.all(),
-        required=True,
+        required=False,
+        allow_null=True,
     )
 
     images = CarImageSerializer(
         many=True,
         read_only=True,
+        allow_null=True
     )
 
     class Meta:
