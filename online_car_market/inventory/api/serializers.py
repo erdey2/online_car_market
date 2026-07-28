@@ -525,8 +525,6 @@ class CarWriteSerializer(serializers.ModelSerializer):
         model = Car
         exclude = [
             "id",
-            "make",
-            "model",
             "created_at",
             "updated_at",
             "sold_at",
