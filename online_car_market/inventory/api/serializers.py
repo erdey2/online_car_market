@@ -506,6 +506,7 @@ class CarWriteSerializer(serializers.ModelSerializer):
     make_ref = serializers.PrimaryKeyRelatedField(
         queryset=CarMake.objects.all(),
         required=False,
+        allow_null=True,
     )
 
     model_ref = serializers.PrimaryKeyRelatedField(
@@ -781,29 +782,48 @@ class CarWriteSerializer(serializers.ModelSerializer):
             instance.model_ref if instance else None,
         )
 
-        if not make_ref:
-            raise serializers.ValidationError(
-                {"make_ref": "Car make is required."}
-            )
+        make = data.get("make")
+        model = data.get("model")
 
-        if not model_ref:
-            raise serializers.ValidationError(
-                {"model_ref": "Car model is required."}
-            )
+        # MAKE / MODEL VALIDATION
 
-        if model_ref.make_id != make_ref.id:
+        # Existing make/model selected
+        if make_ref and model_ref:
+
+            if model_ref.make_id != make_ref.id:
+                raise serializers.ValidationError(
+                    {
+                        "model_ref": (
+                            "Selected model does not belong "
+                            "to the selected make."
+                        )
+                    }
+                )
+
+            data["make"] = make_ref.name
+            data["model"] = model_ref.name
+
+        # New make/model entered manually
+        elif make and model:
+
+            data["make"] = bleach.clean(make.strip(), tags=[], strip=True)
+
+            data["model"] = bleach.clean(model.strip(), tags=[], strip=True)
+
+            # keep references empty until admin approval
+            data["make_ref"] = None
+            data["model_ref"] = None
+
+        # Nothing provided
+        else:
             raise serializers.ValidationError(
                 {
-                    "model_ref": (
-                        "Selected model does not belong to "
-                        "the selected make."
+                    "make": (
+                        "Provide either existing make/model "
+                        "references or new make and model names."
                     )
                 }
             )
-
-        # Keep legacy text fields synchronized
-        data["make"] = make_ref.name
-        data["model"] = model_ref.name
 
         sale_type = data.get(
             "sale_type",
