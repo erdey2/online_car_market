@@ -4,7 +4,6 @@ from django.core.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.cache import cache
 from django.conf import settings
-from django.utils import timezone
 
 from rest_framework import status, mixins, serializers
 from rest_framework.exceptions import NotFound
@@ -31,7 +30,6 @@ from .serializers import (
 from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, is_admin_user, IsSuperAdminOrAdminOrBuyer, IsDealerBrokerOrSeller
 from online_car_market.users.permissions.business_permissions import CanPostCar, CanViewInventory
 from online_car_market.bids.api.serializers import BidSerializer
-from ..services.car_request_notification_service import CarRequestNotificationService
 from ..services.car_service import CarService
 from ..services.car_filter_service import CarFilterService
 from ..services.car_query_service import CarQueryService
@@ -41,6 +39,7 @@ from ..services.popular_car_service import PopularCarService
 from ..services.user_car_service import UserCarService
 from ..services.favorite_car_service import FavoriteCarService
 from ..services.contact_service import ContactService
+from ..services.car_taxonomy_service import CarTaxonomyService
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +178,10 @@ class CarModelViewSet(ModelViewSet):
     list=extend_schema(
         tags=["Cars - Make Requests"],
         summary="List make requests",
-        description="Admins see all requests. Sellers/Brokers see only their own.",
+        description=(
+            "Admins see all requests. "
+            "Dealers, brokers and sellers see only their own requests."
+        ),
     ),
     retrieve=extend_schema(
         tags=["Cars - Make Requests"],
@@ -191,6 +193,7 @@ class CarModelViewSet(ModelViewSet):
     ),
 )
 class CarMakeRequestViewSet(ModelViewSet):
+
     serializer_class = CarMakeRequestSerializer
 
     def get_queryset(self):
@@ -204,16 +207,13 @@ class CarMakeRequestViewSet(ModelViewSet):
             .order_by("-created_at")
         )
 
-        user = self.request.user
-
-        # Admin and super admin see all requests
-        if is_admin_user(user):
+        if is_admin_user(self.request.user):
             return queryset
 
-        # Dealer staff, sellers, brokers see only their requests
         return queryset.filter(
-            requested_by=user
+            requested_by=self.request.user
         )
+
     def get_permissions(self):
 
         if self.action in [
@@ -234,43 +234,18 @@ class CarMakeRequestViewSet(ModelViewSet):
         request=None,
         responses={
             200: CarMakeSerializer,
-            400: OpenApiResponse(description="Request already processed."),
+            400: OpenApiResponse(
+                description="Request already processed."
+            ),
         },
     )
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
 
-        req = self.get_object()
-
-        if req.status != CarMakeRequest.Status.PENDING:
-            return Response(
-                {
-                    "detail": "Request already processed."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-
-        make, created = CarMake.objects.get_or_create(
-            name=req.requested_name.strip()
+        make = CarTaxonomyService.approve_make_request(
+            request_obj=self.get_object(),
+            reviewer=request.user,
         )
-
-        req.status = CarMakeRequest.Status.APPROVED
-        req.reviewed_by = request.user
-        req.reviewed_at = timezone.now()
-
-        req.save(
-            update_fields=[
-                "status",
-                "reviewed_by",
-                "reviewed_at",
-            ]
-        )
-        CarRequestNotificationService.notify_request_approved(
-            req,
-            "make"
-        )
-        cache.delete("car_makes_list")
 
         return Response(
             CarMakeSerializer(make).data
@@ -283,49 +258,39 @@ class CarMakeRequestViewSet(ModelViewSet):
     )
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
-        serializer = RejectRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
 
-        req = self.get_object()
-
-        if req.status != CarMakeRequest.Status.PENDING:
-            return Response(
-                {
-                    "detail": "Request already processed."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        req.status = CarMakeRequest.Status.REJECTED
-        req.reviewed_by = request.user
-        req.reviewed_at = timezone.now()
-        req.rejection_reason = request.data.get(
-            "reason",
-            ""
+        serializer = RejectRequestSerializer(
+            data=request.data
         )
 
-        req.save(
-            update_fields=[
-                "status",
-                "reviewed_by",
-                "reviewed_at",
-                "rejection_reason",
-            ]
+        serializer.is_valid(
+            raise_exception=True
         )
-        CarRequestNotificationService.notify_request_rejected(
-            req,
-            "make"
+
+        CarTaxonomyService.reject_make_request(
+            request_obj=self.get_object(),
+            reviewer=request.user,
+            reason=serializer.validated_data.get(
+                "reason",
+                "",
+            ),
         )
+
         return Response(
             {
                 "status": "rejected"
             }
         )
 
+
 @extend_schema_view(
     list=extend_schema(
         tags=["Cars - Model Requests"],
         summary="List model requests",
-        description="Admins see all requests. Sellers/Brokers see only their own.",
+        description=(
+            "Admins see all requests. "
+            "Dealers, brokers and sellers see only their own requests."
+        ),
     ),
     retrieve=extend_schema(
         tags=["Cars - Model Requests"],
@@ -337,6 +302,7 @@ class CarMakeRequestViewSet(ModelViewSet):
     ),
 )
 class CarModelRequestViewSet(ModelViewSet):
+
     serializer_class = CarModelRequestSerializer
 
     def get_queryset(self):
@@ -351,13 +317,11 @@ class CarModelRequestViewSet(ModelViewSet):
             .order_by("-created_at")
         )
 
-        user = self.request.user
-
-        if is_admin_user(user):
+        if is_admin_user(self.request.user):
             return queryset
 
         return queryset.filter(
-            requested_by=user
+            requested_by=self.request.user
         )
 
     def get_permissions(self):
@@ -380,38 +344,19 @@ class CarModelRequestViewSet(ModelViewSet):
         request=None,
         responses={
             200: CarModelSerializer,
-            400: OpenApiResponse(description="Request already processed."),
+            400: OpenApiResponse(
+                description="Request already processed."
+            ),
         },
     )
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
 
-        req = self.get_object()
-
-        if req.status != CarModelRequest.Status.PENDING:
-            return Response(
-                {
-                    "detail": "Request already processed."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        model, created = CarModel.objects.get_or_create(
-            make=req.make,
-            name=req.requested_name.strip(),
+        model = CarTaxonomyService.approve_model_request(
+            request_obj=self.get_object(),
+            reviewer=request.user,
         )
 
-        req.status = CarModelRequest.Status.APPROVED
-        req.reviewed_by = request.user
-        req.reviewed_at = timezone.now()
-
-        req.save(
-            update_fields=[
-                "status",
-                "reviewed_by",
-                "reviewed_at",
-            ]
-        )
         return Response(
             CarModelSerializer(model).data
         )
@@ -424,35 +369,23 @@ class CarModelRequestViewSet(ModelViewSet):
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
 
-        serializer = RejectRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        req = self.get_object()
-
-
-        if req.status != CarModelRequest.Status.PENDING:
-            return Response(
-                {
-                    "detail": "Request already processed."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        req.status = CarModelRequest.Status.REJECTED
-        req.reviewed_by = request.user
-        req.reviewed_at = timezone.now()
-        req.rejection_reason = request.data.get(
-            "reason",
-            ""
+        serializer = RejectRequestSerializer(
+            data=request.data
         )
-        req.save(
-            update_fields=[
-                "status",
-                "reviewed_by",
-                "reviewed_at",
-                "rejection_reason",
-            ]
+
+        serializer.is_valid(
+            raise_exception=True
         )
+
+        CarTaxonomyService.reject_model_request(
+            request_obj=self.get_object(),
+            reviewer=request.user,
+            reason=serializer.validated_data.get(
+                "reason",
+                "",
+            ),
+        )
+
         return Response(
             {
                 "status": "rejected"

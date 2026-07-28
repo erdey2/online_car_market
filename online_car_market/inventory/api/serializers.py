@@ -17,74 +17,67 @@ def has_any_role(user, roles):
     return user.is_authenticated and user.role in roles
 
 class CarMakeSerializer(serializers.ModelSerializer):
-    """
-    Serializer for CarMake model.
-    Provides read-only access to id, name, and slug.
-    Validates unique make names and sanitizes input for create/update.
-    """
     class Meta:
         model = CarMake
-        fields = ['id', 'name']
-        read_only_fields = ['id']
+        fields = [
+            "id",
+            "name",
+        ]
+        read_only_fields = [
+            "id",
+        ]
 
     def validate_name(self, value):
-        """
-        Validate make name: non-empty, max 100 chars, unique, sanitized.
-        """
-        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-        if not cleaned:
-            raise serializers.ValidationError("Make name cannot be empty.")
-        if len(cleaned) > 100:
-            raise serializers.ValidationError("Make name cannot exceed 100 characters.")
-        if CarMake.objects.filter(name=cleaned).exclude(id=self.instance.id if self.instance else None).exists():
-            raise serializers.ValidationError("This make name already exists.")
-        return cleaned
+        value = bleach.clean(value.strip(), tags=[], strip=True)
 
-    def validate(self, data):
-        if self.context['request'].method in ['POST', 'PUT', 'PATCH']:
-            user = self.context['request'].user
-            if user.role not in ['admin', 'super_admin'] and not user.is_superuser:
-                raise serializers.ValidationError(
-                    "Only admins or super admins can create or update makes."
-                )
-        return data
+        if not value:
+            raise serializers.ValidationError("Make name cannot be empty.")
+
+        queryset = CarMake.objects.filter(name__iexact=value)
+
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+
+        if queryset.exists():
+            raise serializers.ValidationError("This make already exists.")
+        return value
 
 class CarModelSerializer(serializers.ModelSerializer):
-    make_id = serializers.IntegerField(source='make.id', read_only=True)
-    make_name = serializers.CharField(source='make.name', read_only=True)
+    make_name = serializers.CharField(source="make.name", read_only=True)
 
     class Meta:
         model = CarModel
-        fields = ['id', 'name', 'make_id', 'make_name', 'make']
-        extra_kwargs = {
-            'make': {'write_only': True, 'required': True}
-        }
+        fields = [
+            "id",
+            "name",
+            "make",
+            "make_name",
+        ]
 
-    def get_make_name(self, obj):
-        return obj.make.name if obj.make else None
+    def validate(self, attrs):
+        name = bleach.clean(
+            attrs["name"].strip(),
+            tags=[],
+            strip=True,
+        )
 
-    def validate_name(self, value):
-        """
-        Validate model name: non-empty, max 100 chars, unique per make, sanitized.
-        """
-        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-        if not cleaned:
-            raise serializers.ValidationError("Model name cannot be empty.")
-        if len(cleaned) > 100:
-            raise serializers.ValidationError("Model name cannot exceed 100 characters.")
-        make = self.initial_data.get('make_id') or (self.instance.make.id if self.instance else None)
-        if make and CarModel.objects.filter(make_id=make, name=cleaned).exclude(id=self.instance.id if self.instance else None).exists():
-            raise serializers.ValidationError("This model name already exists for the selected make.")
-        return cleaned
+        make = attrs["make"]
+        queryset = CarModel.objects.filter(make=make, name__iexact=name)
 
-    def validate(self, data):
-        if self.context['request'].method in ['POST', 'PUT', 'PATCH']:
-            user = self.context['request'].user
-            if user.role not in ['admin', 'super_admin'] and not user.is_superuser:
-                raise serializers.ValidationError(
-                    "Only admins or super admins can create or update models."
-                )
-        return data
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+
+        if queryset.exists():
+            raise serializers.ValidationError(
+                {
+                    "name":
+                        "This model already exists for this make."
+                }
+            )
+
+        attrs["name"] = name
+
+        return attrs
 
 class CarMakeRequestSerializer(serializers.ModelSerializer):
     requested_by_email = serializers.EmailField(source="requested_by.email", read_only=True)
@@ -159,6 +152,7 @@ class CarModelRequestSerializer(serializers.ModelSerializer):
             "make",
             "make_name",
             "requested_name",
+            "requested_by",
             "status",
             "requested_by_email",
             "reviewed_by_email",
@@ -169,6 +163,7 @@ class CarModelRequestSerializer(serializers.ModelSerializer):
 
         read_only_fields = (
             "status",
+            "requested_by",
             "requested_by_email",
             "reviewed_by_email",
             "reviewed_at",
