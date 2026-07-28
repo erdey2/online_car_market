@@ -216,13 +216,10 @@ class CarMakeRequestViewSet(ModelViewSet):
 
     def get_permissions(self):
 
-        if self.action in [
-            "approve",
-            "reject",
-        ]:
-            return [
-                IsSuperAdminOrAdmin()
-            ]
+        if self.action in ["approve", "reject"]:
+            return [IsSuperAdminOrAdmin()]
+        if self.action in ["list", "retrieve"]:
+            return [IsAuthenticated()]
 
         return [
             IsDealerBrokerOrSeller()

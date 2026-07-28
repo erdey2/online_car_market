@@ -784,7 +784,6 @@ class CarWriteSerializer(serializers.ModelSerializer):
         model = data.get("model")
 
         # MAKE / MODEL VALIDATION
-
         # Existing make/model selected
         if make_ref and model_ref:
 
