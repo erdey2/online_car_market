@@ -502,17 +502,21 @@ class CarWriteSerializer(serializers.ModelSerializer):
     dealer = serializers.PrimaryKeyRelatedField(read_only=True)
     broker = serializers.PrimaryKeyRelatedField(read_only=True)
     posted_by = serializers.PrimaryKeyRelatedField(read_only=True)
+
     make_ref = serializers.PrimaryKeyRelatedField(
         queryset=CarMake.objects.all(),
-        required=False,
-        allow_null=True
+        required=True,
     )
+
     model_ref = serializers.PrimaryKeyRelatedField(
         queryset=CarModel.objects.all(),
-        required=False,
-        allow_null=True
+        required=True,
     )
-    images = CarImageSerializer(many=True, read_only=True)
+
+    images = CarImageSerializer(
+        many=True,
+        read_only=True,
+    )
 
     class Meta:
         model = Car
@@ -527,142 +531,230 @@ class CarWriteSerializer(serializers.ModelSerializer):
             "priority",
         ]
 
-    def validate_make(self, value):
-        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-        if len(cleaned) > 100:
-            raise serializers.ValidationError("Make cannot exceed 100 characters.")
-        if not re.match(r"^[a-zA-Z0-9\s-]+$", cleaned):
-            raise serializers.ValidationError("Invalid characters.")
-        return cleaned
-
-    def validate_model(self, value):
-        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-        if len(cleaned) > 100:
-            raise serializers.ValidationError("Model cannot exceed 100 characters.")
-        if not re.match(r"^[a-zA-Z0-9\s-]+$", cleaned):
-            raise serializers.ValidationError("Invalid characters.")
-        return cleaned
-
     def validate_year(self, value):
         current_year = datetime.now().year
+
         if not 1900 <= value <= current_year + 1:
-            raise serializers.ValidationError(f"Year must be 1900-{current_year + 1}.")
+            raise serializers.ValidationError(
+                f"Year must be between 1900 and {current_year + 1}."
+            )
+
         return value
 
     def validate_price(self, value):
         if value < 0:
-            raise serializers.ValidationError("Price cannot be negative.")
+            raise serializers.ValidationError(
+                "Price cannot be negative."
+            )
+
         if value > 100000000:
-            raise serializers.ValidationError("Price cannot exceed 100,000,000.")
+            raise serializers.ValidationError(
+                "Price cannot exceed 100,000,000."
+            )
+
         return value
 
     def validate_mileage(self, value):
         if value < 0:
-            raise serializers.ValidationError("Mileage cannot be negative.")
+            raise serializers.ValidationError(
+                "Mileage cannot be negative."
+            )
+
         if value > 1000000:
-            raise serializers.ValidationError("Mileage cannot exceed 1,000,000 km.")
+            raise serializers.ValidationError(
+                "Mileage cannot exceed 1,000,000 km."
+            )
+
         return value
 
     def validate_body_type(self, value):
-        if value:
-            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-            valid_types = [choice[0] for choice in Car.BODY_TYPES]
-            if cleaned not in valid_types:
-                raise serializers.ValidationError(
-                    f"Body type must be one of: {', '.join(valid_types)}."
-                )
-            return cleaned
-        return value
+        if not value:
+            return value
+
+        cleaned = bleach.clean(
+            value.strip(),
+            tags=[],
+            strip=True,
+        )
+
+        valid_types = [choice[0] for choice in Car.BODY_TYPES]
+
+        if cleaned not in valid_types:
+            raise serializers.ValidationError(
+                f"Body type must be one of: {', '.join(valid_types)}."
+            )
+
+        return cleaned
 
     def validate_fuel_type(self, value):
-        valid_types = ["electric", "hybrid", "petrol", "diesel"]
-        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+        cleaned = bleach.clean(
+            value.strip(),
+            tags=[],
+            strip=True,
+        )
+
+        valid_types = [
+            "electric",
+            "hybrid",
+            "petrol",
+            "diesel",
+        ]
+
         if cleaned not in valid_types:
             raise serializers.ValidationError(
                 f"Fuel type must be one of: {', '.join(valid_types)}."
             )
+
         return cleaned
 
     def validate_exterior_color(self, value):
         if value:
-            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-            return cleaned
+            value = bleach.clean(
+                value.strip(),
+                tags=[],
+                strip=True,
+            )
+
         return value
 
     def validate_interior_color(self, value):
         if value:
-            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-            return cleaned
+            value = bleach.clean(
+                value.strip(),
+                tags=[],
+                strip=True,
+            )
+
         return value
 
     def validate_engine(self, value):
         if value:
-            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-            return cleaned
+            value = bleach.clean(
+                value.strip(),
+                tags=[],
+                strip=True,
+            )
+
         return value
 
     def validate_drivetrain(self, value):
-        if value:
-            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-            valid_types = [choice[0] for choice in Car.DRIVETRAIN_TYPES]
-            if cleaned not in valid_types:
-                raise serializers.ValidationError(
-                    f"Drivetrain type must be one of: {', '.join(valid_types)}."
-                )
-            return cleaned
-        return value
+        if not value:
+            return value
+
+        cleaned = bleach.clean(
+            value.strip(),
+            tags=[],
+            strip=True,
+        )
+
+        valid_types = [
+            choice[0]
+            for choice in Car.DRIVETRAIN_TYPES
+        ]
+
+        if cleaned not in valid_types:
+            raise serializers.ValidationError(
+                f"Drivetrain must be one of: {', '.join(valid_types)}."
+            )
+
+        return cleaned
 
     def validate_condition(self, value):
-        if value:
-            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-            valid_types = [choice[0] for choice in Car.CONDITIONS]
-            if cleaned not in valid_types:
-                raise serializers.ValidationError(
-                    f"Condition must be one of: {', '.join(valid_types)}."
-                )
-            return cleaned
-        return value
+        if not value:
+            return value
+
+        cleaned = bleach.clean(
+            value.strip(),
+            tags=[],
+            strip=True,
+        )
+
+        valid_types = [
+            choice[0]
+            for choice in Car.CONDITIONS
+        ]
+
+        if cleaned not in valid_types:
+            raise serializers.ValidationError(
+                f"Condition must be one of: {', '.join(valid_types)}."
+            )
+
+        return cleaned
 
     def validate_trim(self, value):
         if value:
-            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-            return cleaned
+            value = bleach.clean(
+                value.strip(),
+                tags=[],
+                strip=True,
+            )
+
         return value
 
     def validate_description(self, value):
         if value:
-            return bleach.clean(value.strip(), tags=[], strip=True)
+            value = bleach.clean(
+                value.strip(),
+                tags=[],
+                strip=True,
+            )
+
         return value
 
     def validate_status(self, value):
-        valid_statuses = [c[0] for c in Car.STATUS_CHOICES]
-        cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+        cleaned = bleach.clean(
+            value.strip(),
+            tags=[],
+            strip=True,
+        )
+
+        valid_statuses = [
+            choice[0]
+            for choice in Car.STATUS_CHOICES
+        ]
+
         if cleaned not in valid_statuses:
             raise serializers.ValidationError(
                 f"Status must be one of: {', '.join(valid_statuses)}."
             )
+
         return cleaned
 
     def validate_sale_type(self, value):
-        cleaned_value = bleach.clean(value.strip(), tags=[], strip=True)
-        valid_types = [choice[0] for choice in Car.SALE_TYPES]
-        if cleaned_value not in valid_types:
+        cleaned = bleach.clean(
+            value.strip(),
+            tags=[],
+            strip=True,
+        )
+
+        valid_types = [
+            choice[0]
+            for choice in Car.SALE_TYPES
+        ]
+
+        if cleaned not in valid_types:
             raise serializers.ValidationError(
                 f"Sale type must be one of: {', '.join(valid_types)}."
             )
-        return cleaned_value
+
+        return cleaned
 
     def validate_auction_end(self, value):
         if value and value < timezone.now():
-            raise serializers.ValidationError("Auction end time must be in the future.")
+            raise serializers.ValidationError(
+                "Auction end time must be in the future."
+            )
+
         return value
 
     def validate_model_ref(self, value):
-        make_ref_id = self.initial_data.get("make_ref")
-        if value and make_ref_id and value.make.id != int(make_ref_id):
+        make_ref = self.initial_data.get("make_ref")
+
+        if make_ref and value.make_id != int(make_ref):
             raise serializers.ValidationError(
-                "Selected model must belong to the selected make."
+                "Selected model does not belong to the selected make."
             )
+
         return value
 
     def validate(self, data):
@@ -672,49 +764,88 @@ class CarWriteSerializer(serializers.ModelSerializer):
 
         from online_car_market.dealers.models import DealerStaff
 
-        seller_record = DealerStaff.objects.filter(user=user, role="seller").first()
+        seller_record = DealerStaff.objects.filter(
+            user=user,
+            role="seller",
+        ).first()
 
-        make_ref = data.get("make_ref", getattr(instance, "make_ref", None) if instance else None)
-        model_ref = data.get("model_ref", getattr(instance, "model_ref", None) if instance else None)
-        make = (
-            (make_ref.name if make_ref else None)
-            or (getattr(instance, "make", None) if instance else None)
-            or data.get("make")
-        )
-        model = (
-            (model_ref.name if model_ref else None)
-            or (getattr(instance, "model", None) if instance else None)
-            or data.get("model")
+        make_ref = data.get(
+            "make_ref",
+            instance.make_ref if instance else None,
         )
 
-        if not (make and model) and not (make_ref and model_ref):
+        model_ref = data.get(
+            "model_ref",
+            instance.model_ref if instance else None,
+        )
+
+        if not make_ref:
             raise serializers.ValidationError(
-                "Either 'make and model' or 'make_ref and model_ref' must be provided."
+                {"make_ref": "Car make is required."}
             )
 
-        sale_type = data.get("sale_type") or (instance.sale_type if instance else None)
-        price = data.get("price") if "price" in data else (instance.price if instance else None)
-        auction_end = data.get("auction_end") or (
-            instance.auction_end if instance else None
+        if not model_ref:
+            raise serializers.ValidationError(
+                {"model_ref": "Car model is required."}
+            )
+
+        if model_ref.make_id != make_ref.id:
+            raise serializers.ValidationError(
+                {
+                    "model_ref": (
+                        "Selected model does not belong to "
+                        "the selected make."
+                    )
+                }
+            )
+
+        # Keep legacy text fields synchronized
+        data["make"] = make_ref.name
+        data["model"] = model_ref.name
+
+        sale_type = data.get(
+            "sale_type",
+            instance.sale_type if instance else None,
+        )
+
+        auction_end = data.get(
+            "auction_end",
+            instance.auction_end if instance else None,
         )
 
         if is_update:
             car = instance
-            is_admin = user.role in ["admin", "super_admin"]
+
+            is_admin = user.role in [
+                "admin",
+                "super_admin",
+            ]
+
             broker_profile = getattr(
-                getattr(user, "profile", None), "broker_profile", None
+                getattr(user, "profile", None),
+                "broker_profile",
+                None,
             )
+
             dealer_profile = getattr(
-                getattr(user, "profile", None), "dealer_profile", None
+                getattr(user, "profile", None),
+                "dealer_profile",
+                None,
             )
+
             is_broker_owner = bool(
-                broker_profile and car.broker_id == broker_profile.id
+                broker_profile
+                and car.broker_id == broker_profile.id
             )
+
             is_dealer_owner = bool(
-                dealer_profile and car.dealer_id == dealer_profile.id
+                dealer_profile
+                and car.dealer_id == dealer_profile.id
             )
+
             is_seller_under_dealer = bool(
-                seller_record and car.dealer_id == seller_record.dealer_id
+                seller_record
+                and car.dealer_id == seller_record.dealer_id
             )
 
             if not (
@@ -726,89 +857,112 @@ class CarWriteSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     "You do not have permission to update this car."
                 )
-        else:
-            dealer = data.get("dealer")
-            broker = data.get("broker")
 
+        else:
             if user.role in ["admin", "super_admin"]:
-                if (dealer and broker) or (not dealer and not broker):
+
+                dealer = data.get("dealer")
+                broker = data.get("broker")
+
+                if bool(dealer) == bool(broker):
                     raise serializers.ValidationError(
-                        "Admin must provide exactly one of 'dealer' or 'broker'."
+                        "Provide either dealer or broker."
                     )
 
             elif user.role == "dealer":
+
                 dealer_profile = getattr(
-                    getattr(user, "profile", None), "dealer_profile", None
+                    getattr(user, "profile", None),
+                    "dealer_profile",
+                    None,
                 )
+
                 if not dealer_profile:
-                    raise serializers.ValidationError("Dealer profile not found.")
+                    raise serializers.ValidationError(
+                        "Dealer profile not found."
+                    )
+
                 data["dealer"] = dealer_profile
                 data["broker"] = None
 
             elif user.role == "broker":
+
                 broker_profile = getattr(
-                    getattr(user, "profile", None), "broker_profile", None
+                    getattr(user, "profile", None),
+                    "broker_profile",
+                    None,
                 )
+
                 if not broker_profile:
-                    raise serializers.ValidationError("Broker profile not found.")
+                    raise serializers.ValidationError(
+                        "Broker profile not found."
+                    )
+
                 data["broker"] = broker_profile
                 data["dealer"] = None
 
             elif seller_record:
+
                 data["dealer"] = seller_record.dealer
                 data["broker"] = None
 
             else:
-                raise serializers.ValidationError("You are not allowed to create cars.")
+                raise serializers.ValidationError(
+                    "You are not allowed to create cars."
+                )
 
         if sale_type == "auction":
+
             data["price"] = Decimal("0.00")
 
             if not auction_end:
                 raise serializers.ValidationError(
-                    "Auction end time is required."
+                    {
+                        "auction_end": (
+                            "Auction end time is required "
+                            "for auction listings."
+                        )
+                    }
                 )
 
         return data
 
     def create(self, validated_data):
-        request = self.context["request"]
-        user = request.user
+        user = self.context["request"].user
 
         validated_data.pop("uploaded_images", None)
+        validated_data.pop("images", None)
 
-        # REMOVE duplicates
-        validated_data.pop("dealer", None)
-        validated_data.pop("broker", None)
+        dealer = validated_data.pop("dealer", None)
+        broker = validated_data.pop("broker", None)
         validated_data.pop("posted_by", None)
 
-        dealer = None
-        broker = None
-
-        if user.role in ["admin", "super_admin"]:
-            dealer = validated_data.get("dealer")
-            broker = validated_data.get("broker")
-
-        elif user.role == "dealer":
+        if user.role == "dealer":
             dealer = user.profile.dealer_profile
+            broker = None
 
-        else:
-            seller_record = user.dealer_staff_assignments.filter(role="seller").first()
+        elif user.role == "broker":
+            broker = user.profile.broker_profile
+            dealer = None
 
-            if seller_record:
-                dealer = seller_record.dealer
+        elif user.role not in ["admin", "super_admin"]:
+            seller_record = user.dealer_staff_assignments.filter(
+                role="seller"
+            ).first()
 
-            elif user.role == "broker":
-                broker = user.profile.broker_profile
+            if not seller_record:
+                raise serializers.ValidationError(
+                    "You are not allowed to create cars."
+                )
 
-            else:
-                raise serializers.ValidationError("You are not allowed to create cars.")
+            dealer = seller_record.dealer
+            broker = None
 
         return Car.objects.create(
             dealer=dealer,
             broker=broker,
             posted_by=user,
-            **validated_data
+            **validated_data,
         )
 
     def update(self, instance, validated_data):
@@ -819,9 +973,11 @@ class CarWriteSerializer(serializers.ModelSerializer):
         model_ref = validated_data.get("model_ref")
 
         if make_ref is not None:
+            instance.make_ref = make_ref
             instance.make = make_ref.name
 
         if model_ref is not None:
+            instance.model_ref = model_ref
             instance.model = model_ref.name
 
         if validated_data.get("price") is None:
@@ -834,6 +990,7 @@ class CarWriteSerializer(serializers.ModelSerializer):
             instance.price = Decimal("0.00")
 
         instance.save()
+
         return instance
 
 class FavoriteCarSerializer(serializers.ModelSerializer):
