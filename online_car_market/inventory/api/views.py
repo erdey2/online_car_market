@@ -332,7 +332,6 @@ class CarModelRequestViewSet(ModelViewSet):
             IsDealerBrokerOrSeller()
         ]
 
-
     @extend_schema(
         tags=["Cars - Model Requests"],
         summary="Approve model request",

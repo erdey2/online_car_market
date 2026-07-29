@@ -5,6 +5,7 @@ from django.utils import timezone
 from cloudinary.models import CloudinaryField
 from django.contrib.auth import get_user_model
 from rest_framework.exceptions import ValidationError
+from rest_framework import status
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.brokers.models import BrokerProfile
 from online_car_market.users.models import Profile
@@ -55,46 +56,28 @@ class CarMakeRequest(models.Model):
 
     requested_name = models.CharField(max_length=100, db_index=True)
     requested_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="car_make_requests")
-    status = models.CharField(max_length=20, choices=Status.choices, default="pending", db_index=True)
-
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
     reviewed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="reviewed_make_requests")
     reviewed_at = models.DateTimeField(null=True, blank=True)
-
     rejection_reason = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = [
-            "-created_at"
-        ]
+        ordering = ["-created_at"]
 
         indexes = [
-            models.Index(
-                fields=[
-                    "status"
-                ]
-            ),
-            models.Index(
-                fields=[
-                    "requested_by"
-                ]
-            ),
-            models.Index(
-                fields=[
-                    "created_at"
-                ]
-            ),
+            models.Index(fields=["status"]),
+            models.Index(fields=["requested_by"]),
+            models.Index(fields=["created_at"]),
         ]
 
         constraints = [
             models.UniqueConstraint(
                 Lower("requested_name"),
                 "status",
-                condition=models.Q(
-                    status="pending"
-                ),
-                name="unique_pending_make_request"
-            )
+                condition=Q(status="pending"),
+                name="unique_pending_make_request",
+            ),
         ]
 
     def __str__(self):
@@ -106,62 +89,107 @@ class CarModelRequest(models.Model):
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
 
-    make = models.ForeignKey(CarMake, on_delete=models.CASCADE, related_name="model_requests", db_index=True)
+    # Existing approved make
+    make = models.ForeignKey("CarMake", null=True, blank=True, on_delete=models.CASCADE, related_name="model_requests", db_index=True)
+
+    # Pending make request
+    pending_make_request = models.ForeignKey(
+        "CarMakeRequest",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="pending_model_requests",
+        db_index=True,
+    )
     requested_name = models.CharField(max_length=100, db_index=True)
     requested_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="car_model_requests")
-    status = models.CharField(max_length=20, choices=Status.choices, default="pending", db_index=True)
-
-    reviewed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="reviewed_model_requests")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    reviewed_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reviewed_model_requests",
+    )
     reviewed_at = models.DateTimeField(null=True, blank=True)
     rejection_reason = models.TextField(blank=True)
-
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-
-        ordering = [
-            "-created_at"
-        ]
+        ordering = ["-created_at"]
 
         indexes = [
-            models.Index(
-                fields=[
-                    "status"
-                ]
-            ),
-            models.Index(
-                fields=[
-                    "requested_by"
-                ]
-            ),
-            models.Index(
-                fields=[
-                    "make"
-                ]
-            ),
-            models.Index(
-                fields=[
-                    "created_at"
-                ]
-            ),
+            models.Index(fields=["status"]),
+            models.Index(fields=["requested_by"]),
+            models.Index(fields=["make"]),
+            models.Index(fields=["pending_make_request"]),
+            models.Index(fields=["created_at"]),
         ]
 
         constraints = [
+
+            # Exactly one of make or pending_make_request must be supplied
+            models.CheckConstraint(
+                check=(
+                    (
+                        Q(make__isnull=False)
+                        & Q(pending_make_request__isnull=True)
+                    )
+                    |
+                    (
+                        Q(make__isnull=True)
+                        & Q(pending_make_request__isnull=False)
+                    )
+                ),
+                name="model_request_requires_make_or_pending_make",
+            ),
+
+            # Prevent duplicate pending requests for existing makes
             models.UniqueConstraint(
                 Lower("requested_name"),
                 "make",
                 "status",
-                condition=models.Q(
-                    status="pending"
+                condition=Q(
+                    status="pending",
+                    make__isnull=False,
                 ),
-                name="unique_pending_model_request"
-            )
+                name="unique_pending_model_request_make",
+            ),
+
+            # Prevent duplicate pending requests for pending makes
+            models.UniqueConstraint(
+                Lower("requested_name"),
+                "pending_make_request",
+                "status",
+                condition=Q(
+                    status="pending",
+                    pending_make_request__isnull=False,
+                ),
+                name="unique_pending_model_request_pending_make",
+            ),
         ]
 
+    @property
+    def make_name(self):
+        if self.make:
+            return self.make.name
+
+        if self.pending_make_request:
+            return self.pending_make_request.requested_name
+
+        return None
+
+    def clean(self):
+        super().clean()
+
+        if bool(self.make) == bool(self.pending_make_request):
+            raise ValidationError(
+                "Exactly one of 'make' or 'pending_make_request' must be provided."
+            )
 
     def __str__(self):
         return (
-            f"{self.make.name} "
+            f"{self.make_name} "
             f"{self.requested_name} "
             f"({self.status})"
         )
@@ -382,20 +410,23 @@ class Car(models.Model):
 
         self.full_clean()
 
-        # Sync approved taxonomy
+        # Approved make
         if self.make_ref:
             self.make = self.make_ref.name
             self.pending_make_request = None
 
-        else:
-            self.make = None
+        # Pending make
+        elif self.pending_make_request:
+            self.make = self.pending_make_request.requested_name
 
+        # Approved model
         if self.model_ref:
             self.model = self.model_ref.name
             self.pending_model_request = None
 
-        else:
-            self.model = None
+        # Pending model
+        elif self.pending_model_request:
+            self.model = self.pending_model_request.requested_name
 
         # Automatically record sold date
         if (

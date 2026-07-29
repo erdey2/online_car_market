@@ -79,6 +79,110 @@ class CarModelSerializer(serializers.ModelSerializer):
 
         return attrs
 
+class CarImageSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField(read_only=True)
+    image_file = serializers.ImageField(write_only=True, required=False)
+    is_featured = serializers.BooleanField(required=False, default=False)
+    caption = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+
+    class Meta:
+        model = CarImage
+        fields = '__all__'
+        read_only_fields = ["id", "image_url", "uploaded_at"]
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_image_url(self, obj):
+        try:
+            return obj.image.url if obj.image else None
+        except Exception as e:
+            logger.error(f"Error fetching image_url for CarImage ID={obj.id}: {e}")
+            return None
+
+    def validate_caption(self, value):
+        if value:
+            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
+            if len(cleaned) > 255:
+                raise serializers.ValidationError("Caption cannot exceed 255 characters.")
+            return cleaned
+        return value
+
+    def validate_image_file(self, value):
+        if value:
+            max_size = 5 * 1024 * 1024
+            if value.size > max_size:
+                raise serializers.ValidationError("Image file size cannot exceed 5MB.")
+            return value
+        if self.instance is None:
+            raise serializers.ValidationError("Image file is required.")
+        return value
+
+    def validate(self, data):
+        user = self.context["request"].user
+        car = data.get("car") or getattr(self.instance, "car", None)
+
+        if self.instance is None:
+            if user.role not in ["super_admin", "admin", "broker", "seller"]:
+                raise serializers.ValidationError(
+                    "Only sellers, brokers, admins, or super admins can create car images."
+                )
+
+            if car and user.role not in ["super_admin", "admin"] and getattr(car, "posted_by", None) != user:
+                raise serializers.ValidationError(
+                    "Only the car owner or admins can add images."
+                )
+
+        return data
+
+    def create(self, validated_data):
+        car = validated_data.pop("car", None)
+        image_file = validated_data.pop("image_file", None)
+
+        logger.debug(f"Creating CarImage with data: {validated_data} | image_file={image_file}")
+
+        instance = CarImage(**validated_data)
+        if car:
+            instance.car = car
+        if image_file:
+            instance.image = image_file
+        instance.save()
+
+        logger.info(
+            f"Saved CarImage ID={instance.id} | image={instance.image} | is_featured={instance.is_featured} | caption={instance.caption}")
+        return instance
+
+    def update(self, instance, validated_data):
+        image_file = validated_data.pop("image_file", None)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        if image_file:
+            instance.image = image_file
+        instance.save()
+        return instance
+
+class BidNestedSerializer(serializers.ModelSerializer):
+    bidder = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Bid
+        fields = ["id", "bidder", "amount", "created_at"]
+
+    def get_bidder(self, obj):
+        user = obj.user
+        profile = getattr(user, 'profile', None)
+
+        if profile:
+            first_name = profile.first_name
+            last_name = profile.last_name
+        else:
+            first_name = None
+            last_name = None
+
+        return {
+            "id": user.id,
+            "first_name": first_name,
+            "last_name": last_name,
+        }
+
 class CarMakeRequestSerializer(serializers.ModelSerializer):
     requested_by_email = serializers.EmailField(source="requested_by.email", read_only=True)
     reviewed_by_email = serializers.EmailField(source="reviewed_by.email", read_only=True)
@@ -216,110 +320,6 @@ class RejectRequestSerializer(serializers.Serializer):
         allow_blank=True,
         max_length=500,
     )
-
-class CarImageSerializer(serializers.ModelSerializer):
-    image_url = serializers.SerializerMethodField(read_only=True)
-    image_file = serializers.ImageField(write_only=True, required=False)
-    is_featured = serializers.BooleanField(required=False, default=False)
-    caption = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-
-    class Meta:
-        model = CarImage
-        fields = '__all__'
-        read_only_fields = ["id", "image_url", "uploaded_at"]
-
-    @extend_schema_field(serializers.CharField(allow_null=True))
-    def get_image_url(self, obj):
-        try:
-            return obj.image.url if obj.image else None
-        except Exception as e:
-            logger.error(f"Error fetching image_url for CarImage ID={obj.id}: {e}")
-            return None
-
-    def validate_caption(self, value):
-        if value:
-            cleaned = bleach.clean(value.strip(), tags=[], strip=True)
-            if len(cleaned) > 255:
-                raise serializers.ValidationError("Caption cannot exceed 255 characters.")
-            return cleaned
-        return value
-
-    def validate_image_file(self, value):
-        if value:
-            max_size = 5 * 1024 * 1024
-            if value.size > max_size:
-                raise serializers.ValidationError("Image file size cannot exceed 5MB.")
-            return value
-        if self.instance is None:
-            raise serializers.ValidationError("Image file is required.")
-        return value
-
-    def validate(self, data):
-        user = self.context["request"].user
-        car = data.get("car") or getattr(self.instance, "car", None)
-
-        if self.instance is None:
-            if user.role not in ["super_admin", "admin", "broker", "seller"]:
-                raise serializers.ValidationError(
-                    "Only sellers, brokers, admins, or super admins can create car images."
-                )
-
-            if car and user.role not in ["super_admin", "admin"] and getattr(car, "posted_by", None) != user:
-                raise serializers.ValidationError(
-                    "Only the car owner or admins can add images."
-                )
-
-        return data
-
-    def create(self, validated_data):
-        car = validated_data.pop("car", None)
-        image_file = validated_data.pop("image_file", None)
-
-        logger.debug(f"Creating CarImage with data: {validated_data} | image_file={image_file}")
-
-        instance = CarImage(**validated_data)
-        if car:
-            instance.car = car
-        if image_file:
-            instance.image = image_file
-        instance.save()
-
-        logger.info(
-            f"Saved CarImage ID={instance.id} | image={instance.image} | is_featured={instance.is_featured} | caption={instance.caption}")
-        return instance
-
-    def update(self, instance, validated_data):
-        image_file = validated_data.pop("image_file", None)
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        if image_file:
-            instance.image = image_file
-        instance.save()
-        return instance
-
-class BidNestedSerializer(serializers.ModelSerializer):
-    bidder = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Bid
-        fields = ["id", "bidder", "amount", "created_at"]
-
-    def get_bidder(self, obj):
-        user = obj.user
-        profile = getattr(user, 'profile', None)
-
-        if profile:
-            first_name = profile.first_name
-            last_name = profile.last_name
-        else:
-            first_name = None
-            last_name = None
-
-        return {
-            "id": user.id,
-            "first_name": first_name,
-            "last_name": last_name,
-        }
 
 class CarMiniSerializer(serializers.ModelSerializer):
     class Meta:
@@ -956,6 +956,12 @@ class CarWriteSerializer(serializers.ModelSerializer):
         broker = validated_data.pop("broker", None)
         validated_data.pop("posted_by", None)
 
+        make_name = validated_data.pop("make", None)
+        model_name = validated_data.pop("model", None)
+
+        make_ref = validated_data.get("make_ref")
+        model_ref = validated_data.get("model_ref")
+
         if user.role == "dealer":
             dealer = user.profile.dealer_profile
             broker = None
@@ -977,6 +983,53 @@ class CarWriteSerializer(serializers.ModelSerializer):
             dealer = seller_record.dealer
             broker = None
 
+        # Create pending make request
+        if not make_ref and make_name:
+
+            make_request, created = CarMakeRequest.objects.get_or_create(
+                requested_name=make_name,
+                status=CarMakeRequest.Status.PENDING,
+                defaults={
+                    "requested_by": user,
+                },
+            )
+
+            if created:
+                CarRequestNotificationService.notify_new_request(
+                    make_request,
+                    "make",
+                )
+
+            validated_data["pending_make_request"] = make_request
+
+        # Create pending model request
+        if not model_ref and model_name:
+
+            if make_ref:
+                request_make = make_ref
+
+            else:
+                request_make = None
+
+            if request_make:
+
+                model_request, created = CarModelRequest.objects.get_or_create(
+                    make=request_make,
+                    requested_name=model_name,
+                    status=CarModelRequest.Status.PENDING,
+                    defaults={
+                        "requested_by": user,
+                    },
+                )
+
+                if created:
+                    CarRequestNotificationService.notify_new_request(
+                        model_request,
+                        "model",
+                    )
+
+                validated_data["pending_model_request"] = model_request
+
         return Car.objects.create(
             dealer=dealer,
             broker=broker,
@@ -988,16 +1041,62 @@ class CarWriteSerializer(serializers.ModelSerializer):
         validated_data.pop("uploaded_images", None)
         validated_data.pop("images", None)
 
+        make_name = validated_data.pop("make", None)
+        model_name = validated_data.pop("model", None)
+
         make_ref = validated_data.get("make_ref")
         model_ref = validated_data.get("model_ref")
 
-        if make_ref is not None:
+        # Existing approved make
+        if make_ref:
             instance.make_ref = make_ref
-            instance.make = make_ref.name
+            instance.pending_make_request = None
 
-        if model_ref is not None:
+        # New make request
+        elif make_name:
+
+            make_request, created = CarMakeRequest.objects.get_or_create(
+                requested_name=make_name,
+                status=CarMakeRequest.Status.PENDING,
+                defaults={
+                    "requested_by": self.context["request"].user,
+                },
+            )
+
+            if created:
+                CarRequestNotificationService.notify_new_request(
+                    make_request,
+                    "make",
+                )
+
+            instance.make_ref = None
+            instance.pending_make_request = make_request
+
+        # Existing approved model
+        if model_ref:
             instance.model_ref = model_ref
-            instance.model = model_ref.name
+            instance.pending_model_request = None
+
+        # New model request
+        elif model_name and make_ref:
+
+            model_request, created = CarModelRequest.objects.get_or_create(
+                make=make_ref,
+                requested_name=model_name,
+                status=CarModelRequest.Status.PENDING,
+                defaults={
+                    "requested_by": self.context["request"].user,
+                },
+            )
+
+            if created:
+                CarRequestNotificationService.notify_new_request(
+                    model_request,
+                    "model",
+                )
+
+            instance.model_ref = None
+            instance.pending_model_request = model_request
 
         if validated_data.get("price") is None:
             validated_data.pop("price", None)
