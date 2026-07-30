@@ -13,12 +13,8 @@ class CarTaxonomyService:
 
     @staticmethod
     def _clear_taxonomy_cache():
-        cache.delete(
-            CarTaxonomyService.CAR_MAKES_CACHE_KEY
-        )
-        cache.delete(
-            CarTaxonomyService.CAR_MODELS_CACHE_KEY
-        )
+        cache.delete(CarTaxonomyService.CAR_MAKES_CACHE_KEY)
+        cache.delete(CarTaxonomyService.CAR_MODELS_CACHE_KEY)
 
     @staticmethod
     def _validate_pending(request_obj):
@@ -35,15 +31,11 @@ class CarTaxonomyService:
         request_obj = (
             CarMakeRequest.objects
             .select_for_update()
-            .select_related(
-                "requested_by"
-            )
+            .select_related("requested_by")
             .get(pk=request_obj.pk)
         )
 
-        CarTaxonomyService._validate_pending(
-            request_obj
-        )
+        CarTaxonomyService._validate_pending(request_obj)
 
         make_name = request_obj.requested_name.strip()
 
@@ -53,12 +45,10 @@ class CarTaxonomyService:
             )
 
         make, _ = CarMake.objects.get_or_create(
-            name=make_name
+            name=make_name,
         )
 
-        request_obj.status = (
-            CarMakeRequest.Status.APPROVED
-        )
+        request_obj.status = CarMakeRequest.Status.APPROVED
         request_obj.reviewed_by = reviewer
         request_obj.reviewed_at = timezone.now()
 
@@ -79,15 +69,21 @@ class CarTaxonomyService:
             pending_make_request=None,
         )
 
+        # Convert pending model requests to use the approved make
+        CarModelRequest.objects.filter(
+            pending_make_request=request_obj,
+            make__isnull=True,
+        ).update(
+            make=make,
+            pending_make_request=None,
+        )
+
         CarTaxonomyService._clear_taxonomy_cache()
 
         transaction.on_commit(
-            lambda: (
-                CarRequestNotificationService
-                .notify_request_approved(
-                    request_obj,
-                    "make",
-                )
+            lambda: CarRequestNotificationService.notify_request_approved(
+                request_obj,
+                "make",
             )
         )
 
@@ -104,19 +100,13 @@ class CarTaxonomyService:
         request_obj = (
             CarMakeRequest.objects
             .select_for_update()
-            .select_related(
-                "requested_by"
-            )
+            .select_related("requested_by")
             .get(pk=request_obj.pk)
         )
 
-        CarTaxonomyService._validate_pending(
-            request_obj
-        )
+        CarTaxonomyService._validate_pending(request_obj)
 
-        request_obj.status = (
-            CarMakeRequest.Status.REJECTED
-        )
+        request_obj.status = CarMakeRequest.Status.REJECTED
         request_obj.reviewed_by = reviewer
         request_obj.reviewed_at = timezone.now()
         request_obj.rejection_reason = reason
@@ -130,7 +120,6 @@ class CarTaxonomyService:
             ]
         )
 
-        # Remove pending relation
         Car.objects.filter(
             pending_make_request=request_obj
         ).update(
@@ -138,39 +127,26 @@ class CarTaxonomyService:
         )
 
         transaction.on_commit(
-            lambda: (
-                CarRequestNotificationService
-                .notify_request_rejected(
-                    request_obj,
-                    "make",
-                )
+            lambda: CarRequestNotificationService.notify_request_rejected(
+                request_obj,
+                "make",
             )
         )
 
         return request_obj
 
-
     # MODEL REQUESTS
     @staticmethod
     @transaction.atomic
-    def approve_model_request(
-        request_obj,
-        reviewer,
-    ):
+    def approve_model_request(request_obj, reviewer):
 
         request_obj = (
             CarModelRequest.objects
             .select_for_update()
-            .select_related(
-                "requested_by",
-                "make",
-            )
             .get(pk=request_obj.pk)
         )
 
-        CarTaxonomyService._validate_pending(
-            request_obj
-        )
+        CarTaxonomyService._validate_pending(request_obj)
 
         model_name = request_obj.requested_name.strip()
 
@@ -179,19 +155,45 @@ class CarTaxonomyService:
                 "Model name cannot be empty."
             )
 
+        # Determine the approved make
+        if request_obj.make:
+            make = request_obj.make
+
+        elif request_obj.pending_make_request:
+
+            if (
+                request_obj.pending_make_request.status
+                != CarMakeRequest.Status.APPROVED
+            ):
+                raise ValidationError(
+                    "Approve the make request before approving this model request."
+                )
+
+            make = CarMake.objects.get(
+                name=request_obj.pending_make_request.requested_name
+            )
+
+            request_obj.make = make
+            request_obj.pending_make_request = None
+
+        else:
+            raise ValidationError(
+                "Model request has no associated make."
+            )
+
         model, _ = CarModel.objects.get_or_create(
-            make=request_obj.make,
+            make=make,
             name=model_name,
         )
 
-        request_obj.status = (
-            CarModelRequest.Status.APPROVED
-        )
+        request_obj.status = CarModelRequest.Status.APPROVED
         request_obj.reviewed_by = reviewer
         request_obj.reviewed_at = timezone.now()
 
         request_obj.save(
             update_fields=[
+                "make",
+                "pending_make_request",
                 "status",
                 "reviewed_by",
                 "reviewed_at",
@@ -202,25 +204,24 @@ class CarTaxonomyService:
         Car.objects.filter(
             pending_model_request=request_obj
         ).update(
+            make_ref=make,
+            make=make.name,
             model_ref=model,
             model=model.name,
+            pending_make_request=None,
             pending_model_request=None,
         )
 
         CarTaxonomyService._clear_taxonomy_cache()
 
         transaction.on_commit(
-            lambda: (
-                CarRequestNotificationService
-                .notify_request_approved(
-                    request_obj,
-                    "model",
-                )
+            lambda: CarRequestNotificationService.notify_request_approved(
+                request_obj,
+                "model",
             )
         )
 
         return model
-
 
     @staticmethod
     @transaction.atomic
@@ -233,19 +234,12 @@ class CarTaxonomyService:
         request_obj = (
             CarModelRequest.objects
             .select_for_update()
-            .select_related(
-                "requested_by"
-            )
             .get(pk=request_obj.pk)
         )
 
-        CarTaxonomyService._validate_pending(
-            request_obj
-        )
+        CarTaxonomyService._validate_pending(request_obj)
 
-        request_obj.status = (
-            CarModelRequest.Status.REJECTED
-        )
+        request_obj.status = CarModelRequest.Status.REJECTED
         request_obj.reviewed_by = reviewer
         request_obj.reviewed_at = timezone.now()
         request_obj.rejection_reason = reason
@@ -259,7 +253,6 @@ class CarTaxonomyService:
             ]
         )
 
-        # Remove pending relation
         Car.objects.filter(
             pending_model_request=request_obj
         ).update(
@@ -267,12 +260,9 @@ class CarTaxonomyService:
         )
 
         transaction.on_commit(
-            lambda: (
-                CarRequestNotificationService
-                .notify_request_rejected(
-                    request_obj,
-                    "model",
-                )
+            lambda: CarRequestNotificationService.notify_request_rejected(
+                request_obj,
+                "model",
             )
         )
 
