@@ -245,7 +245,7 @@ class CarMakeRequestSerializer(serializers.ModelSerializer):
         return instance
 
 class CarModelRequestSerializer(serializers.ModelSerializer):
-    make_name = serializers.CharField(source="make.name", read_only=True)
+    make_name = serializers.CharField(read_only=True)
     requested_by_email = serializers.EmailField(source="requested_by.email", read_only=True)
     reviewed_by_email = serializers.EmailField(source="reviewed_by.email", read_only=True)
 
@@ -254,6 +254,7 @@ class CarModelRequestSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "make",
+            "pending_make_request",
             "make_name",
             "requested_name",
             "requested_by",
@@ -264,7 +265,6 @@ class CarModelRequestSerializer(serializers.ModelSerializer):
             "rejection_reason",
             "created_at",
         ]
-
         read_only_fields = (
             "status",
             "requested_by",
@@ -276,41 +276,70 @@ class CarModelRequestSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs):
-        make = attrs["make"]
+        make = attrs.get("make")
+        pending_make_request = attrs.get("pending_make_request")
+
         name = bleach.clean(
             attrs["requested_name"].strip(),
             tags=[],
             strip=True,
         )
 
-        if CarModel.objects.filter(
-            make=make,
-            name__iexact=name,
-        ).exists():
+        # Exactly one make source
+        if bool(make) == bool(pending_make_request):
             raise serializers.ValidationError(
-                "This model already exists."
+                "Provide either 'make' or 'pending_make_request'."
             )
 
-        if CarModelRequest.objects.filter(
-            make=make,
-            requested_name__iexact=name,
-            status=CarModelRequest.Status.PENDING,
-        ).exists():
-            raise serializers.ValidationError(
-                "A request already exists."
-            )
+        # Approved make
+        if make:
+
+            if CarModel.objects.filter(
+                make=make,
+                name__iexact=name,
+            ).exists():
+                raise serializers.ValidationError(
+                    "This model already exists."
+                )
+
+            if CarModelRequest.objects.filter(
+                make=make,
+                requested_name__iexact=name,
+                status=CarModelRequest.Status.PENDING,
+            ).exists():
+                raise serializers.ValidationError(
+                    "A pending request already exists."
+                )
+
+        # Pending make request
+        else:
+
+            if CarModelRequest.objects.filter(
+                pending_make_request=pending_make_request,
+                requested_name__iexact=name,
+                status=CarModelRequest.Status.PENDING,
+            ).exists():
+                raise serializers.ValidationError(
+                    "A pending request already exists."
+                )
 
         attrs["requested_name"] = name
 
         return attrs
 
     def create(self, validated_data):
-
         instance = CarModelRequest.objects.create(
             requested_by=self.context["request"].user,
             **validated_data,
         )
-        CarRequestNotificationService.notify_admins_new_model_request(instance)
+
+        CarRequestNotificationService.notify_new_request(
+            instance,
+            "model",
+            extra_data={
+                "make_name": instance.make_name,
+            },
+        )
 
         return instance
 
@@ -984,6 +1013,8 @@ class CarWriteSerializer(serializers.ModelSerializer):
             broker = None
 
         # Create pending make request
+        make_request = None
+
         if not make_ref and make_name:
 
             make_request, created = CarMakeRequest.objects.get_or_create(
@@ -1005,30 +1036,31 @@ class CarWriteSerializer(serializers.ModelSerializer):
         # Create pending model request
         if not model_ref and model_name:
 
+            filters = {
+                "requested_name": model_name,
+                "status": CarModelRequest.Status.PENDING,
+            }
+
             if make_ref:
-                request_make = make_ref
+                filters["make"] = make_ref
 
-            else:
-                request_make = None
+            elif make_request:
+                filters["pending_make_request"] = make_request
 
-            if request_make:
+            model_request, created = CarModelRequest.objects.get_or_create(
+                **filters,
+                defaults={
+                    "requested_by": user,
+                },
+            )
 
-                model_request, created = CarModelRequest.objects.get_or_create(
-                    make=request_make,
-                    requested_name=model_name,
-                    status=CarModelRequest.Status.PENDING,
-                    defaults={
-                        "requested_by": user,
-                    },
+            if created:
+                CarRequestNotificationService.notify_new_request(
+                    model_request,
+                    "model",
                 )
 
-                if created:
-                    CarRequestNotificationService.notify_new_request(
-                        model_request,
-                        "model",
-                    )
-
-                validated_data["pending_model_request"] = model_request
+            validated_data["pending_model_request"] = model_request
 
         return Car.objects.create(
             dealer=dealer,
@@ -1041,14 +1073,19 @@ class CarWriteSerializer(serializers.ModelSerializer):
         validated_data.pop("uploaded_images", None)
         validated_data.pop("images", None)
 
+        user = self.context["request"].user
+
         make_name = validated_data.pop("make", None)
         model_name = validated_data.pop("model", None)
 
         make_ref = validated_data.get("make_ref")
         model_ref = validated_data.get("model_ref")
 
+        make_request = None
+
         # Existing approved make
         if make_ref:
+
             instance.make_ref = make_ref
             instance.pending_make_request = None
 
@@ -1059,7 +1096,7 @@ class CarWriteSerializer(serializers.ModelSerializer):
                 requested_name=make_name,
                 status=CarMakeRequest.Status.PENDING,
                 defaults={
-                    "requested_by": self.context["request"].user,
+                    "requested_by": user,
                 },
             )
 
@@ -1074,18 +1111,41 @@ class CarWriteSerializer(serializers.ModelSerializer):
 
         # Existing approved model
         if model_ref:
+
             instance.model_ref = model_ref
             instance.pending_model_request = None
 
         # New model request
-        elif model_name and make_ref:
+        elif model_name:
+
+            filters = {
+                "requested_name": model_name,
+                "status": CarModelRequest.Status.PENDING,
+            }
+
+            if make_ref:
+                filters["make"] = make_ref
+
+            elif make_request:
+                filters["pending_make_request"] = make_request
+
+            elif instance.pending_make_request:
+                filters["pending_make_request"] = instance.pending_make_request
+
+            elif instance.make_ref:
+                filters["make"] = instance.make_ref
+
+            else:
+                raise serializers.ValidationError(
+                    {
+                        "make": "A make or pending make request is required before requesting a model."
+                    }
+                )
 
             model_request, created = CarModelRequest.objects.get_or_create(
-                make=make_ref,
-                requested_name=model_name,
-                status=CarModelRequest.Status.PENDING,
+                **filters,
                 defaults={
-                    "requested_by": self.context["request"].user,
+                    "requested_by": user,
                 },
             )
 
