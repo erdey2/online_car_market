@@ -527,301 +527,267 @@ class CarDetailSerializer(serializers.ModelSerializer):
             "report_document": inspection.report_document.url if inspection.report_document else None,
         }
 
-    class CarWriteSerializer(serializers.ModelSerializer):
-        dealer = serializers.PrimaryKeyRelatedField(
-            read_only=True
-        )
+class CarWriteSerializer(serializers.ModelSerializer):
+    dealer = serializers.PrimaryKeyRelatedField(read_only=True)
+    broker = serializers.PrimaryKeyRelatedField(read_only=True)
+    posted_by = serializers.PrimaryKeyRelatedField(read_only=True)
+    make_ref = serializers.PrimaryKeyRelatedField(queryset=CarMake.objects.all(), required=False, allow_null=True)
+    model_ref = serializers.PrimaryKeyRelatedField(queryset=CarModel.objects.all(), required=False, allow_null=True)
+    make = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    model = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    images = CarImageSerializer(many=True, read_only=True, allow_null=True)
 
-        broker = serializers.PrimaryKeyRelatedField(
-            read_only=True
-        )
+    class Meta:
+        model = Car
+        exclude = [
+            "id",
+            "created_at",
+            "updated_at",
+            "sold_at",
+            "verification_status",
+            "priority",
+        ]
 
-        posted_by = serializers.PrimaryKeyRelatedField(
-            read_only=True
-        )
+    def validate_year(self, value):
+        current_year = datetime.now().year
 
-        make_ref = serializers.PrimaryKeyRelatedField(
-            queryset=CarMake.objects.all(),
-            required=False,
-            allow_null=True,
-        )
+        if not 1900 <= value <= current_year + 1:
+            raise serializers.ValidationError(
+                f"Year must be between 1900 and {current_year + 1}."
+            )
 
-        model_ref = serializers.PrimaryKeyRelatedField(
-            queryset=CarModel.objects.all(),
-            required=False,
-            allow_null=True,
-        )
+        return value
 
-        make = serializers.CharField(
-            required=False,
-            allow_blank=True,
-            allow_null=True,
-        )
+    def validate_price(self, value):
+        if value < 0:
+            raise serializers.ValidationError(
+                "Price cannot be negative."
+            )
 
-        model = serializers.CharField(
-            required=False,
-            allow_blank=True,
-            allow_null=True,
-        )
+        if value > 100000000:
+            raise serializers.ValidationError(
+                "Price cannot exceed 100,000,000."
+            )
 
-        images = CarImageSerializer(
-            many=True,
-            read_only=True,
-            allow_null=True,
-        )
+        return value
 
-        class Meta:
-            model = Car
-            exclude = [
-                "id",
-                "created_at",
-                "updated_at",
-                "sold_at",
-                "verification_status",
-                "priority",
-            ]
+    def validate_mileage(self, value):
+        if value < 0:
+            raise serializers.ValidationError(
+                "Mileage cannot be negative."
+            )
 
-        def validate_year(self, value):
-            current_year = datetime.now().year
+        if value > 1000000:
+            raise serializers.ValidationError(
+                "Mileage cannot exceed 1,000,000 km."
+            )
 
-            if not 1900 <= value <= current_year + 1:
-                raise serializers.ValidationError(
-                    f"Year must be between 1900 and {current_year + 1}."
-                )
+        return value
 
+    def validate_body_type(self, value):
+        if not value:
             return value
 
-        def validate_price(self, value):
-            if value < 0:
-                raise serializers.ValidationError(
-                    "Price cannot be negative."
-                )
+        cleaned = bleach.clean(
+            value.strip(),
+            tags=[],
+            strip=True,
+        )
+        valid_types = [
+            choice[0]
+            for choice in Car.BODY_TYPES
+        ]
 
-            if value > 100000000:
-                raise serializers.ValidationError(
-                    "Price cannot exceed 100,000,000."
-                )
+        if cleaned not in valid_types:
+            raise serializers.ValidationError(
+                f"Body type must be one of: {', '.join(valid_types)}."
+            )
 
+        return cleaned
+
+    def validate_fuel_type(self, value):
+        if not value:
             return value
 
-        def validate_mileage(self, value):
-            if value < 0:
-                raise serializers.ValidationError(
-                    "Mileage cannot be negative."
-                )
+        cleaned = bleach.clean(
+            value.strip(),
+            tags=[],
+            strip=True,
+        )
 
-            if value > 1000000:
-                raise serializers.ValidationError(
-                    "Mileage cannot exceed 1,000,000 km."
-                )
+        valid_types = [
+            "electric",
+            "hybrid",
+            "petrol",
+            "diesel",
+        ]
 
-            return value
+        if cleaned not in valid_types:
+            raise serializers.ValidationError(
+                f"Fuel type must be one of: {', '.join(valid_types)}."
+            )
 
-        def validate_body_type(self, value):
-            if not value:
-                return value
+        return cleaned
 
-            cleaned = bleach.clean(
+    def validate_exterior_color(self, value):
+        if value:
+            value = bleach.clean(
                 value.strip(),
                 tags=[],
                 strip=True,
             )
 
-            valid_types = [
-                choice[0]
-                for choice in Car.BODY_TYPES
-            ]
+        return value
 
-            if cleaned not in valid_types:
-                raise serializers.ValidationError(
-                    f"Body type must be one of: {', '.join(valid_types)}."
-                )
-
-            return cleaned
-
-        def validate_fuel_type(self, value):
-            if not value:
-                return value
-
-            cleaned = bleach.clean(
+    def validate_interior_color(self, value):
+        if value:
+            value = bleach.clean(
                 value.strip(),
                 tags=[],
                 strip=True,
             )
 
-            valid_types = [
-                "electric",
-                "hybrid",
-                "petrol",
-                "diesel",
-            ]
+        return value
 
-            if cleaned not in valid_types:
-                raise serializers.ValidationError(
-                    f"Fuel type must be one of: {', '.join(valid_types)}."
-                )
-
-            return cleaned
-
-        def validate_exterior_color(self, value):
-            if value:
-                value = bleach.clean(
-                    value.strip(),
-                    tags=[],
-                    strip=True,
-                )
-
-            return value
-
-        def validate_interior_color(self, value):
-            if value:
-                value = bleach.clean(
-                    value.strip(),
-                    tags=[],
-                    strip=True,
-                )
-
-            return value
-
-        def validate_engine(self, value):
-            if value:
-                value = bleach.clean(
-                    value.strip(),
-                    tags=[],
-                    strip=True,
-                )
-
-            return value
-
-        def validate_drivetrain(self, value):
-            if not value:
-                return value
-
-            cleaned = bleach.clean(
+    def validate_engine(self, value):
+        if value:
+            value = bleach.clean(
                 value.strip(),
                 tags=[],
                 strip=True,
             )
 
-            valid_types = [
-                choice[0]
-                for choice in Car.DRIVETRAIN_TYPES
-            ]
+        return value
 
-            if cleaned not in valid_types:
-                raise serializers.ValidationError(
-                    f"Drivetrain must be one of: {', '.join(valid_types)}."
-                )
+    def validate_drivetrain(self, value):
+        if not value:
+            return value
 
-            return cleaned
+        cleaned = bleach.clean(
+            value.strip(),
+            tags=[],
+            strip=True,
+        )
 
-        def validate_condition(self, value):
-            if not value:
-                return value
+        valid_types = [
+            choice[0]
+            for choice in Car.DRIVETRAIN_TYPES
+        ]
 
-            cleaned = bleach.clean(
+        if cleaned not in valid_types:
+            raise serializers.ValidationError(
+                f"Drivetrain must be one of: {', '.join(valid_types)}."
+            )
+
+        return cleaned
+
+    def validate_condition(self, value):
+        if not value:
+            return value
+
+        cleaned = bleach.clean(
+            value.strip(),
+            tags=[],
+            strip=True,
+        )
+
+        valid_types = [
+            choice[0]
+            for choice in Car.CONDITIONS
+        ]
+
+        if cleaned not in valid_types:
+            raise serializers.ValidationError(
+                f"Condition must be one of: {', '.join(valid_types)}."
+            )
+
+        return cleaned
+
+    def validate_trim(self, value):
+        if value:
+            value = bleach.clean(
                 value.strip(),
                 tags=[],
                 strip=True,
             )
 
-            valid_types = [
-                choice[0]
-                for choice in Car.CONDITIONS
-            ]
+        return value
 
-            if cleaned not in valid_types:
-                raise serializers.ValidationError(
-                    f"Condition must be one of: {', '.join(valid_types)}."
-                )
-
-            return cleaned
-
-        def validate_trim(self, value):
-            if value:
-                value = bleach.clean(
-                    value.strip(),
-                    tags=[],
-                    strip=True,
-                )
-
-            return value
-
-        def validate_description(self, value):
-            if value:
-                value = bleach.clean(
-                    value.strip(),
-                    tags=[],
-                    strip=True,
-                )
-
-            return value
-
-        def validate_status(self, value):
-            if not value:
-                return value
-
-            cleaned = bleach.clean(
+    def validate_description(self, value):
+        if value:
+            value = bleach.clean(
                 value.strip(),
                 tags=[],
                 strip=True,
             )
 
-            valid_statuses = [
-                choice[0]
-                for choice in Car.STATUS_CHOICES
-            ]
+        return value
 
-            if cleaned not in valid_statuses:
-                raise serializers.ValidationError(
-                    f"Status must be one of: {', '.join(valid_statuses)}."
-                )
+    def validate_status(self, value):
+        if not value:
+            return value
 
-            return cleaned
+        cleaned = bleach.clean(
+            value.strip(),
+            tags=[],
+            strip=True,
+        )
 
-        def validate_sale_type(self, value):
-            if not value:
-                return value
+        valid_statuses = [
+            choice[0]
+            for choice in Car.STATUS_CHOICES
+        ]
 
-            cleaned = bleach.clean(
-                value.strip(),
-                tags=[],
-                strip=True,
+        if cleaned not in valid_statuses:
+            raise serializers.ValidationError(
+                f"Status must be one of: {', '.join(valid_statuses)}."
             )
 
-            valid_types = [
-                choice[0]
-                for choice in Car.SALE_TYPES
-            ]
+        return cleaned
 
-            if cleaned not in valid_types:
-                raise serializers.ValidationError(
-                    f"Sale type must be one of: {', '.join(valid_types)}."
-                )
-
-            return cleaned
-
-        def validate_auction_end(self, value):
-            if value and value < timezone.now():
-                raise serializers.ValidationError(
-                    "Auction end time must be in the future."
-                )
-
+    def validate_sale_type(self, value):
+        if not value:
             return value
 
-        def validate_model_ref(self, value):
-            make_ref = self.initial_data.get("make_ref")
+        cleaned = bleach.clean(
+            value.strip(),
+            tags=[],
+            strip=True,
+        )
 
-            if (
-                make_ref
-                and value
-                and value.make_id != int(make_ref)
-            ):
-                raise serializers.ValidationError(
-                    "Selected model does not belong to the selected make."
-                )
+        valid_types = [
+            choice[0]
+            for choice in Car.SALE_TYPES
+        ]
 
-            return value
+        if cleaned not in valid_types:
+            raise serializers.ValidationError(
+                f"Sale type must be one of: {', '.join(valid_types)}."
+            )
+
+        return cleaned
+
+    def validate_auction_end(self, value):
+        if value and value < timezone.now():
+            raise serializers.ValidationError(
+                "Auction end time must be in the future."
+            )
+
+        return value
+
+    def validate_model_ref(self, value):
+        make_ref = self.initial_data.get("make_ref")
+
+        if (
+            make_ref
+            and value
+            and value.make_id != int(make_ref)
+        ):
+            raise serializers.ValidationError(
+                "Selected model does not belong to the selected make."
+            )
+
+        return value
 
     def validate_model_ref(self, value):
         """
