@@ -248,25 +248,34 @@ class CarService:
     @transaction.atomic
     def update_car_with_images(serializer, request):
         old_price = serializer.instance.price
+
+        # Update car fields
         car = serializer.save()
 
-        # delete requested images
-        delete_images = (
-            CarService._collect_delete_images(
-                request
-            )
+        # Any edit requires re-verification
+        car.verification_status = "pending"
+        car.reviewed_by = None
+        car.reviewed_at = None
+
+        car.save(
+            update_fields=[
+                "verification_status",
+                "reviewed_by",
+                "reviewed_at",
+                "updated_at",
+            ]
         )
+
+        # Delete requested images
+        delete_images = CarService._collect_delete_images(request)
+
         CarService.delete_images(
             car,
             delete_images
         )
 
-        # add/update uploaded images
-        uploaded_images = (
-            CarService._collect_uploaded_images(
-                request
-            )
-        )
+        # Add/update uploaded images
+        uploaded_images = CarService._collect_uploaded_images(request)
 
         CarService._upsert_images_for_car(
             car,
@@ -274,9 +283,8 @@ class CarService:
             require_at_least_one=False
         )
 
-        images_payload = request.data.get(
-            "images"
-        )
+        # Update existing images from JSON
+        images_payload = request.data.get("images")
 
         if images_payload is not None:
             CarService.sync_images_json(
@@ -284,7 +292,7 @@ class CarService:
                 images_payload
             )
 
-        # notify price drop
+        # Notify price drop
         if car.price < old_price:
             CarService.notify_price_drop(
                 car,
