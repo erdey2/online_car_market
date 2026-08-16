@@ -11,7 +11,7 @@ from .serializers import CarRatingSerializer, CarRatingReadSerializer, CarRating
 from online_car_market.inventory.models import Car
 from online_car_market.inventory.api.serializers import CarListSerializer
 from online_car_market.notifications.services import notify_user
-from online_car_market.users.permissions.drf_permissions import IsBuyer
+from online_car_market.users.permissions.drf_permissions import IsBuyerOrBroker
 
 
 @extend_schema_view(
@@ -97,7 +97,7 @@ class CarRatingViewSet(ModelViewSet):
             "partial_update",
             "destroy",
         ]:
-            permissions = [IsBuyer]
+            permissions = [IsBuyerOrBroker]
 
         else:
             permissions = [IsAuthenticated]
