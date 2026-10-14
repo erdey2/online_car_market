@@ -8,3 +8,5 @@ pytest-django==4.11.1
 
 rich==14.1.0
 ipython
+
+whitenoise==6.9.0

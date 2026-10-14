@@ -170,16 +170,43 @@ class MeView(APIView):
     @extend_schema(
         tags=["Users"],
         summary="Get current authenticated user",
-        description="Retrieve the authenticated user's full info: User + Profile + Dealer/Broker profile (only relevant role).",
+        description="Retrieve the authenticated user's full information.",
         responses={
             200: UserFullSerializer,
-            401: OpenApiResponse(description="Authentication credentials were not provided"),
+            401: OpenApiResponse(
+                description="Authentication credentials were not provided."
+            ),
         },
     )
     def get(self, request):
-        user = request.user
-        serializer = UserFullSerializer(user)
+        serializer = UserFullSerializer(request.user)
         return Response(serializer.data)
+
+    @extend_schema(
+        tags=["Users"],
+        summary="Delete my account",
+        description=(
+            "Permanently delete the authenticated user's account. "
+            "The authenticated user can delete only their own account."
+        ),
+        responses={
+            204: OpenApiResponse(description="Account deleted successfully."),
+            401: OpenApiResponse(
+                description="Authentication credentials were not provided."
+            ),
+        },
+    )
+    def delete(self, request):
+        user = request.user
+        email = user.email
+
+        logger.info("Account deletion requested for %s", email)
+
+        user.delete()
+
+        logger.info("Account deleted for %s", email)
+
+        return Response(status=204)
 
 class UserViewSet(ReadOnlyModelViewSet):
     """
