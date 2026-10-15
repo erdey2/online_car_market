@@ -1270,6 +1270,12 @@ class ContactViewSet(CreateModelMixin, ListModelMixin, RetrieveModelMixin, Gener
         serializer = self.get_serializer(contact)
         return Response(serializer.data)
 
+@extend_schema_view(
+    list=extend_schema(tags=["Car Reports"]),
+    retrieve=extend_schema(tags=["Car Reports"]),
+    create=extend_schema(tags=["Car Reports"]),
+    review=extend_schema(tags=["Car Reports"]),
+)
 class CarReportViewSet(ModelViewSet):
     http_method_names = ["get", "post", "head", "options"]
     permission_classes = [IsAuthenticated]
