@@ -1306,11 +1306,18 @@ class CarReportViewSet(ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(reported_by=self.request.user)
 
-    @extend_schema(
-        tags=["Car Reports"],
-        summary="Review a car report",
-        request=CarReportReviewSerializer,
-        responses={200: CarReportReadSerializer},
+    @extend_schema_view(
+        get=extend_schema(
+            tags=["Car Reports"],
+            summary="Get a car report for review",
+            responses={200: CarReportReadSerializer},
+        ),
+        post=extend_schema(
+            tags=["Car Reports"],
+            summary="Review a car report",
+            request=CarReportReviewSerializer,
+            responses={200: CarReportReadSerializer},
+        ),
     )
     @action(detail=True, methods=["get", "post"])
     def review(self, request, pk=None):
