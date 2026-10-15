@@ -1306,18 +1306,33 @@ class CarReportViewSet(ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(reported_by=self.request.user)
 
-    @extend_schema_view(
-        get=extend_schema(
-            tags=["Car Reports"],
-            summary="Get a car report for review",
-            responses={200: CarReportReadSerializer},
+    @extend_schema(
+        tags=["Car Reports"],
+        summary="Get or review a car report",
+        description=(
+            "GET retrieves a report for review. POST updates its review status "
+            "and notes. Action-taken reports require review notes, and closed "
+            "reports cannot be reviewed again."
         ),
-        post=extend_schema(
-            tags=["Car Reports"],
-            summary="Review a car report",
-            request=CarReportReviewSerializer,
-            responses={200: CarReportReadSerializer},
-        ),
+        request={
+            "GET": None,
+            "POST": CarReportReviewSerializer,
+        },
+        responses={
+            200: CarReportReadSerializer,
+            400: OpenApiResponse(
+                description="Invalid input or report already closed."
+            ),
+            401: OpenApiResponse(
+                description="Authentication required."
+            ),
+            403: OpenApiResponse(
+                description="Permission denied."
+            ),
+            404: OpenApiResponse(
+                description="Report not found."
+            ),
+        },
     )
     @action(detail=True, methods=["get", "post"])
     def review(self, request, pk=None):
