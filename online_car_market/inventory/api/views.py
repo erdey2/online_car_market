@@ -4,9 +4,11 @@ from django.core.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.cache import cache
 from django.conf import settings
+from django.utils import timezone
+from django.db import transaction
 
 from rest_framework import status, mixins, serializers
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.generics import get_object_or_404
 from rest_framework.mixins import CreateModelMixin, ListModelMixin, RetrieveModelMixin
@@ -19,13 +21,14 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 
 from drf_spectacular.utils import (extend_schema, extend_schema_view, OpenApiParameter,
                                    OpenApiTypes, OpenApiExample, OpenApiResponse, inline_serializer)
-from ..models import Car, CarMake, CarModel, FavoriteCar, CarView, Contact, CarImage, CarMakeRequest, CarModelRequest
+from ..models import Car, CarMake, CarModel, FavoriteCar, CarView, Contact, CarImage, CarMakeRequest, CarModelRequest, CarReport
 from .serializers import (
                           VerifyCarSerializer, CarMakeSerializer, ContactSerializer,
                           CarModelSerializer, FavoriteCarSerializer, CarViewSerializer,
                           CarWriteSerializer, CarListSerializer, CarDetailSerializer,
                           CarVerificationListSerializer, CarVerificationAnalyticsSerializer, CarImageSerializer,
-                          CarMakeRequestSerializer, CarModelRequestSerializer, RejectRequestSerializer
+                          CarMakeRequestSerializer, CarModelRequestSerializer, RejectRequestSerializer,
+                          CarReportCreateSerializer, CarReportReadSerializer, CarReportReviewSerializer
                           )
 from online_car_market.users.permissions.drf_permissions import IsSuperAdminOrAdmin, is_admin_user, IsSuperAdminOrAdminOrBuyer, IsDealerBrokerOrSeller
 from online_car_market.users.permissions.business_permissions import CanPostCar, CanViewInventory
@@ -1267,3 +1270,90 @@ class ContactViewSet(CreateModelMixin, ListModelMixin, RetrieveModelMixin, Gener
         serializer = self.get_serializer(contact)
         return Response(serializer.data)
 
+class CarReportViewSet(ModelViewSet):
+    http_method_names = ["get", "post", "head", "options"]
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action == "review":
+            return [IsAuthenticated(), IsSuperAdminOrAdmin()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self):
+        queryset = CarReport.objects.select_related(
+            "car", "reported_by", "reviewed_by"
+        )
+
+        if self.request.user.is_superuser:
+            return queryset
+
+        if getattr(self.request.user, "role", None) in {
+            "admin",
+            "super_admin",
+        }:
+            return queryset
+
+        # Regular users see only their own reports.
+        return queryset.filter(reported_by=self.request.user)
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return CarReportCreateSerializer
+        if self.action == "review":
+            return CarReportReviewSerializer
+        return CarReportReadSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(reported_by=self.request.user)
+
+    @extend_schema(
+        tags=["Car Reports"],
+        summary="Review a car report",
+        request=CarReportReviewSerializer,
+        responses={200: CarReportReadSerializer},
+    )
+    @action(detail=True, methods=["get", "post"])
+    def review(self, request, pk=None):
+        report = self.get_object()
+
+        if request.method == "GET":
+            return Response(CarReportReadSerializer(report).data)
+
+        serializer = CarReportReviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        new_status = serializer.validated_data["status"]
+        notes = serializer.validated_data.get("review_notes", "")
+
+        if new_status == "action_taken" and not notes.strip():
+            raise ValidationError({
+                "review_notes": (
+                    "Explain the action taken before closing this report."
+                )
+            })
+
+        with transaction.atomic():
+            report = CarReport.objects.select_for_update().get(
+                pk=report.pk
+            )
+
+            if report.status in ["action_taken", "dismissed"]:
+                raise ValidationError(
+                    "This report has already been closed."
+                )
+
+            report.status = new_status
+            report.review_notes = notes
+            report.reviewed_by = request.user
+            report.reviewed_at = timezone.now()
+            report.save(
+                update_fields=[
+                    "status",
+                    "review_notes",
+                    "reviewed_by",
+                    "reviewed_at",
+                    "updated_at",
+                ]
+            )
+
+        return Response(CarReportReadSerializer(report).data)

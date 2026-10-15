@@ -1,6 +1,7 @@
 from django.db import models
 from django.db.models import Q
 from django.db.models.functions import Lower
+from django.conf import settings
 from django.utils import timezone
 from cloudinary.models import CloudinaryField
 from django.contrib.auth import get_user_model
@@ -649,3 +650,56 @@ class Contact(models.Model):
     car = models.ForeignKey(Car, on_delete=models.CASCADE, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
+
+class CarReport(models.Model):
+    REASON_CHOICES = [
+        ("suspected_fraud", "Suspected fraud"),
+        ("incorrect_details", "Incorrect car details"),
+        ("misleading_price", "Misleading price"),
+        ("fake_photos", "Fake or misleading photos"),
+        ("duplicate_listing", "Duplicate listing"),
+        ("sold_unavailable", "Car sold or unavailable"),
+        ("other", "Other"),
+    ]
+
+    STATUS_CHOICES = [
+        ("pending", "Pending review"),
+        ("investigating", "Under investigation"),
+        ("action_taken", "Action taken"),
+        ("dismissed", "Dismissed"),
+    ]
+
+    car = models.ForeignKey("inventory.Car", on_delete=models.PROTECT, related_name="reports")
+    reported_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="car_reports")
+    reason = models.CharField(max_length=30, choices=REASON_CHOICES)
+    description = models.TextField(blank=True, help_text="Optional additional information about the issue.")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending", db_index=True)
+
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="reviewed_car_reports")
+    review_notes = models.TextField(blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["car", "reported_by"],
+                condition=Q(
+                    status__in=["pending", "investigating"]
+                ) & Q(reported_by__isnull=False),
+                name="unique_active_car_report_per_user",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["status", "created_at"],
+                name="carreport_status_created_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Report #{self.pk} - Car #{self.car_id} ({self.status})"
+

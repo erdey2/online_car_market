@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Car, CarImage, CarMake, CarModel
+from .models import Car, CarImage, CarMake, CarModel, CarReport
+
 
 # Car Make & Model Admin
 @admin.register(CarMake)
@@ -76,4 +77,35 @@ class CarImageAdmin(admin.ModelAdmin):
         return "No image"
 
     image_preview.short_description = "Image Preview"
+
+@admin.register(CarReport)
+class CarReportAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "car",
+        "reported_by",
+        "reason",
+        "status",
+        "created_at",
+        "reviewed_by",
+    )
+    list_filter = ("status", "reason", "created_at")
+    search_fields = (
+        "car__vin",
+        "car__make",
+        "car__model",
+        "reported_by__email",
+        "description",
+    )
+    readonly_fields = (
+        "car",
+        "reported_by",
+        "reason",
+        "description",
+        "created_at",
+        "updated_at",
+        "reviewed_at",
+    )
+    list_select_related = ("car", "reported_by", "reviewed_by")
+
 

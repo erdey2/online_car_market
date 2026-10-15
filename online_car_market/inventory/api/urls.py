@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (CarViewSet, CarMakeViewSet, CarModelViewSet, FavoriteCarViewSet, CarViewViewSet,
                     UserCarsViewSet, PopularCarsViewSet, ContactViewSet, CarVerificationViewSet,
-                    CarImageViewSet, CarMakeRequestViewSet, CarModelRequestViewSet)
+                    CarImageViewSet, CarMakeRequestViewSet, CarModelRequestViewSet, CarReportViewSet)
 
 router = DefaultRouter()
 
@@ -28,6 +28,7 @@ router.register(r'user-cars', UserCarsViewSet, basename='user-car')
 router.register(r'popular-cars', PopularCarsViewSet, basename='popular-car')
 router.register(r'contacts', ContactViewSet, basename='contact')
 router.register(r'car-images', CarImageViewSet, basename='car-images')
+router.register(r"car-reports", CarReportViewSet, basename="car-report")
 
 urlpatterns = [
     path('', include(router.urls)),

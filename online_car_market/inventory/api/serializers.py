@@ -1,7 +1,7 @@
 from django.utils import timezone
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
-from ..models import Car, CarImage, CarMake, CarModel, FavoriteCar, CarView, CarMakeRequest, CarModelRequest
+from ..models import Car, CarImage, CarMake, CarModel, FavoriteCar, CarView, CarMakeRequest, CarModelRequest, CarReport
 from online_car_market.inventory.models import Contact
 from online_car_market.bids.models import Bid
 from django.contrib.auth import get_user_model
@@ -1382,3 +1382,84 @@ class ContactSerializer(serializers.ModelSerializer):
             )
 
         return attrs
+
+class CarReportCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CarReport
+        fields = ["id", "car", "reason", "description", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+    def validate_car(self, car):
+        request = self.context["request"]
+
+        # A user cannot report their own listing.
+        if car.posted_by_id == request.user.pk:
+            raise serializers.ValidationError(
+                "You cannot report your own car listing."
+            )
+
+        # Match the public listing eligibility rules.
+        if (
+            car.verification_status != "verified"
+            or car.status != "available"
+        ):
+            raise serializers.ValidationError(
+                "Only verified, available cars can be reported."
+            )
+
+        return car
+
+    def validate_description(self, value):
+        if len(value) > 2000:
+            raise serializers.ValidationError(
+                "Description cannot exceed 2000 characters."
+            )
+        return value
+
+class CarReportReadSerializer(serializers.ModelSerializer):
+    car_id = serializers.IntegerField(read_only=True)
+    car_title = serializers.SerializerMethodField()
+    reporter_email = serializers.EmailField(
+        source="reported_by.email",
+        read_only=True,
+        default=None,
+    )
+    reviewer_email = serializers.EmailField(
+        source="reviewed_by.email",
+        read_only=True,
+        default=None,
+    )
+
+    class Meta:
+        model = CarReport
+        fields = [
+            "id",
+            "car_id",
+            "car_title",
+            "reported_by",
+            "reporter_email",
+            "reason",
+            "description",
+            "status",
+            "reviewed_by",
+            "reviewer_email",
+            "review_notes",
+            "reviewed_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+    def get_car_title(self, obj):
+        car = obj.car
+        return f"{car.year} {car.make or ''} {car.model or ''}".strip()
+
+class CarReportReviewSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(
+        choices=["investigating", "action_taken", "dismissed"]
+    )
+    review_notes = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=2000,
+    )
