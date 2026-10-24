@@ -10,9 +10,7 @@ DATABASES = {
 }
 
 # EMAIL
-EMAIL_BACKEND = env(
-    "DJANGO_EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend",
-)
+# EMAIL_BACKEND = env("DJANGO_EMAIL_BACKEND", default="django.core.mail.backends.console.EmailBackend")
 
 # django-debug-toolbar
 INSTALLED_APPS += ["debug_toolbar"]

@@ -218,14 +218,22 @@ CSRF_COOKIE_HTTPONLY = True
 
 X_FRAME_OPTIONS = "DENY"
 
-# EMAIL
-EMAIL_BACKEND = "anymail.backends.brevo.EmailBackend"
+# EMAIL CONFIGURATION
+EMAIL_BACKEND = env(
+    "DJANGO_EMAIL_BACKEND",
+    default="django.core.mail.backends.smtp.EmailBackend"
+)
+EMAIL_HOST = env("DJANGO_EMAIL_HOST", default="plutotechnologies.org")
+EMAIL_PORT = env.int("DJANGO_EMAIL_PORT", default=465)
+EMAIL_HOST_USER = env("DJANGO_EMAIL_HOST_USER", default="hulucar@plutotechnologies.org")
+EMAIL_HOST_PASSWORD = env("DJANGO_EMAIL_HOST_PASSWORD")
+EMAIL_USE_SSL = env.bool("DJANGO_EMAIL_USE_SSL", default=True)
+EMAIL_USE_TLS = env.bool("DJANGO_EMAIL_USE_TLS", default=False)
 
-ANYMAIL = {
-    "BREVO_API_KEY": env("BREVO_API_KEY"),
-}
-
-DEFAULT_FROM_EMAIL = "Online Car Market <noreply@online-car-market.com>"
+DEFAULT_FROM_EMAIL = env(
+    "DJANGO_DEFAULT_FROM_EMAIL",
+    default="HuluCar <hulucar@plutotechnologies.org>"
+)
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 
 # Django Admin URL.
