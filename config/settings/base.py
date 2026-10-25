@@ -4,6 +4,8 @@ import os
 from datetime import timedelta
 import environ
 
+ACCOUNT_EMAIL_SUBJECT_PREFIX = "[HuluCar] "
+
 BASE_DIR = Path(__file__).resolve(strict=True).parent.parent.parent
 
 APPS_DIR = BASE_DIR / "online_car_market"
