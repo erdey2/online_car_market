@@ -18,9 +18,28 @@ from online_car_market.brokers.models import BrokerProfile
 from online_car_market.dealers.models import DealerProfile
 from online_car_market.inspection.models import Inspector
 from online_car_market.users.permissions.business_permissions import is_staff
+from django.urls import reverse
+from allauth.account.utils import user_pk_to_url_str
+from dj_rest_auth.serializers import PasswordResetSerializer as DefaultPasswordResetSerializer
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+def allauth_reset_url_generator(request, user, temp_key):
+    path = reverse(
+        "account_reset_password_from_key",
+        kwargs={
+            "uidb36": user_pk_to_url_str(user),
+            "key": temp_key,
+        },
+    )
+    return request.build_absolute_uri(path)
+
+class CustomPasswordResetSerializer(DefaultPasswordResetSerializer):
+    def get_email_options(self):
+        options = super().get_email_options()
+        options["url_generator"] = allauth_reset_url_generator
+        return options
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)

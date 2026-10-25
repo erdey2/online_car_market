@@ -284,6 +284,7 @@ REST_AUTH = {
     "JWT_AUTH_HTTPONLY": False,
     'REGISTER_SERIALIZER': 'online_car_market.users.api.serializers.CustomRegisterSerializer',
     'LOGIN_SERIALIZER': 'online_car_market.users.api.serializers.CustomLoginSerializer',
+    "PASSWORD_RESET_SERIALIZER": "online_car_market.users.api.serializers.CustomPasswordResetSerializer",
     'SIGNUP_FIELDS': {
         'username': {'required': False},
     }

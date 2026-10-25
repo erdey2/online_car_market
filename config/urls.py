@@ -45,7 +45,7 @@ TokenView = extend_schema(tags=["Authentication & Users"])(ObtainAuthToken)
 UserDetailsView = extend_schema(tags=["Authentication & Users"])(UserDetailsView)
 
 urlpatterns = [
-    # Django Admin, use {% url 'admin:index' %}
+
     path(settings.ADMIN_URL, admin.site.urls),
 
     path('', RedirectView.as_view(url='/api/docs/', permanent=False)),
