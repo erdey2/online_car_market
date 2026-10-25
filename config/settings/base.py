@@ -12,7 +12,7 @@ env = environ.Env()
 env.read_env(str(BASE_DIR / ".env"))
 
 SECRET_KEY = env("DJANGO_SECRET_KEY")
-
+FRONTEND_URL = "https://hulucar.com"
 # GENERAL
 DEBUG = env.bool("DJANGO_DEBUG", False)
 TIME_ZONE = "Africa/Addis_Ababa"

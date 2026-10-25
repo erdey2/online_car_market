@@ -26,14 +26,12 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 def allauth_reset_url_generator(request, user, temp_key):
-    path = reverse(
-        "account_reset_password_from_key",
-        kwargs={
-            "uidb36": user_pk_to_url_str(user),
-            "key": temp_key,
-        },
+    uid = user_pk_to_url_str(user)
+
+    return (
+        f"{settings.FRONTEND_URL.rstrip('/')}"
+        f"/reset-password/{uid}/{temp_key}/"
     )
-    return request.build_absolute_uri(path)
 
 class CustomPasswordResetSerializer(DefaultPasswordResetSerializer):
     def get_email_options(self):
